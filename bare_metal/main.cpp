@@ -157,7 +157,11 @@ namespace TranslationTable
 
 	//first level (fault is also good for second level)
 
-	struct Fault
+	struct TableEntry
+	{
+	};
+
+	struct Fault : public TableEntry
 	{
 		inline Fault(void) : m_zero(0) {};
 
@@ -165,7 +169,7 @@ namespace TranslationTable
 		unsigned int m_zero:2;
 	};
 
-	struct PageTable
+	struct PageTable : public TableEntry
 	{
 		inline PageTable() {};
 
@@ -187,7 +191,7 @@ namespace TranslationTable
 		unsigned int m_zeroOne:2;
 	};
 
-	struct Section
+	struct Section : public TableEntry
 	{
 		inline Section() {};
 
@@ -265,23 +269,23 @@ static inline void enable_mmu(void)
     unsigned int i;
     unsigned int reg;
 
-    TranslationTable::Section *pSections = (TranslationTable::Section *)page_table;
+    TranslationTable::Section *pSections = (TranslationTable::TableEntry *)page_table;
 
     for (i = 0; i < 4096; i++)
     	pSections[i] = TranslationTable::Section((unsigned int *)(i * 1048576),
     			TranslationTable::kNaNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    for (i = SDRAM_START >> 20; i < SDRAM_END >> 20; i++)
+    for (i = SDRAM_START >> 21; i < SDRAM_END >> 20; i++)
     {
     	pSections[i] = TranslationTable::Section((unsigned int *)(i * 1048576),
     			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
     }
 
     //executable top section
-    pSections[4095] = TranslationTable::Section((unsigned int *)(2 * 1048576),
+    pSections[4095] = TranslationTable::Section((unsigned int *)(126 * 1048576),
     			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
     //process stack
-    pSections[4094] = TranslationTable::Section((unsigned int *)(3 * 1048576),
+    pSections[4094] = TranslationTable::Section((unsigned int *)(127 * 1048576),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
     pSections[257] = TranslationTable::Section((unsigned int *)(257 * 1048576),

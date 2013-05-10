@@ -16,16 +16,6 @@
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
 	PrinterUart p;
-	p.PrintString("supervisor call ");
-	p.Print(r7);
-	p.PrintString("\r\n");
-
-	for (int count = 0; count < 7; count++)
-	{
-		p.PrintString("\t");
-		p.Print(pRegisters[count]);
-		p.PrintString("\r\n");
-	}
 
 	switch (r7)
 	{
@@ -81,15 +71,40 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 1:			//sys_exit
 	case 20:		//sys_getpid
 	case 45:		//sys_brk
+	{
+		if (pRegisters[0] != 0)
+		{
+			p.PrintString("trying to change the brk to ");
+			p.Print(pRegisters[0]);
+			p.PrintString("\r\n");
+		}
+		return 125 * 1024 * 1024;
+	}
+	case 0xf0005:	//__ARM_NR_compat_set_tls
+	{
+		*(unsigned int *)(0xffff0fe0 - 4) = pRegisters[0];
+		return 0;
+	}
+	case 78:		//compat_sys_gettimeofday
 	case 174:		//compat_sys_rt_sigaction
 	case 175:		//compat_sys_rt_sigprocmask
 	case 192:		//sys_mmap_pgoff
+	case 201:		//sys_geteuid
 	case 248:		//sys_exit_group
 	case 268:		//sys_tgkill
 	case 281:		//sys_socket
-	case 0xf0005:	//__ARM_NR_compat_set_tls
-		return (unsigned int)-4095;
+		p.PrintString("UNIMPLEMENTED\n");
 	default:
+		p.PrintString("supervisor call ");
+		p.Print(r7);
+		p.PrintString("\r\n");
+
+		for (int count = 0; count < 7; count++)
+		{
+			p.PrintString("\t");
+			p.Print(pRegisters[count]);
+			p.PrintString("\r\n");
+		}
 		return (unsigned int)-4095;
 	}
 }
