@@ -6,7 +6,9 @@
  */
 
 #include <string.h>
+
 #include "print_uart.h"
+#include "common.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -72,13 +74,45 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 20:		//sys_getpid
 	case 45:		//sys_brk
 	{
-		if (pRegisters[0] != 0)
+		unsigned int current = (unsigned int)GetHighBrk();
+
+		if (pRegisters[0] != 0)		//move it
 		{
-			p.PrintString("trying to change the brk to ");
-			p.Print(pRegisters[0]);
-			p.PrintString("\r\n");
+			unsigned int want = pRegisters[0];
+			if (want > current)
+			{
+				unsigned int change = want - current;
+				//round up to a page
+				change = (change + 4095) & ~4095;
+				//count the pages
+				unsigned int num_pages = change >> 12;
+
+				EnableMmu(false);
+
+				for (unsigned int count = 0; count < num_pages; count++)
+				{
+					void *p = PhysPages::FindPage();
+					if (p == (void *)-1)
+						break;
+
+					//zero it
+					memset(p, 0, 4096);
+
+					if (!MapPhysToVirt(p, (void *)current, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+					{
+						PhysPages::ReleasePage((unsigned int)p >> 12);
+						break;
+					}
+
+					current += 4096;
+				}
+
+				SetHighBrk((void *)current);
+				EnableMmu(true);
+			}
 		}
-		return 125 * 1024 * 1024;
+
+		return current;
 	}
 	case 0xf0005:	//__ARM_NR_compat_set_tls
 	{
@@ -94,6 +128,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 268:		//sys_tgkill
 	case 281:		//sys_socket
 		p.PrintString("UNIMPLEMENTED\n");
+		/* no break */
 	default:
 		p.PrintString("supervisor call ");
 		p.Print(r7);

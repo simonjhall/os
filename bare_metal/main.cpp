@@ -1,4 +1,5 @@
 #include "print_uart.h"
+#include "common.h"
 
 int main(void);
 
@@ -26,6 +27,8 @@ struct VectorTable
 		unsigned int target = (unsigned int)v;
 		unsigned int source = (unsigned int)e * 4;
 		unsigned int diff = target - source - 8;
+
+		ASSERT(((diff >> 2) & ~0xffffff) == 0);
 
 		unsigned int b = (0xe << 28) | (10 << 24) | (((unsigned int)diff >> 2) & 0xffffff);
 		pBase[(unsigned int)e] = b;
@@ -82,6 +85,7 @@ struct FixedStack
 
 extern "C" unsigned int *GetStackHigh(VectorTable::ExceptionType e)
 {
+	ASSERT((unsigned int)e < 8);
 	return g_stacks[(unsigned int)e].m_stack + FixedStack::sm_size - 1;
 }
 
@@ -95,13 +99,25 @@ extern "C" void _SupervisorCall(void);
 extern "C" unsigned int SupervisorCall(unsigned int r7);
 
 extern "C" void _PrefetchAbort(void);
-extern "C" void PrefetchAbort(void)
+extern "C" void PrefetchAbort(unsigned int addr)
 {
+	PrinterUart p;
+	p.PrintString("prefetch abort at ");
+	p.Print(addr);
+	p.PrintString("\r\n");
+
+	ASSERT(0);
 }
 
 extern "C" void _DataAbort(void);
-extern "C" void DataAbort(void)
+extern "C" void DataAbort(unsigned int addr)
 {
+	PrinterUart p;
+	p.PrintString("data abort at ");
+	p.Print(addr);
+	p.PrintString("\r\n");
+
+	ASSERT(0);
 }
 
 extern "C" void Irq(void)
@@ -123,189 +139,61 @@ extern "C" void _start(void);
 #define SDRAM_END         (128 * 1024 * 1024)
 #define CACHE_WRITEBACK   0x1e
 
-namespace TranslationTable
-{
-	//properties
-	enum MemRegionType
-	{
-		kStronglyOrdered = 0,
-		kShareableDevice = 1,
-		kOuterInnerWtNoWa = 2,
-		kOuterInnerWbNoWa = 3,
 
-		kOuterInnerNc = 4,
-		kOuterInnerWbWa = 7,
-
-		kNonShareableDevice = 8,
-	};
-
-	enum ExecuteNever
-	{
-		kExec = 0,
-		kNoExec = 1,
-	};
-
-	enum AccessPerm
-	{
-		kNaNa = 0,
-		kRwNa = 1,
-		kRwRo = 2,
-		kRwRw = 3,
-		kRoNa = 5,
-		kRoRo = 7,
-	};
-
-	//first level (fault is also good for second level)
-
-	struct TableEntry
-	{
-	};
-
-	struct Fault : public TableEntry
-	{
-		inline Fault(void) : m_zero(0) {};
-
-		unsigned int m_ignore:30;
-		unsigned int m_zero:2;
-	};
-
-	struct PageTable : public TableEntry
-	{
-		inline PageTable() {};
-
-		inline PageTable(unsigned int *pBase, unsigned int domain)
-		:  m_pageTableBase ((unsigned int)pBase >> 10),
-		   m_domain (domain),
-		   m_sbz (0),
-		   m_ns (0),
-		   m_pxn (0),
-		   m_zeroOne (1)
-		{};
-
-		unsigned int m_pageTableBase:22;
-		unsigned int m_ignore1:1;
-		unsigned int m_domain:4;
-		unsigned int m_sbz:1;
-		unsigned int m_ns:1;
-		unsigned int m_pxn:1;
-		unsigned int m_zeroOne:2;
-	};
-
-	struct Section : public TableEntry
-	{
-		inline Section() {};
-
-		inline Section(unsigned int *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type, unsigned int domain)
-		: m_pxn(0),
-		  m_one(1),
-		  m_b((unsigned int)type & 1),
-		  m_c(((unsigned int)type > 1) & 1),
-		  m_xn((unsigned int)xn),
-		  m_domain(domain),
-		  m_ap((unsigned int)perm & 3),
-		  m_tex((unsigned int)type >> 2),
-		  m_ap2((unsigned int)perm >> 2),
-		  m_s(0),
-		  m_ng(0),
-		  m_zero(0),
-		  m_ns(0),
-		  m_sectionBase ((unsigned int)pBase >> 20)
-		{
-		}
-		unsigned int m_pxn:1;
-		unsigned int m_one:1;
-		unsigned int m_b:1;
-		unsigned int m_c:1;
-		unsigned int m_xn:1;
-		unsigned int m_domain:4;
-		unsigned int m_ignore1:1;
-		unsigned int m_ap:2;
-		unsigned int m_tex:3;
-		unsigned int m_ap2:1;
-		unsigned int m_s:1;
-		unsigned int m_ng:1;
-		unsigned int m_zero:1;
-		unsigned int m_ns:1;
-		unsigned int m_sectionBase:12;
-	};
-
-	//second level
-	struct SmallPage
-	{
-		inline SmallPage() {};
-
-		inline SmallPage(unsigned int *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type) :
-		  m_xn((unsigned int)xn),
-		  m_one(1),
-		  m_b((unsigned int)type & 1),
-		  m_c(((unsigned int)type > 1) & 1),
-		  m_ap((unsigned int)perm & 3),
-		  m_tex((unsigned int)type >> 2),
-		  m_ap2((unsigned int)perm >> 2),
-		  m_s(0),
-		  m_ng(0),
-		  m_pageBase ((unsigned int)pBase >> 12)
-		{
-		};
-
-		unsigned int m_xn:1;
-		unsigned int m_one:1;
-		unsigned int m_b:1;
-		unsigned int m_c:1;
-		unsigned int m_ap:2;
-		unsigned int m_tex:3;
-		unsigned int m_ap2:1;
-		unsigned int m_s:1;
-		unsigned int m_ng:1;
-		unsigned int m_pageBase:20;
-	};
-}
 
 extern unsigned int TlsLow, TlsHigh;
+extern unsigned int __init_array_start;
 
-static inline void enable_mmu(void)
+
+static inline void SetupMmu(void)
 {
-    static unsigned int __attribute__((aligned(16384))) page_table[NUM_PAGE_TABLE_ENTRIES];
+//    static TranslationTable::TableEntryL2 __attribute__((aligned(16384))) page[256];
     unsigned int i;
     unsigned int reg;
 
-    TranslationTable::Section *pSections = (TranslationTable::TableEntry *)page_table;
+    PhysPages::BlankUsedPages();
+    PhysPages::ReservePages(0, 1048576 / 4096);
 
+    PhysPages::AllocL1Table();
+    TranslationTable::TableEntryL1 *pEntries = PhysPages::GetL1Table();
+
+    //disable everything
     for (i = 0; i < 4096; i++)
-    	pSections[i] = TranslationTable::Section((unsigned int *)(i * 1048576),
+    	pEntries[i].section.Init((unsigned int *)(i * 1048576),
     			TranslationTable::kNaNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    for (i = SDRAM_START >> 21; i < SDRAM_END >> 20; i++)
-    {
-    	pSections[i] = TranslationTable::Section((unsigned int *)(i * 1048576),
-    			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    }
+    MapPhysToVirt(0, 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    MapPhysToVirt((void *)0x10000, (void *)0x10000, 1048576 - 0x10000, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+
+    SetHighBrk((void *)1048576);
 
     //executable top section
-    pSections[4095] = TranslationTable::Section((unsigned int *)(126 * 1048576),
+    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
     //process stack
-    pSections[4094] = TranslationTable::Section((unsigned int *)(127 * 1048576),
+    pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
-    pSections[257] = TranslationTable::Section((unsigned int *)(257 * 1048576),
-    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+//    pEntries[257].section.Init((unsigned int *)(257 * 1048576),
+//    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
     /* Copy the page table address to cp15 */
     asm volatile("mcr p15, 0, %0, c2, c0, 0"
-            : : "r" (page_table) : "memory");
+            : : "r" (pEntries) : "memory");
 
     //change the domain bits
     asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (1));		//0=no access, 1=client, 3=manager
 
-    /* Enable the MMU */
-    asm("mrc p15, 0, %0, c1, c0, 0" : "=r" (reg) : : "cc");
-    reg|=0x1;
-    asm volatile("mcr p15, 0, %0, c1, c0, 0" : : "r" (reg) : "cc");
+    EnableMmu(true);
 
     //copy in the high code
     memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
-    *(unsigned int *)(0xffff0fe0 - 4) = 4094U * 1048576;		//make tls start at the low end of the stack
+
+    //set the emulation value
+    *(unsigned int *)(0xffff0fe0 - 4) = (unsigned int)&__init_array_start - 16 - 8;
+    //set the register value
+    asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" ((unsigned int)&__init_array_start - 16 - 8) : "cc");
 }
 
 extern "C" void Setup(void)
@@ -313,7 +201,7 @@ extern "C" void Setup(void)
 	PrinterUart p;
 	p.PrintString("pre-mmu\r\n");
 
-	enable_mmu();
+	SetupMmu();
 
 	p.PrintString("mmu enabled\r\n");
 

@@ -122,6 +122,8 @@ _PrefetchAbort:
 	sub r0, #4
 	mov sp, r0
 
+	ldr r0, =stored_state
+	ldr r0, [r0]
 	blx PrefetchAbort
 
 	add sp, #4
@@ -153,6 +155,8 @@ _DataAbort:
 	sub r0, #4
 	mov sp, r0
 
+	ldr r0, =stored_state
+	ldr r0, [r0]
 	blx DataAbort
 
 	add sp, #4
