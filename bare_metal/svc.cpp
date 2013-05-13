@@ -18,6 +18,8 @@
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
 	PrinterUart p;
+	bool known = false;
+	const char *pName = 0;
 
 	switch (r7)
 	{
@@ -70,8 +72,6 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 		return written;
 	}
-	case 1:			//sys_exit
-	case 20:		//sys_getpid
 	case 45:		//sys_brk
 	{
 		unsigned int current = (unsigned int)GetHighBrk();
@@ -120,18 +120,73 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (pRegisters[0]) : "cc");
 		return 0;
 	}
+	case 4:			//write
+	{
+		unsigned int fd = pRegisters[0];
+		unsigned char *pBuf = (unsigned char *)pRegisters[1];
+		unsigned int len = pRegisters[2];
+
+		if (fd == 1)	//stdout
+		{
+			for (unsigned int count = 0; count < len; count++)
+				p.PrintChar(pBuf[count]);
+			return len;
+		}
+
+		return -1;
+	}
+
+	case 1:			//sys_exit
+		if (!pName)
+			pName = "sys_exit";
+	case 20:		//sys_getpid
+		if (!pName)
+			pName = "sys_getpid";
 	case 78:		//compat_sys_gettimeofday
+		if (!pName)
+			pName = "compat_sys_gettimeofday";
 	case 174:		//compat_sys_rt_sigaction
+		if (!pName)
+			pName = "compat_sys_rt_sigaction";
 	case 175:		//compat_sys_rt_sigprocmask
+		if (!pName)
+			pName = "compat_sys_rt_sigprocmask";
 	case 192:		//sys_mmap_pgoff
+		if (!pName)
+			pName = "sys_mmap_pgoff";
 	case 197:		//fstat64
+		if (!pName)
+			pName = "fstat64";
+	case 199:		//getuid32
+		if (!pName)
+			pName = "getuid32";
+	case 200:		//getgid32
+		if (!pName)
+			pName = "getgid32";
 	case 201:		//sys_geteuid
+		if (!pName)
+			pName = "sys_geteuid";
+	case 202:		//getegid32
+		if (!pName)
+			pName = "getegid32";
 	case 248:		//sys_exit_group
+		if (!pName)
+			pName = "sys_exit_group";
 	case 268:		//sys_tgkill
+		if (!pName)
+			pName = "sys_tgkill";
 	case 281:		//sys_socket
-		p.PrintString("UNIMPLEMENTED\n");
+		if (!pName)
+			pName = "sys_socket";
+
+		p.PrintString("UNIMPLEMENTED ");
+		p.PrintString(pName);
+		known = true;
 		/* no break */
 	default:
+		if (!known)
+			p.PrintString("UNKNOWN");
+		p.PrintString("\r\n");
 		p.PrintString("supervisor call ");
 		p.Print(r7);
 		p.PrintString("\r\n");

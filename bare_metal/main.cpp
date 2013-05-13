@@ -291,7 +291,7 @@ int main(int argc, const char **argv)
 
 	for (int count = 0; count < argc; count++)
 	{
-		printf("%d: %s\n", count, argv[count]);
+		printf("%d: %s\r\n", count, argv[count]);
 	}
 	return 0;
 }
