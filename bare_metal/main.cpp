@@ -1,10 +1,12 @@
 #include "print_uart.h"
 #include "common.h"
 
-int main(void);
+int main(int argc, const char **argv);
 
 #include <stdio.h>
 #include <string.h>
+#include <link.h>
+#include <elf.h>
 
 struct VectorTable
 {
@@ -129,7 +131,7 @@ extern "C" void Fiq(void)
 }
 
 extern "C" void InvokeSyscall(unsigned int r7);
-extern "C" void ChangeModeAndJump(RfeData *);
+extern "C" void ChangeModeAndJump(unsigned int r0, unsigned int r1, unsigned int r2, RfeData *);
 
 extern "C" void _start(void);
 
@@ -142,14 +144,13 @@ extern "C" void _start(void);
 
 
 extern unsigned int TlsLow, TlsHigh;
-extern unsigned int __init_array_start;
+extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
 
 
 static inline void SetupMmu(void)
 {
 //    static TranslationTable::TableEntryL2 __attribute__((aligned(16384))) page[256];
     unsigned int i;
-    unsigned int reg;
 
     PhysPages::BlankUsedPages();
     PhysPages::ReservePages(0, 1048576 / 4096);
@@ -191,9 +192,11 @@ static inline void SetupMmu(void)
     memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
 
     //set the emulation value
-    *(unsigned int *)(0xffff0fe0 - 4) = (unsigned int)&__init_array_start - 16 - 8;
+//    *(unsigned int *)(0xffff0fe0 - 4) = (unsigned int)&thread_section_begin - 8;
+    *(unsigned int *)(0xffff0fe0 - 4) = 0;
     //set the register value
-    asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" ((unsigned int)&__init_array_start - 16 - 8) : "cc");
+//    asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" ((unsigned int)&thread_section_begin - 8) : "cc");
+    asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (0) : "cc");
 }
 
 extern "C" void Setup(void)
@@ -225,10 +228,51 @@ extern "C" void Setup(void)
 	if ((unsigned int)rfe.m_pPc & 1)		//thumb
 		rfe.m_cpsr.m_t = 1;
 
-	ChangeModeAndJump(&rfe);
+	//move down enough for some stuff
+	rfe.m_pSp = rfe.m_pSp - 100;
+	//fill in argc
+	rfe.m_pSp[0] = 1;
+	//fill in argv
+	const char *pElfName = "/init.elf";
+	const char *pEnv = "VAR=var";
+
+	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
+	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 3;
+
+	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
+
+	pAuxVec[0].a_type = AT_PHDR;
+	pAuxVec[0].a_un.a_val = (unsigned int)pHdr;
+
+	pAuxVec[1].a_type = AT_PHNUM;
+	pAuxVec[1].a_un.a_val = 1;
+
+	pAuxVec[2].a_type = AT_NULL;
+
+	pHdr->p_align = 2;
+	pHdr->p_filesz = (unsigned int)&thread_section_mid - (unsigned int)&thread_section_begin;
+	pHdr->p_memsz = (unsigned int)&thread_section_end - (unsigned int)&thread_section_begin;
+	pHdr->p_offset = 0;
+	pHdr->p_paddr = 0;
+	pHdr->p_vaddr = (unsigned int)&thread_section_begin;
+	pHdr->p_type = PT_TLS;
+
+	unsigned int hdr_size = sizeof(ElfW(Phdr));
+
+	unsigned int text_start_addr = (unsigned int)pAuxVec + aux_size + hdr_size;
+
+	unsigned int e = (unsigned int)strcpy((char *)text_start_addr, pEnv);
+	unsigned int a = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1, pElfName);
+
+	rfe.m_pSp[1] = a;
+	rfe.m_pSp[2] = 0;
+	rfe.m_pSp[3] = e;
+	rfe.m_pSp[4] = 0;
+
+	ChangeModeAndJump(0, 0, 0, &rfe);
 }
 
-int main(void)
+int main(int argc, const char **argv)
 {
 	PrinterUart p;
 	p.PrintString("hello world\r\n");
@@ -243,6 +287,11 @@ int main(void)
 	{
 		p.Print(count);
 		p.PrintString("\r\n");
+	}
+
+	for (int count = 0; count < argc; count++)
+	{
+		printf("%d: %s\n", count, argv[count]);
 	}
 	return 0;
 }

@@ -117,12 +117,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 0xf0005:	//__ARM_NR_compat_set_tls
 	{
 		*(unsigned int *)(0xffff0fe0 - 4) = pRegisters[0];
+		asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (pRegisters[0]) : "cc");
 		return 0;
 	}
 	case 78:		//compat_sys_gettimeofday
 	case 174:		//compat_sys_rt_sigaction
 	case 175:		//compat_sys_rt_sigprocmask
 	case 192:		//sys_mmap_pgoff
+	case 197:		//fstat64
 	case 201:		//sys_geteuid
 	case 248:		//sys_exit_group
 	case 268:		//sys_tgkill

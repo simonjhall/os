@@ -113,8 +113,11 @@ SECTIONS
   .gcc_except_table   : ONLY_IF_RW { *(.gcc_except_table .gcc_except_table.*) }
   .exception_ranges   : ONLY_IF_RW { *(.exception_ranges .exception_ranges*) }
   /* Thread Local Storage sections  */
+  thread_section_begin = .;
   .tdata	  : { *(.tdata .tdata.* .gnu.linkonce.td.*) }
+  thread_section_mid = .;
   .tbss		  : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) }
+  thread_section_end = .;
   .preinit_array     :
   {
     PROVIDE_HIDDEN (__preinit_array_start = .);

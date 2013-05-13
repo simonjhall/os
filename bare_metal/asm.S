@@ -172,8 +172,8 @@ _DataAbort:
 
 .func ChangeModeAndJump
 ChangeModeAndJump:
-	ldr sp, [r0, #8]
-	rfeia r0
+	ldr sp, [r3, #8]
+	rfeia r3
 .endfunc
 .size ChangeModeAndJump, .-ChangeModeAndJump
 
