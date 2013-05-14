@@ -2,7 +2,7 @@
 OUTPUT_FORMAT("elf32-littlearm", "elf32-bigarm",
 	      "elf32-littlearm")
 OUTPUT_ARCH(arm)
-ENTRY(_start)
+/*ENTRY(_start)*/
 SEARCH_DIR("=/usr/local/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/usr/lib"); SEARCH_DIR("/usr/arm-linux-gnueabihf/lib");
 SECTIONS
 {
@@ -113,8 +113,11 @@ SECTIONS
   .gcc_except_table   : ONLY_IF_RW { *(.gcc_except_table .gcc_except_table.*) }
   .exception_ranges   : ONLY_IF_RW { *(.exception_ranges .exception_ranges*) }
   /* Thread Local Storage sections  */
+  thread_section_begin = .;
   .tdata	  : { *(.tdata .tdata.* .gnu.linkonce.td.*) }
+  thread_section_mid = .;
   .tbss		  : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) }
+  thread_section_end = .;
   .preinit_array     :
   {
     PROVIDE_HIDDEN (__preinit_array_start = .);

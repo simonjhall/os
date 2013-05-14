@@ -7,6 +7,7 @@ int main(int argc, const char **argv);
 #include <string.h>
 #include <link.h>
 #include <elf.h>
+#include "elf.h"
 
 struct VectorTable
 {
@@ -79,6 +80,11 @@ const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
 
+//testing elf
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_start;
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_size;
+/////////
+
 struct FixedStack
 {
 	static const unsigned int sm_size = 1024;
@@ -145,11 +151,10 @@ extern "C" void _start(void);
 
 extern unsigned int TlsLow, TlsHigh;
 extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
-
+extern unsigned int _end;
 
 static inline void SetupMmu(void)
 {
-//    static TranslationTable::TableEntryL2 __attribute__((aligned(16384))) page[256];
     unsigned int i;
 
     PhysPages::BlankUsedPages();
@@ -163,10 +168,12 @@ static inline void SetupMmu(void)
     	pEntries[i].section.Init((unsigned int *)(i * 1048576),
     			TranslationTable::kNaNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    MapPhysToVirt(0, 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    MapPhysToVirt((void *)0x10000, (void *)0x10000, 1048576 - 0x10000, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    unsigned int end = ((unsigned int)&_end + 4095) & ~4095;
 
-    SetHighBrk((void *)1048576);
+    MapPhysToVirt(0, 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    MapPhysToVirt((void *)0x10000, (void *)0x10000, end - 0x10000, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+
+    SetHighBrk((void *)end);
 
     //executable top section
     pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
@@ -175,8 +182,6 @@ static inline void SetupMmu(void)
     pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
-//    pEntries[257].section.Init((unsigned int *)(257 * 1048576),
-//    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
     /* Copy the page table address to cp15 */
@@ -192,10 +197,8 @@ static inline void SetupMmu(void)
     memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
 
     //set the emulation value
-//    *(unsigned int *)(0xffff0fe0 - 4) = (unsigned int)&thread_section_begin - 8;
     *(unsigned int *)(0xffff0fe0 - 4) = 0;
     //set the register value
-//    asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" ((unsigned int)&thread_section_begin - 8) : "cc");
     asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (0) : "cc");
 }
 
@@ -215,6 +218,11 @@ extern "C" void Setup(void)
 
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
+
+	Elf startingElf;
+	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_start,
+			_binary__home_simon_workspace_tester_Debug_tester_size);
+
 	RfeData rfe;
 	rfe.m_pPc = &_start;
 	rfe.m_pSp = (unsigned int *)0xffeffffc;		//4095MB-4b

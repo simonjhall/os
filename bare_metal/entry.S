@@ -21,8 +21,6 @@ entry:
 	mov sp, r0
 
 	blx Setup
-
-	blx _start
 done:
 	b done
 .endfunc
