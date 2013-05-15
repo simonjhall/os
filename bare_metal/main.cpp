@@ -23,18 +23,31 @@ struct VectorTable
 	};
 	typedef void(*ExceptionVector)(void);
 
-	static void EncodeAndWriteBranch(ExceptionVector v, ExceptionType e)
+	static void EncodeAndWriteBranch(ExceptionVector v, ExceptionType e, unsigned int subtract = 0)
 	{
-		unsigned int *pBase = 0;
+		unsigned int *pBase = GetTableAddress();
 
-		unsigned int target = (unsigned int)v;
-		unsigned int source = (unsigned int)e * 4;
+		unsigned int target = (unsigned int)v - subtract;
+		unsigned int source = (unsigned int)pBase + (unsigned int)e * 4;
 		unsigned int diff = target - source - 8;
 
 		ASSERT(((diff >> 2) & ~0xffffff) == 0);
 
 		unsigned int b = (0xe << 28) | (10 << 24) | (((unsigned int)diff >> 2) & 0xffffff);
 		pBase[(unsigned int)e] = b;
+	}
+
+	static void SetTableAddress(unsigned int *pAddress)
+	{
+		asm("mcr p15, 0, %0, c12, c0, 0" : : "r" (pAddress) : "memory");
+	}
+
+	static unsigned int *GetTableAddress(void)
+	{
+		unsigned int existing;
+		asm("mrc p15, 0, %0, c12, c0, 0" : "=r" (existing) : : "cc");
+
+		return (unsigned int *)existing;
 	}
 };
 
@@ -107,23 +120,37 @@ extern "C" void _SupervisorCall(void);
 extern "C" unsigned int SupervisorCall(unsigned int r7);
 
 extern "C" void _PrefetchAbort(void);
-extern "C" void PrefetchAbort(unsigned int addr)
+extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pRegisters)
 {
 	PrinterUart p;
 	p.PrintString("prefetch abort at ");
 	p.Print(addr);
 	p.PrintString("\r\n");
 
+	for (int count = 0; count < 7; count++)
+	{
+		p.PrintString("\t");
+		p.Print(pRegisters[count]);
+		p.PrintString("\r\n");
+	}
+
 	ASSERT(0);
 }
 
 extern "C" void _DataAbort(void);
-extern "C" void DataAbort(unsigned int addr)
+extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegisters)
 {
 	PrinterUart p;
 	p.PrintString("data abort at ");
 	p.Print(addr);
 	p.PrintString("\r\n");
+
+	for (int count = 0; count < 7; count++)
+	{
+		p.PrintString("\t");
+		p.Print(pRegisters[count]);
+		p.PrintString("\r\n");
+	}
 
 	ASSERT(0);
 }
@@ -141,17 +168,28 @@ extern "C" void ChangeModeAndJump(unsigned int r0, unsigned int r1, unsigned int
 
 extern "C" void _start(void);
 
-#define NUM_PAGE_TABLE_ENTRIES 4096 /* 1 entry per 1MB, so this covers 4G address space */
-#define CACHE_DISABLED    0x12
-#define SDRAM_START       0x0
-#define SDRAM_END         (128 * 1024 * 1024)
-#define CACHE_WRITEBACK   0x1e
-
-
 
 extern unsigned int TlsLow, TlsHigh;
 extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
 extern unsigned int _end;
+
+
+extern unsigned int __trampoline_start__;
+extern unsigned int __trampoline_end__;
+
+extern unsigned int __UndefinedInstruction_addr;
+extern unsigned int __SupervisorCall_addr;
+extern unsigned int __PrefetchAbort_addr;
+extern unsigned int __DataAbort_addr;
+extern unsigned int __Irq_addr;
+extern unsigned int __Fiq_addr;
+
+extern "C" void __UndefinedInstruction(void);
+extern "C" void __SupervisorCall(void);
+extern "C" void __PrefetchAbort(void);
+extern "C" void __DataAbort(void);
+extern "C" void __Irq(void);
+extern "C" void __Fiq(void);
 
 static inline void SetupMmu(void)
 {
@@ -185,6 +223,9 @@ static inline void SetupMmu(void)
     //MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     MapPhysToVirt((void *)(1152 * 1048576), (void *)(1152 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
+    //map the trampoline vector one page up from exception vector
+    MapPhysToVirt((void *)0x82001000, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+
     /* Copy the page table address to cp15 */
     asm volatile("mcr p15, 0, %0, c2, c0, 0"
             : : "r" (pEntries) : "memory");
@@ -203,21 +244,45 @@ static inline void SetupMmu(void)
     asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (0) : "cc");
 }
 
+template <class T>
+void DumpMem(T *pVirtual, unsigned int len)
+{
+	PrinterUart p;
+	for (unsigned int count = 0; count < len; count++)
+	{
+		p.Print((unsigned int)pVirtual);
+		p.PrintString(": ");
+		p.Print(*pVirtual);
+		p.PrintString("\r\n");
+		pVirtual++;
+	}
+}
+
 extern "C" void Setup(void)
 {
 	PrinterUart p;
 	p.PrintString("pre-mmu\r\n");
 
+	VectorTable::SetTableAddress(0);
+
 	SetupMmu();
 
-//	while (1)
 	p.PrintString("mmu enabled\r\n");
 
-	VectorTable::EncodeAndWriteBranch(&_UndefinedInstruction, VectorTable::kUndefinedInstruction);
-	VectorTable::EncodeAndWriteBranch(&_SupervisorCall, VectorTable::kSupervisorCall);
-	VectorTable::EncodeAndWriteBranch(&_PrefetchAbort, VectorTable::kPrefetchAbort);
-	VectorTable::EncodeAndWriteBranch(&_DataAbort, VectorTable::kDataAbort);
+	__UndefinedInstruction_addr = (unsigned int)&_UndefinedInstruction;
+	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
+	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
+	__DataAbort_addr = (unsigned int)&_DataAbort;
+
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0x82000000);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0x82000000);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0x82000000);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0x82000000);
 	p.PrintString("exception table inserted\r\n");
+
+//	asm volatile ("swi 0");
+
+//	p.PrintString("swi\r\n");
 
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
@@ -291,7 +356,7 @@ int main(int argc, const char **argv)
 	PrinterUart *pee = new PrinterUart;
 
 	char buffer[100];
-	sprintf(buffer, "%p\n", pee);
+	sprintf(buffer, "%p\r\n", pee);
 	p.PrintString(buffer);
 
 	for (int count = 0; count < 10; count++)

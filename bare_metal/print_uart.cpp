@@ -16,7 +16,7 @@ void PrinterUart::PrintChar(char c)
 
 void PrinterUart::Wait(void)
 {
-	volatile int i = 10000;
+	volatile int i = 1000;
 	while (i--);
 }
 

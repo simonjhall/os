@@ -26,6 +26,7 @@ InvokeSyscall:
 	bx lr
 .endfunc
 
+.global stored_state
 stored_state:
 .word 0
 .word 0
@@ -107,6 +108,7 @@ _SupervisorCall:
 .func _PrefetchAbort
 _PrefetchAbort:
 	ldr sp, =stored_state
+	#mrs lr, lr_abt
 	str lr, [sp]
 	mrs lr, SPSR
 	str lr, [sp, #4]
@@ -124,6 +126,10 @@ _PrefetchAbort:
 
 	ldr r0, =stored_state
 	ldr r0, [r0]
+
+	ldr r1, =initial_stack_end
+	sub r1, #((14 + 1) * 4)
+
 	blx PrefetchAbort
 
 	add sp, #4
@@ -157,6 +163,10 @@ _DataAbort:
 
 	ldr r0, =stored_state
 	ldr r0, [r0]
+
+	ldr r1, =initial_stack_end
+	sub r1, #((14 + 1) * 4)
+
 	blx DataAbort
 
 	add sp, #4

@@ -76,6 +76,11 @@ namespace TranslationTable
 			m_ignore = top;
 		}
 
+		void Print(Printer &p)
+		{
+			p.PrintString("FAULT\r\n");
+		}
+
 		unsigned int m_zero:2;
 		unsigned int m_ignore:30;
 	};
@@ -94,6 +99,18 @@ namespace TranslationTable
 
 			ASSERT(((unsigned int)pBase & 1023) == 0);
 			m_pageTableBase = (unsigned int)pBase >> 10;
+		}
+
+		void Print(Printer &p)
+		{
+			p.PrintString("PTE     phys ");
+			p.Print(m_pageTableBase << 10);
+			p.PrintString("\r\n");
+		}
+
+		TableEntryL2 *GetPhysPageTable(void)
+		{
+			return (TableEntryL2 *)(m_pageTableBase << 10);
 		}
 
 		unsigned int m_zeroOne:2;
@@ -125,6 +142,19 @@ namespace TranslationTable
 
 			ASSERT(((unsigned int)pBase & 1048575) == 0);
 			m_sectionBase = (unsigned int)pBase >> 20;
+		}
+
+		void Print(Printer &p)
+		{
+			p.PrintString("Section phys ");
+			p.Print(m_sectionBase << 20);
+			p.PrintString(" AP ");
+			p.Print(m_ap | (m_ap2 << 2));
+			p.PrintString(" TEX ");
+			p.Print(m_b | (m_c << 1) | (m_tex << 2));
+			p.PrintString(" XN ");
+			p.Print(m_xn);
+			p.PrintString("\r\n");
 		}
 
 		unsigned int m_pxn:1;
@@ -176,6 +206,30 @@ namespace TranslationTable
 			else
 				return false;
 		}
+
+		bool Print(Printer &p)
+		{
+			if (IsPageTable())
+			{
+				pageTable.Print(p);
+				return true;
+			}
+			else if (IsSection())
+			{
+				section.Print(p);
+				return false;
+			}
+			else if (IsFault())
+			{
+				fault.Print(p);
+				return false;
+			}
+			else
+			{
+				ASSERT(0);
+				return false;
+			}
+		}
 	};
 
 	//second level
@@ -197,6 +251,19 @@ namespace TranslationTable
 		  m_pageBase = (unsigned int)pBase >> 12;
 		};
 
+		void Print(Printer &p)
+		{
+			p.PrintString("4k page phys ");
+			p.Print(m_pageBase << 12);
+			p.PrintString(" AP ");
+			p.Print(m_ap | (m_ap2 << 2));
+			p.PrintString(" TEX ");
+			p.Print(m_b | (m_c << 1) | (m_tex << 2));
+			p.PrintString(" XN ");
+			p.Print(m_xn);
+			p.PrintString("\r\n");
+		}
+
 		unsigned int m_xn:1;
 		unsigned int m_one:1;
 		unsigned int m_b:1;
@@ -216,6 +283,29 @@ namespace TranslationTable
 			Fault fault;
 			SmallPage smallPage;
 		};
+
+		bool IsFault(void)
+		{
+			if (fault.m_zero == 0)
+				return true;
+			else
+				return false;
+		}
+
+		bool IsSmallPage(void)
+		{
+			return !IsFault();			//do a better version
+		}
+
+		void Print(Printer &p)
+		{
+			if (IsSmallPage())
+				smallPage.Print(p);
+			else if (IsFault())
+				fault.Print(p);
+			else
+				ASSERT(0);
+		}
 	};
 }
 

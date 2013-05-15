@@ -134,39 +134,36 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 			unsigned int physStart = (unsigned int)pPhys;
 			unsigned int len = length;
 
-			PrinterUart p;
-			p.PrintString("starting ");
+			/*PrinterUart p;
+			p.PrintString("starting virt ");
 			p.Print(virtStart);
-			p.PrintString(" ");
+			p.PrintString(" phys ");
 			p.Print(physStart);
-			p.PrintString(" ");
+			p.PrintString(" len ");
 			p.Print(len);
-			p.PrintString("\r\n");
+			p.PrintString("\r\n");*/
 
 
 			ASSERT((len & 0xfff) == 0);					//page multiple
 			ASSERT((physStart & 0xfff) == 0);				//page aligned
 			ASSERT((virtStart & 0xfff) == 0);				//page aligned
 
-			p.Print(__LINE__);
-			p.PrintString("\r\n");
-
 			while (len)
 			{
 				unsigned int to_map = len > 1048576 ? 1048576 : len;
 				unsigned int virtEnd = virtStart + to_map;
 
-				p.PrintString("   it ");
+				/*p.PrintString("   it virtStart ");
 				p.Print(virtStart);
-				p.PrintString(" ");
+				p.PrintString(" virtEnd ");
 				p.Print(virtEnd);
-				p.PrintString(" ");
+				p.PrintString(" physStart ");
 				p.Print(physStart);
-				p.PrintString(" ");
+				p.PrintString(" len ");
 				p.Print(len);
-				p.PrintString(" ");
+				p.PrintString(" to_map ");
 				p.Print(to_map);
-				p.PrintString("\r\n");
+				p.PrintString("\r\n");*/
 
 				//clamp to the end of the megabyte
 				if ((virtEnd >> 20) != (virtStart >> 20))

@@ -15,11 +15,19 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 
+extern unsigned int stored_state;
+
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
 	PrinterUart p;
 	bool known = false;
 	const char *pName = 0;
+
+	/*p.PrintString("svc from ");
+	p.Print(stored_state);
+	p.PrintString(" code ");
+	p.Print(r7);
+	p.PrintString("\r\n");*/
 
 	switch (r7)
 	{
@@ -137,8 +145,13 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 
 	case 1:			//sys_exit
-		if (!pName)
-			pName = "sys_exit";
+	{
+//		if (!pName)
+//			pName = "sys_exit";
+		p.PrintString("sys_exit");
+		ASSERT(0);
+		return 0;
+	}
 	case 20:		//sys_getpid
 		if (!pName)
 			pName = "sys_getpid";
