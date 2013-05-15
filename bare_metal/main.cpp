@@ -226,6 +226,29 @@ static inline void SetupMmu(void)
     //map the trampoline vector one page up from exception vector
     MapPhysToVirt((void *)0x82001000, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
 
+    for (unsigned int count = 2045; count < 2048 + 128 + 5; count++)
+    {
+    	PrinterUart p;
+    	p.Print(count * 1048576);
+    	p.PrintString(": ");
+
+    	if (pEntries[count].Print(p))
+    	{
+    		p.PrintString("\r\n");
+    		TranslationTable::TableEntryL2 *pL2 = pEntries[count].pageTable.GetPhysPageTable();
+
+    		for (unsigned int inner = 0; inner < 256; inner++)
+    		{
+    			p.PrintString("\t");
+    			p.Print(count * 1048576 + inner * 4096);
+    			p.PrintString(": ");
+    			pL2[inner].Print(p);
+    		}
+
+    		p.PrintString("\r\n");
+    	}
+    }
+
     /* Copy the page table address to cp15 */
     asm volatile("mcr p15, 0, %0, c2, c0, 0"
             : : "r" (pEntries) : "memory");
