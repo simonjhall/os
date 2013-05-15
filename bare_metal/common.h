@@ -8,13 +8,15 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
+#include "print_uart.h"
+
 static inline void assert_func(void)
 {
 	volatile bool wait = false;
 	while (wait == false);
 }
 
-#define ASSERT(x) { if (!(x)) assert_func(); }
+#define ASSERT(x) { if (!(x)) {PrinterUart p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.Print(__LINE__);assert_func();} }
 
 namespace TranslationTable
 {
