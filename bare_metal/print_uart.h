@@ -13,11 +13,13 @@
 class PrinterUart : public Printer
 {
 public:
-	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x101f1000) {};
+//	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x101f1000) {};
+	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x48020000) {};
 	virtual ~PrinterUart(void) {};
 
 	virtual void PrintChar(char c);
 private:
+	void Wait(void);
 	volatile unsigned int *sm_pTxAddress;
 };
 

@@ -10,7 +10,14 @@
 void PrinterUart::PrintChar(char c)
 {
         *sm_pTxAddress = c;
+        Wait();
 }
 
+
+void PrinterUart::Wait(void)
+{
+	volatile int i = 10000;
+	while (i--);
+}
 
 

@@ -5,6 +5,7 @@
  *      Author: simon
  */
 
+#include "print_uart.h"
 #include "common.h"
 
 #include <functional>
@@ -22,7 +23,7 @@ void *FindPage(void)
 		if (g_usedPage[count] == false)
 		{
 			g_usedPage[count] = true;
-			return (void *)(count * 4096);
+			return (void *)((count + s_startPage) * 4096);
 		}
 	return (void *)-1;
 }
@@ -51,23 +52,27 @@ void *FindMultiplePages(unsigned int num, unsigned int alignOrder)
 						g_usedPage[count + inner] = true;
 				}
 
-			return (void *)(count * 4096);
+			return (void *)((count + s_startPage) * 4096);
 		}
 	return (void *)-1;
 }
 
 void ReleasePage(unsigned int p)
 {
+	p -= s_startPage;
 	unsigned int page = p >> 12;
 
+	ASSERT(p < s_totalPages);
 	ASSERT(g_usedPage[page] == true);
 	g_usedPage[page] = false;
 }
 
 void ReleaseMultiplePages(unsigned int p, unsigned int num)
 {
+	p -= s_startPage;
 	for (unsigned int page = p >> 12; page < (p >> 12) + num; page++)
 	{
+		ASSERT(p < s_totalPages);
 		ASSERT(g_usedPage[page] == true);
 		g_usedPage[page] = false;
 	}
@@ -97,6 +102,7 @@ TranslationTable::TableEntryL1 *GetL1Table(void)
 
 void ReservePages(unsigned int start, unsigned int num)
 {
+	start -= s_startPage;
 	for (unsigned int count = start; count < start + num; count++)
 	{
 		ASSERT(count < s_totalPages);
@@ -128,14 +134,39 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 			unsigned int physStart = (unsigned int)pPhys;
 			unsigned int len = length;
 
+			PrinterUart p;
+			p.PrintString("starting ");
+			p.Print(virtStart);
+			p.PrintString(" ");
+			p.Print(physStart);
+			p.PrintString(" ");
+			p.Print(len);
+			p.PrintString("\r\n");
+
+
 			ASSERT((len & 0xfff) == 0);					//page multiple
 			ASSERT((physStart & 0xfff) == 0);				//page aligned
 			ASSERT((virtStart & 0xfff) == 0);				//page aligned
+
+			p.Print(__LINE__);
+			p.PrintString("\r\n");
 
 			while (len)
 			{
 				unsigned int to_map = len > 1048576 ? 1048576 : len;
 				unsigned int virtEnd = virtStart + to_map;
+
+				p.PrintString("   it ");
+				p.Print(virtStart);
+				p.PrintString(" ");
+				p.Print(virtEnd);
+				p.PrintString(" ");
+				p.Print(physStart);
+				p.PrintString(" ");
+				p.Print(len);
+				p.PrintString(" ");
+				p.Print(to_map);
+				p.PrintString("\r\n");
 
 				//clamp to the end of the megabyte
 				if ((virtEnd >> 20) != (virtStart >> 20))
@@ -277,6 +308,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 	{
 		bool ok = mapper(true);
 		ASSERT(ok);
+
 		return ok;
 	}
 	else

@@ -158,7 +158,7 @@ static inline void SetupMmu(void)
     unsigned int i;
 
     PhysPages::BlankUsedPages();
-    PhysPages::ReservePages(0, 1048576 / 4096);
+    PhysPages::ReservePages(PhysPages::s_startPage, 1048576 / 4096);
 
     PhysPages::AllocL1Table();
     TranslationTable::TableEntryL1 *pEntries = PhysPages::GetL1Table();
@@ -170,8 +170,8 @@ static inline void SetupMmu(void)
 
     unsigned int end = ((unsigned int)&_end + 4095) & ~4095;
 
-    MapPhysToVirt(0, 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    MapPhysToVirt((void *)0x10000, (void *)0x10000, end - 0x10000, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0), 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0x10000), (void *)(PhysPages::s_startAddr + 0x10000), end - (PhysPages::s_startAddr + 0x10000), TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
     SetHighBrk((void *)end);
 
@@ -182,7 +182,8 @@ static inline void SetupMmu(void)
     pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
-    MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    //MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    MapPhysToVirt((void *)(1152 * 1048576), (void *)(1152 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
     /* Copy the page table address to cp15 */
     asm volatile("mcr p15, 0, %0, c2, c0, 0"
@@ -209,19 +210,21 @@ extern "C" void Setup(void)
 
 	SetupMmu();
 
+//	while (1)
 	p.PrintString("mmu enabled\r\n");
 
 	VectorTable::EncodeAndWriteBranch(&_UndefinedInstruction, VectorTable::kUndefinedInstruction);
 	VectorTable::EncodeAndWriteBranch(&_SupervisorCall, VectorTable::kSupervisorCall);
 	VectorTable::EncodeAndWriteBranch(&_PrefetchAbort, VectorTable::kPrefetchAbort);
 	VectorTable::EncodeAndWriteBranch(&_DataAbort, VectorTable::kDataAbort);
+	p.PrintString("exception table inserted\r\n");
 
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
 
-	Elf startingElf;
-	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_start,
-			_binary__home_simon_workspace_tester_Debug_tester_size);
+//	Elf startingElf;
+//	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_start,
+//			_binary__home_simon_workspace_tester_Debug_tester_size);
 
 	RfeData rfe;
 	rfe.m_pPc = &_start;

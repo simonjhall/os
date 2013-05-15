@@ -219,6 +219,8 @@ namespace TranslationTable
 
 namespace PhysPages
 {
+	static const unsigned int s_startAddr = 0x80000000;
+	static const unsigned int s_startPage = s_startAddr >> 12;
 	static const unsigned int s_totalPages = 128 * 256;
 
 	void BlankUsedPages(void);
