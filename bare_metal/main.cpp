@@ -188,6 +188,8 @@ extern "C" void _start(void);
 
 extern unsigned int TlsLow, TlsHigh;
 extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
+
+extern unsigned int entry;
 extern unsigned int _end;
 
 
@@ -208,28 +210,29 @@ extern "C" void __DataAbort(void);
 extern "C" void __Irq(void);
 extern "C" void __Fiq(void);
 
-static inline void SetupMmu(void)
+static inline void SetupMmu(unsigned int physEntryPoint)
 {
-    unsigned int i;
-
+	unsigned int virt_phys_offset = (unsigned int)&entry - physEntryPoint;
     //the end of the program, rounded up to the nearest phys page
-    unsigned int end = ((unsigned int)&_end + 4095) & ~4095;
+    unsigned int virt_end = ((unsigned int)&_end + 4095) & ~4095;
+    unsigned int image_length_4k_align = virt_end - (unsigned int)&entry;
+    ASSERT((image_length_4k_align & 4095) == 0);
+    unsigned int image_length_section_align = (image_length_4k_align + 1048575) & ~1048575;
 
     PhysPages::BlankUsedPages();
-    PhysPages::ReservePages(PhysPages::s_startPage, end / 4096);
+    PhysPages::ReservePages(physEntryPoint >> 12, image_length_section_align >> 12);
 
-    PhysPages::AllocL1Table();
+    PhysPages::AllocL1Table(physEntryPoint);
     TranslationTable::TableEntryL1 *pEntries = PhysPages::GetL1Table();
 
-    //disable everything
-    for (i = 0; i < 4096; i++)
-    	pEntries[i].section.Init((unsigned int *)(i * 1048576),
-    			TranslationTable::kNaNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
+    //disable the existing phys map
+    for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
+    	pEntries[i].fault.Init();
 
-    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0), 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0x10000), (void *)(PhysPages::s_startAddr + 0x10000), end - (PhysPages::s_startAddr + 0x10000), TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+//    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0), 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+//    MapPhysToVirt((void *)(PhysPages::s_startAddr + 0x10000), (void *)(PhysPages::s_startAddr + 0x10000), end - (PhysPages::s_startAddr + 0x10000), TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    SetHighBrk((void *)end);
+    SetHighBrk((void *)virt_end);
 
     //executable top section
     pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
@@ -245,7 +248,10 @@ static inline void SetupMmu(void)
 #endif
 
     //map the trampoline vector one page up from exception vector
-    MapPhysToVirt((void *)(PhysPages::s_loadAddr + 0x1000), (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+    MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+
+    unsigned int tramp_phys = virt_phys_offset + ((unsigned int)&__trampoline_start__ - (unsigned int)&entry);
+    MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
 
     for (unsigned int count = 0; count < 5; count++)
     {
@@ -269,15 +275,15 @@ static inline void SetupMmu(void)
     		p.PrintString("\r\n");
     	}
     }
-
-    /* Copy the page table address to cp15 */
-    asm volatile("mcr p15, 0, %0, c2, c0, 0"
-            : : "r" (pEntries) : "memory");
-
-    //change the domain bits
-    asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (1));		//0=no access, 1=client, 3=manager
-
-    EnableMmu(true);
+//
+//    /* Copy the page table address to cp15 */
+//    asm volatile("mcr p15, 0, %0, c2, c0, 0"
+//            : : "r" (pEntries) : "memory");
+//
+//    //change the domain bits
+//    asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (1));		//0=no access, 1=client, 3=manager
+//
+//    EnableMmu(true);
 
     //copy in the high code
     memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
@@ -302,15 +308,15 @@ void DumpMem(T *pVirtual, unsigned int len)
 	}
 }
 
-extern "C" void Setup(void)
+extern "C" void Setup(unsigned int entryPoint)
 {
+	VectorTable::SetTableAddress(0);
+
+	SetupMmu(entryPoint);
+
 	PL011::EnableFifo(false);
 	PrinterUart<PL011> p;
 	p.PrintString("pre-mmu\r\n");
-
-	VectorTable::SetTableAddress(0);
-
-	SetupMmu();
 
 	p.PrintString("mmu enabled\r\n");
 
@@ -319,10 +325,10 @@ extern "C" void Setup(void)
 	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
 	__DataAbort_addr = (unsigned int)&_DataAbort;
 
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, PhysPages::s_loadAddr);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, PhysPages::s_loadAddr);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, PhysPages::s_loadAddr);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, PhysPages::s_loadAddr);
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0);
 	p.PrintString("exception table inserted\r\n");
 
 //	asm volatile ("swi 0");

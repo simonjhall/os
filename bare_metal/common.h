@@ -312,11 +312,11 @@ namespace TranslationTable
 namespace PhysPages
 {
 #ifdef PBES
-	static const unsigned int s_loadAddr = 0x82000000;
+//	static const unsigned int s_loadAddr = 0x82000000;
 	static const unsigned int s_startAddr = 0x80000000;
 	static const unsigned int s_startPage = s_startAddr >> 12;
 #else
-	static const unsigned int s_loadAddr = 0x00000000;
+//	static const unsigned int s_loadAddr = 0x00000000;
 	static const unsigned int s_startAddr = 0x00000000;
 	static const unsigned int s_startPage = s_startAddr >> 12;
 #endif
@@ -326,7 +326,7 @@ namespace PhysPages
 	void BlankUsedPages(void);
 	void ReservePages(unsigned int start, unsigned int num);
 
-	bool AllocL1Table(void);
+	bool AllocL1Table(unsigned int entryPoint);
 	TranslationTable::TableEntryL1 *GetL1Table(void);
 
 	void *FindPage(void);
@@ -334,6 +334,58 @@ namespace PhysPages
 
 	void *FindMultiplePages(unsigned int num, unsigned int alignOrder);
 	void ReleaseMultiplePages(unsigned int p, unsigned int num);
+}
+
+template <class T>
+bool VirtToPhys(T *pVirtual, T **ppPhysical, int depth = 0)
+{
+	ASSERT(depth < 10);
+
+	unsigned int megabyte = (unsigned int)pVirtual >> 20;
+	TranslationTable::TableEntryL1 *pMainTableVirt = PhysPages::GetL1Table();
+
+	if (pMainTableVirt[megabyte].IsFault())
+		return false;
+	else if (pMainTableVirt[megabyte].IsSection())
+	{
+		//offset within the megabyte
+		unsigned int offset = (unsigned int)pVirtual & 1048575;
+		*ppPhysical = (T *)((pMainTableVirt[megabyte].section.m_sectionBase << 20) + offset);
+		return true;
+	}
+	else if (pMainTableVirt[megabyte].IsPageTable())
+	{
+		TranslationTable::TableEntryL2 *pPtePhys = pMainTableVirt[megabyte].pageTable.GetPhysPageTable();
+		TranslationTable::TableEntryL2 *pPteVirt;
+
+		if (VirtToPhys(pPtePhys, &pPteVirt, depth++))
+		{
+			//page within the megabyte
+			unsigned int page = ((unsigned int)pVirtual >> 12) & 4095;
+
+			if (pPteVirt[page].IsFault())
+				return false;
+			else if (pPteVirt[page].IsSmallPage())
+			{
+				//offset within the page
+				unsigned int offset = (unsigned int)pVirtual & 4095;
+				*ppPhysical = (T *)((pPteVirt[page].smallPage.m_pageBase << 12) + offset);
+				return true;
+			}
+			else
+			{
+				ASSERT(0);
+				return false;
+			}
+		}
+		else
+			return false;
+	}
+	else
+	{
+		ASSERT(0);
+		return false;
+	}
 }
 
 bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTable);

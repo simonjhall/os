@@ -10,6 +10,8 @@
 
 #include <functional>
 
+extern unsigned int master_tlb;
+
 namespace PhysPages
 {
 
@@ -84,12 +86,15 @@ void BlankUsedPages(void)
     	g_usedPage[count] = false;
 }
 
-static TranslationTable::TableEntryL1 *g_pPageTableL1;
-bool AllocL1Table(void)
+static TranslationTable::TableEntryL1 *g_pPageTableL1Virt;
+static TranslationTable::TableEntryL1 *g_pPageTableL1Phys;
+bool AllocL1Table(unsigned int entryPoint)
 {
-	g_pPageTableL1 = (TranslationTable::TableEntryL1 *)FindMultiplePages(4, 2);		//4096 entries of 4b each
+//	g_pPageTableL1 = (TranslationTable::TableEntryL1 *)FindMultiplePages(4, 2);		//4096 entries of 4b each
+	g_pPageTableL1Virt = (TranslationTable::TableEntryL1 *)&master_tlb;
+	g_pPageTableL1Phys = (TranslationTable::TableEntryL1 *)entryPoint;
 
-	if (g_pPageTableL1 == (TranslationTable::TableEntryL1 *)-1)
+	if (g_pPageTableL1Virt == (TranslationTable::TableEntryL1 *)-1)
 		return false;
 	else
 		return true;
@@ -97,7 +102,7 @@ bool AllocL1Table(void)
 
 TranslationTable::TableEntryL1 *GetL1Table(void)
 {
-	return g_pPageTableL1;
+	return g_pPageTableL1Virt;
 }
 
 void ReservePages(unsigned int start, unsigned int num)
@@ -176,14 +181,14 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 
 				//get the l1 entry
 				unsigned int megabyte = (unsigned int)virtStart >> 20;
-				TranslationTable::TableEntryL1 *pMainTable = PhysPages::GetL1Table();
+				TranslationTable::TableEntryL1 *pMainTableVirt = PhysPages::GetL1Table();
 
 				//find out what's there
 				bool current_fault, current_pagetable, current_section;
 
-				current_fault = pMainTable[megabyte].IsFault();
-				current_pagetable = pMainTable[megabyte].IsPageTable();
-				current_section = pMainTable[megabyte].IsSection();
+				current_fault = pMainTableVirt[megabyte].IsFault();
+				current_pagetable = pMainTableVirt[megabyte].IsPageTable();
+				current_section = pMainTableVirt[megabyte].IsSection();
 
 				//the l1 page table should be initialised
 				ASSERT(current_fault || current_pagetable || current_section);
@@ -200,7 +205,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 						if (current_pagetable)
 							RemovePageTable((void *)virtStart);
 
-						pMainTable[megabyte].section.Init((void *)physStart, perm, xn, type, domain);
+						pMainTableVirt[megabyte].section.Init((void *)physStart, perm, xn, type, domain);
 					}
 				}
 				else		//map part of it
@@ -210,15 +215,15 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 					{
 						if (commit)
 						{
-							TranslationTable::TableEntryL2 *pNew;
-							bool ok = AddPageTable((void *)virtStart, domain, &pNew);
+							TranslationTable::TableEntryL2 *pNewPhys, *pNewVirt;
+							bool ok = AddPageTable((void *)virtStart, domain, &pNewPhys);
 
 							if (!ok)
 								return false;
 
 							//clear the lot
 							for (unsigned int o = 0; o < 256; o++)
-								pNew[o].fault.Init();
+								pNewPhys[o].fault.Init();
 
 							//map the bit we're interested in
 							unsigned int total_pages = to_map >> 12;
@@ -227,20 +232,20 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 							for (unsigned int o = 0; o < total_pages; o++)
 							{
 								ASSERT(o + starting_page < 256);
-								pNew[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type);
+								pNewPhys[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type);
 							}
 						}
 					}
 					//currently a section
 					if (current_section)
 					{
-						if (pMainTable[megabyte].section.m_domain != domain)
+						if (pMainTableVirt[megabyte].section.m_domain != domain)
 							return false;
 
 						if (commit)
 						{
 							//take a copy
-							TranslationTable::Section existing = pMainTable[megabyte].section;
+							TranslationTable::Section existing = pMainTableVirt[megabyte].section;
 							unsigned int existing_pa = existing.m_sectionBase << 20;
 							TranslationTable::MemRegionType existing_type = (TranslationTable::MemRegionType)((existing.m_b) | (existing.m_c << 1) | (existing.m_tex << 2));
 							TranslationTable::AccessPerm existing_perm = (TranslationTable::AccessPerm)(existing.m_ap | (existing.m_ap2 << 2));
@@ -270,13 +275,13 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 					//currently a page table
 					if (current_pagetable)
 					{
-						if (pMainTable[megabyte].pageTable.m_domain != domain)
+						if (pMainTableVirt[megabyte].pageTable.m_domain != domain)
 							return false;
 
 						if (commit)
 						{
 							//get the existing page table phys address
-							TranslationTable::TableEntryL2 *pTable = (TranslationTable::TableEntryL2 *)(pMainTable[megabyte].pageTable.m_pageTableBase << 10);
+							TranslationTable::TableEntryL2 *pTable = (TranslationTable::TableEntryL2 *)(pMainTableVirt[megabyte].pageTable.m_pageTableBase << 10);
 
 							//map the bit we're interested in
 							unsigned int total_pages = to_map >> 12;
@@ -320,13 +325,13 @@ bool UnmapVirt(void *pVirt, unsigned int length)
 bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTable)
 {
 	//find 1KB of free phys space
-	void *pPage = PhysPages::FindPage();
+	void *pPhysPage = PhysPages::FindPage();
 
-	if (pPage == (void *)-1)
+	if (pPhysPage == (void *)-1)
 		return false;
 
 	//clear the table
-	TranslationTable::TableEntryL2 *pTable = (TranslationTable::TableEntryL2 *)pPage;
+	TranslationTable::TableEntryL2 *pTable = (TranslationTable::TableEntryL2 *)pPhysPage;
 	for (int count = 0; count < 256; count++)
 		pTable[count].fault.Init();
 
