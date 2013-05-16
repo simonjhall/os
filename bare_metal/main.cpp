@@ -100,8 +100,8 @@ unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
 
 //testing elf
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_start;
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_size;
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
 /////////
 
 struct FixedStack
@@ -120,7 +120,7 @@ extern "C" unsigned int *GetStackHigh(VectorTable::ExceptionType e)
 extern "C" void _UndefinedInstruction(void);
 extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * const pRegisters)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	p.PrintString("undefined instruction at ");
 	p.Print(addr);
 	p.PrintString("\r\n");
@@ -139,7 +139,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7);
 extern "C" void _PrefetchAbort(void);
 extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pRegisters)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	p.PrintString("prefetch abort at ");
 	p.Print(addr);
 	p.PrintString("\r\n");
@@ -157,7 +157,7 @@ extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pReg
 extern "C" void _DataAbort(void);
 extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegisters)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	p.PrintString("data abort at ");
 	p.Print(addr);
 	p.PrintString("\r\n");
@@ -212,8 +212,11 @@ static inline void SetupMmu(void)
 {
     unsigned int i;
 
+    //the end of the program, rounded up to the nearest phys page
+    unsigned int end = ((unsigned int)&_end + 4095) & ~4095;
+
     PhysPages::BlankUsedPages();
-    PhysPages::ReservePages(PhysPages::s_startPage, 1048576 / 4096);
+    PhysPages::ReservePages(PhysPages::s_startPage, end / 4096);
 
     PhysPages::AllocL1Table();
     TranslationTable::TableEntryL1 *pEntries = PhysPages::GetL1Table();
@@ -222,8 +225,6 @@ static inline void SetupMmu(void)
     for (i = 0; i < 4096; i++)
     	pEntries[i].section.Init((unsigned int *)(i * 1048576),
     			TranslationTable::kNaNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
-
-    unsigned int end = ((unsigned int)&_end + 4095) & ~4095;
 
     MapPhysToVirt((void *)(PhysPages::s_startAddr + 0), 0, 0x10000, TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
     MapPhysToVirt((void *)(PhysPages::s_startAddr + 0x10000), (void *)(PhysPages::s_startAddr + 0x10000), end - (PhysPages::s_startAddr + 0x10000), TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
@@ -248,7 +249,7 @@ static inline void SetupMmu(void)
 
     for (unsigned int count = 0; count < 5; count++)
     {
-    	PrinterUart p;
+    	PrinterUart<PL011> p;
     	p.Print(count * 1048576);
     	p.PrintString(": ");
 
@@ -290,7 +291,7 @@ static inline void SetupMmu(void)
 template <class T>
 void DumpMem(T *pVirtual, unsigned int len)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	for (unsigned int count = 0; count < len; count++)
 	{
 		p.Print((unsigned int)pVirtual);
@@ -303,7 +304,8 @@ void DumpMem(T *pVirtual, unsigned int len)
 
 extern "C" void Setup(void)
 {
-	PrinterUart p;
+	PL011::EnableFifo(false);
+	PrinterUart<PL011> p;
 	p.PrintString("pre-mmu\r\n");
 
 	VectorTable::SetTableAddress(0);
@@ -330,9 +332,9 @@ extern "C" void Setup(void)
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
 
-//	Elf startingElf;
-//	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_start,
-//			_binary__home_simon_workspace_tester_Debug_tester_size);
+	Elf startingElf;
+	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
+			_binary__home_simon_workspace_tester_Debug_tester_strip_size);
 
 	RfeData rfe;
 	rfe.m_pPc = &_start;
@@ -393,10 +395,10 @@ extern "C" void Setup(void)
 
 int main(int argc, const char **argv)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	p.PrintString("hello world\r\n");
 
-	PrinterUart *pee = new PrinterUart;
+	PrinterUart<PL011> *pee = new PrinterUart<PL011>;
 
 	char buffer[100];
 	sprintf(buffer, "%p\r\n", pee);
@@ -411,6 +413,13 @@ int main(int argc, const char **argv)
 	for (int count = 0; count < argc; count++)
 	{
 		printf("%d: %s\r\n", count, argv[count]);
+	}
+
+	while (1)
+	{
+		int c = getchar();
+		if (c != EOF)
+			printf("%c", c);
 	}
 	return 0;
 }

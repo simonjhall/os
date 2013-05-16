@@ -7,17 +7,16 @@
 
 #include "print_uart.h"
 
-void PrinterUart::PrintChar(char c)
-{
-        *sm_pTxAddress = c;
-        Wait();
-}
+//void PrinterUart::PrintChar(char c)
+//{
+//        Wait();
+//}
 
 
-void PrinterUart::Wait(void)
-{
-	volatile int i = 1000;
-	while (i--);
-}
+//void PrinterUart::Wait(void)
+//{
+//	volatile int i = 1000;
+//	while (i--);
+//}
 
 

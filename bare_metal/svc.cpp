@@ -19,7 +19,7 @@ extern unsigned int stored_state;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
-	PrinterUart p;
+	PrinterUart<PL011> p;
 	bool known = false;
 	const char *pName = 0;
 
@@ -138,6 +138,25 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		{
 			for (unsigned int count = 0; count < len; count++)
 				p.PrintChar(pBuf[count]);
+			return len;
+		}
+
+		return -1;
+	}
+	case 3:			//read
+	{
+		unsigned int fd = pRegisters[0];
+		unsigned char *pBuf = (unsigned char *)pRegisters[1];
+		unsigned int len = pRegisters[2];
+
+		if (fd == 0)	//stdin
+		{
+			for (unsigned int count = 0; count < len; count++)
+			{
+				unsigned char c;
+				while (PL011::ReadByte(c) == false);
+				pBuf[count] = c;
+			}
 			return len;
 		}
 

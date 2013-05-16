@@ -16,7 +16,7 @@ static inline void assert_func(void)
 	while (wait == false);
 }
 
-#define ASSERT(x) { if (!(x)) {PrinterUart p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.Print(__LINE__);assert_func();} }
+#define ASSERT(x) { if (!(x)) {PrinterUart<PL011> p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.Print(__LINE__);assert_func();} }
 
 namespace TranslationTable
 {
