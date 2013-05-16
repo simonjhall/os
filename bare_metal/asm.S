@@ -49,6 +49,12 @@ _UndefinedInstruction:
 	sub r0, #4
 	mov sp, r0
 
+	ldr r0, =stored_state
+	ldr r0, [r0]
+
+	ldr r1, =initial_stack_end
+	sub r1, #((14 + 1) * 4)
+
 	blx UndefinedInstruction
 
 	add sp, #4

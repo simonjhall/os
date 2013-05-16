@@ -6,12 +6,19 @@ OUTPUT_ARCH(arm)
 SEARCH_DIR("=/usr/local/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib/arm-linux-gnueabihf"); SEARCH_DIR("=/usr/lib"); SEARCH_DIR("/usr/arm-linux-gnueabihf/lib");
 SECTIONS
 {
-	. = 0x10000;
+	. = 0x82000040;
+	  /*. = 0x00010000;*/
 	.entry : {
 	*(.entry)
 	}
+	. = 0x82001040;
+	/*  . = 0x00011040;*/
+	.trampoline : {
+	*(.trampoline)
+	}
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x20000)); . = SEGMENT_START("text-segment", 0x20000) + SIZEOF_HEADERS;
+  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x82020040)); . = SEGMENT_START("text-segment", 0x82020040) + SIZEOF_HEADERS;
+  /*  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x00020040)); . = SEGMENT_START("text-segment", 0x00020040) + SIZEOF_HEADERS;*/
   .interp         : { *(.interp) }
   .note.gnu.build-id : { *(.note.gnu.build-id) }
   .hash           : { *(.hash) }

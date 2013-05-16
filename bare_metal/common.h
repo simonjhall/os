@@ -311,8 +311,16 @@ namespace TranslationTable
 
 namespace PhysPages
 {
+#ifdef PBES
+	static const unsigned int s_loadAddr = 0x82000000;
 	static const unsigned int s_startAddr = 0x80000000;
 	static const unsigned int s_startPage = s_startAddr >> 12;
+#else
+	static const unsigned int s_loadAddr = 0x00000000;
+	static const unsigned int s_startAddr = 0x00000000;
+	static const unsigned int s_startPage = s_startAddr >> 12;
+#endif
+
 	static const unsigned int s_totalPages = 128 * 256;
 
 	void BlankUsedPages(void);

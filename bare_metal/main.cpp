@@ -39,15 +39,21 @@ struct VectorTable
 
 	static void SetTableAddress(unsigned int *pAddress)
 	{
+#ifdef PBES
 		asm("mcr p15, 0, %0, c12, c0, 0" : : "r" (pAddress) : "memory");
+#endif
 	}
 
 	static unsigned int *GetTableAddress(void)
 	{
+#ifdef PBES
 		unsigned int existing;
 		asm("mrc p15, 0, %0, c12, c0, 0" : "=r" (existing) : : "cc");
 
 		return (unsigned int *)existing;
+#else
+		return 0;
+#endif
 	}
 };
 
@@ -112,8 +118,19 @@ extern "C" unsigned int *GetStackHigh(VectorTable::ExceptionType e)
 
 
 extern "C" void _UndefinedInstruction(void);
-extern "C" void UndefinedInstruction(void)
+extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * const pRegisters)
 {
+	PrinterUart p;
+	p.PrintString("undefined instruction at ");
+	p.Print(addr);
+	p.PrintString("\r\n");
+
+	for (int count = 0; count < 7; count++)
+	{
+		p.PrintString("\t");
+		p.Print(pRegisters[count]);
+		p.PrintString("\r\n");
+	}
 }
 
 extern "C" void _SupervisorCall(void);
@@ -220,13 +237,16 @@ static inline void SetupMmu(void)
     pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
-    //MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+#ifdef PBES
     MapPhysToVirt((void *)(1152 * 1048576), (void *)(1152 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+#else
+    MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+#endif
 
     //map the trampoline vector one page up from exception vector
-    MapPhysToVirt((void *)0x82001000, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+    MapPhysToVirt((void *)(PhysPages::s_loadAddr + 0x1000), (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
 
-    for (unsigned int count = 2045; count < 2048 + 128 + 5; count++)
+    for (unsigned int count = 0; count < 5; count++)
     {
     	PrinterUart p;
     	p.Print(count * 1048576);
@@ -297,10 +317,10 @@ extern "C" void Setup(void)
 	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
 	__DataAbort_addr = (unsigned int)&_DataAbort;
 
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0x82000000);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0x82000000);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0x82000000);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0x82000000);
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, PhysPages::s_loadAddr);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, PhysPages::s_loadAddr);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, PhysPages::s_loadAddr);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, PhysPages::s_loadAddr);
 	p.PrintString("exception table inserted\r\n");
 
 //	asm volatile ("swi 0");

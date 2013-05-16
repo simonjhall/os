@@ -13,8 +13,11 @@
 class PrinterUart : public Printer
 {
 public:
-//	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x101f1000) {};
+#ifdef PBES
 	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x48020000) {};
+#else
+	PrinterUart(void) : sm_pTxAddress ((volatile unsigned int *)0x101f1000) {};
+#endif
 	virtual ~PrinterUart(void) {};
 
 	virtual void PrintChar(char c);
