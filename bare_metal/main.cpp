@@ -342,6 +342,27 @@ extern "C" void Setup(unsigned int entryPoint)
 	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
 			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
 
+	for (unsigned int count = 0; count < startingElf.GetNumProgramHeaders(); count++)
+	{
+		void *pData;
+		unsigned int vaddr;
+		unsigned int memSize, fileSize;
+
+		startingElf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
+
+		p.PrintString("Header ");
+		p.Print(count);
+		p.PrintString(" file data ");
+		p.Print((unsigned int)pData);
+		p.PrintString(" virtual address ");
+		p.Print(vaddr);
+		p.PrintString(" memory size ");
+		p.Print(memSize);
+		p.PrintString(" file size ");
+		p.Print(fileSize);
+		p.PrintString("\r\n");
+	}
+
 	RfeData rfe;
 	rfe.m_pPc = &_start;
 	rfe.m_pSp = (unsigned int *)0xffeffffc;		//4095MB-4b
