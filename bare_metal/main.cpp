@@ -222,8 +222,11 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     PhysPages::BlankUsedPages();
     PhysPages::ReservePages(physEntryPoint >> 12, image_length_section_align >> 12);
 
-    PhysPages::AllocL1Table(physEntryPoint);
-    TranslationTable::TableEntryL1 *pEntries = PhysPages::GetL1Table();
+    VirtMem::AllocL1Table(physEntryPoint);
+    TranslationTable::TableEntryL1 *pEntries = VirtMem::GetL1TableVirt();
+
+    if (!VirtMem::InitL1L2Allocators())
+    	ASSERT(0);
 
     //disable the existing phys map
     for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
@@ -244,14 +247,14 @@ static inline void SetupMmu(unsigned int physEntryPoint)
 #ifdef PBES
     MapPhysToVirt((void *)(1152 * 1048576), (void *)(1152 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #else
-    MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576, TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #endif
 
     //map the trampoline vector one page up from exception vector
-    MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+    VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
 
-    unsigned int tramp_phys = virt_phys_offset + ((unsigned int)&__trampoline_start__ - (unsigned int)&entry);
-    MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
+    unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
+    VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096, TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0);
 
     for (unsigned int count = 0; count < 5; count++)
     {
@@ -262,28 +265,25 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     	if (pEntries[count].Print(p))
     	{
     		p.PrintString("\r\n");
-    		TranslationTable::TableEntryL2 *pL2 = pEntries[count].pageTable.GetPhysPageTable();
+    		TranslationTable::TableEntryL2 *pL2Phys = pEntries[count].pageTable.GetPhysPageTable();
+    		TranslationTable::TableEntryL2 *pL2Virt;
 
-    		for (unsigned int inner = 0; inner < 256; inner++)
+    		if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt))
+    			p.PrintString("\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\r\n");
+    		else
     		{
-    			p.PrintString("\t");
-    			p.Print(count * 1048576 + inner * 4096);
-    			p.PrintString(": ");
-    			pL2[inner].Print(p);
-    		}
+				for (unsigned int inner = 0; inner < 256; inner++)
+				{
+					p.PrintString("\t");
+					p.Print(count * 1048576 + inner * 4096);
+					p.PrintString(": ");
+					pL2Virt[inner].Print(p);
+				}
 
-    		p.PrintString("\r\n");
+				p.PrintString("\r\n");
+    		}
     	}
     }
-//
-//    /* Copy the page table address to cp15 */
-//    asm volatile("mcr p15, 0, %0, c2, c0, 0"
-//            : : "r" (pEntries) : "memory");
-//
-//    //change the domain bits
-//    asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (1));		//0=no access, 1=client, 3=manager
-//
-//    EnableMmu(true);
 
     //copy in the high code
     memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
@@ -325,10 +325,10 @@ extern "C" void Setup(unsigned int entryPoint)
 	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
 	__DataAbort_addr = (unsigned int)&_DataAbort;
 
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0);
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf001b000);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf001b000);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf001b000);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf001b000);
 	p.PrintString("exception table inserted\r\n");
 
 //	asm volatile ("swi 0");
@@ -340,7 +340,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	Elf startingElf;
 	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
-			_binary__home_simon_workspace_tester_Debug_tester_strip_size);
+			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
 
 	RfeData rfe;
 	rfe.m_pPc = &_start;

@@ -95,28 +95,28 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				//count the pages
 				unsigned int num_pages = change >> 12;
 
-				EnableMmu(false);
+//				EnableMmu(false);
 
 				for (unsigned int count = 0; count < num_pages; count++)
 				{
-					void *p = PhysPages::FindPage();
-					if (p == (void *)-1)
+					void *pPhys = PhysPages::FindPage();
+					if (pPhys == (void *)-1)
 						break;
 
-					//zero it
-					memset(p, 0, 4096);
-
-					if (!MapPhysToVirt(p, (void *)current, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+					if (!VirtMem::MapPhysToVirt(pPhys, (void *)current, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
 					{
-						PhysPages::ReleasePage((unsigned int)p >> 12);
+						PhysPages::ReleasePage((unsigned int)pPhys >> 12);
 						break;
 					}
+
+					//zero it
+					memset((void *)current, 0, 4096);
 
 					current += 4096;
 				}
 
 				SetHighBrk((void *)current);
-				EnableMmu(true);
+//				EnableMmu(true);
 			}
 		}
 
