@@ -103,8 +103,10 @@ unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
 
 //testing elf
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
+extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start;
+extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size;
+//extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
+//extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
 /////////
 
 struct FixedStack
@@ -261,7 +263,11 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
     //copy in the high code
-    memcpy((unsigned char *)(0xffff0fe0 - 4), &TlsLow, (unsigned int)TlsHigh - (unsigned int)TlsLow);
+    unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
+    unsigned char *pHighSource = (unsigned char *)&TlsLow;
+
+    for (unsigned int count = 0; count < (unsigned int)&TlsHigh - (unsigned int)&TlsLow; count++)
+    	pHighCode[count] = pHighSource[count];
 
     //set the emulation value
     *(unsigned int *)(0xffff0fe0 - 4) = 0;
@@ -318,8 +324,8 @@ extern "C" void Setup(unsigned int entryPoint)
 //	InvokeSyscall(1234);
 
 	Elf startingElf;
-	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
-			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
+	startingElf.Load(&_binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start,
+			(unsigned int)&_binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size);
 
 	bool has_tls = false;
 	unsigned int tls_memsize, tls_filesize, tls_vaddr;
@@ -370,18 +376,14 @@ extern "C" void Setup(unsigned int entryPoint)
 				//clear the page
 				memset((void *)beginVirt, 0, 4096);
 
-				//copy in the file data
-				unsigned int to_copy = fileSize > 4096 ? 4096 : fileSize;
-
-				for (unsigned int c = 0; c < (to_copy >> 2); c++)
-				{
-					((unsigned int *)beginVirt)[c] = ((unsigned int *)pData)[c];
-				}
-
 				//next page
 				beginVirt += 4096;
-				pData = (void *)((unsigned int)pData + 4096);
-				fileSize -= to_copy;
+			}
+
+			//copy in the file data
+			for (unsigned int c = 0; c < fileSize; c++)
+			{
+				((unsigned char *)vaddr)[c] = ((unsigned char *)pData)[c];
 			}
 		}
 	}
