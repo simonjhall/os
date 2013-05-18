@@ -329,6 +329,47 @@ bool RemovePageTable(void *pVirtual)
 	return true;
 }
 
+void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
+{
+	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt();
+
+	for (unsigned int count = (unsigned int)pStart >> 20; count < (unsigned int)pEnd >> 20; count++)
+	{
+		if (noFault && pL1Virt[count].IsFault())
+			continue;
+
+		PrinterUart<PL011> p;
+
+		p.Print(count * 1048576);
+		p.PrintString(": ");
+
+		if (pL1Virt[count].Print(p) && withL2)
+		{
+			p.PrintString("\r\n");
+			TranslationTable::TableEntryL2 *pL2Phys = pL1Virt[count].pageTable.GetPhysPageTable();
+			TranslationTable::TableEntryL2 *pL2Virt;
+
+			if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt))
+				p.PrintString("\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\r\n");
+			else
+			{
+				for (unsigned int inner = 0; inner < 256; inner++)
+				{
+					if (noFault && pL2Virt[inner].IsFault())
+						continue;
+
+					p.PrintString("\t");
+					p.Print(count * 1048576 + inner * 4096);
+					p.PrintString(": ");
+					pL2Virt[inner].Print(p);
+				}
+
+				p.PrintString("\r\n");
+			}
+		}
+	}
+}
+
 }
 
 

@@ -137,7 +137,7 @@ unsigned int Elf::GetNumProgramHeaders(void)
 		return 0;
 }
 
-bool Elf::GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int *memsize, unsigned int *filesize)
+unsigned int Elf::GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int *memsize, unsigned int *filesize)
 {
 	if (i < 0 || (unsigned int)i >= GetNumProgramHeaders())
 		return false;
@@ -149,10 +149,7 @@ bool Elf::GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int
 	*memsize= swap_bytes(p->p_memsz, m_littleEndian);
 	*filesize = swap_bytes(p->p_filesz, m_littleEndian);
 
-	if (swap_bytes(p->p_type, m_littleEndian) == 1)
-		return true;
-	else
-		return false;
+	return swap_bytes(p->p_type, m_littleEndian);
 }
 
 Elf::~Elf()

@@ -23,7 +23,7 @@ public:
 	void *FindSection(const char *, unsigned int *length, unsigned int *vaddr);
 	void *GetEntryPoint(void);
 	unsigned int GetNumProgramHeaders(void);
-	bool GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int *memsize, unsigned int *filesize);
+	unsigned int GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int *memsize, unsigned int *filesize);
 	void *GetWholeImage(void) { return m_pElf; };
 	Endian GetEndianness(void) { if (m_pHeader->e_ident[5] != 2) return kLittle; else return kBig; }
 

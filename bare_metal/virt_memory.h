@@ -30,6 +30,9 @@ TranslationTable::TableEntryL1 *GetL1TableVirt(void);
 //the L1 and L2 table allocators
 bool InitL1L2Allocators(void);
 
+//debug
+void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault);
+
 //translation of virtual to physical
 template <class T>
 bool VirtToPhys(T *pVirtual, T **ppPhysical, int depth = 0)
@@ -93,7 +96,7 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 
 	TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt();
 
-	unsigned int phys_whole = (unsigned int)pPhysical;
+//	unsigned int phys_whole = (unsigned int)pPhysical;
 
 	unsigned int phys_mb = (unsigned int)pPhysical & ~1048575;
 	unsigned int phys_sub_mb = (unsigned int)pPhysical & 1048575;
