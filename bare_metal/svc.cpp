@@ -13,9 +13,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <asm-generic/errno-base.h>
 #include <fcntl.h>
 
 extern unsigned int stored_state;
+
+extern unsigned int _binary_libgcc_s_so_1_start;
+extern unsigned int _binary_libgcc_s_so_1_size;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
@@ -134,7 +138,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		unsigned char *pBuf = (unsigned char *)pRegisters[1];
 		unsigned int len = pRegisters[2];
 
-		if (fd == 1)	//stdout
+		if (fd == 1 || fd == 2)	//stdout or stderr
 		{
 			for (unsigned int count = 0; count < len; count++)
 				p.PrintChar(pBuf[count]);
@@ -219,12 +223,31 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 		return -1;
 	}
+	case 125:		//mprotect
+	{
+		void *pVaddr = (void *)pRegisters[0];
+		unsigned int len = pRegisters[1];
+		int prot = pRegisters[2];
+
+		if (len & 4095)
+			return -EINVAL;
+
+		void *pPhys;
+		bool ok = VirtMem::VirtToPhys(pVaddr, &pPhys);
+
+		if (!ok)
+			return -ENOMEM;
+
+		p.PrintString("unimplement mprotect\r\n");
+		return 0;
+	}
+	case 20:		//sys_getpid
+	{
+		return 0;
+	}
 	case 33:		//access
 		if (!pName)
 			pName = "access";
-	case 20:		//sys_getpid
-		if (!pName)
-			pName = "sys_getpid";
 	case 78:		//compat_sys_gettimeofday
 		if (!pName)
 			pName = "compat_sys_gettimeofday";

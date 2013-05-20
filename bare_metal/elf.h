@@ -24,6 +24,7 @@ public:
 	void *GetEntryPoint(void);
 	unsigned int GetNumProgramHeaders(void);
 	unsigned int GetProgramHeader(int i, void **data, unsigned int *vaddr, unsigned int *memsize, unsigned int *filesize);
+	Elf32_Phdr *GetAllProgramHeaders(void) { return m_pProgramHeader; };
 	void *GetWholeImage(void) { return m_pElf; };
 	Endian GetEndianness(void) { if (m_pHeader->e_ident[5] != 2) return kLittle; else return kBig; }
 

@@ -462,7 +462,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[0] = 1;
 	//fill in argv
 	const char *pElfName = "/init.elf";
-	const char *pEnv = "VAR=var";
+	const char *pEnv = "LD_DEBUG=all";
 
 	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
 	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 4;
@@ -470,7 +470,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
 
 	pAuxVec[0].a_type = AT_PHDR;
-	pAuxVec[0].a_un.a_val = (unsigned int)pHdr;
+//	pAuxVec[0].a_un.a_val = (unsigned int)pHdr;
+//	pAuxVec[0].a_un.a_val = (unsigned int)startingElf.GetAllProgramHeaders();
+	pAuxVec[0].a_un.a_val = 0x8000 + 52;
 
 	pAuxVec[1].a_type = AT_PHNUM;
 //	pAuxVec[1].a_un.a_val = 1;
@@ -505,7 +507,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	}*/
 
 
-	pAuxVec[1].a_un.a_val = FillPHdr(startingElf, pHdr, 0);
+//	pAuxVec[1].a_un.a_val = FillPHdr(startingElf, pHdr, 0);
+	pAuxVec[1].a_un.a_val = startingElf.GetNumProgramHeaders();
 	unsigned int hdr_size = sizeof(ElfW(Phdr)) * pAuxVec[1].a_un.a_val;
 
 	unsigned int text_start_addr = (unsigned int)pAuxVec + aux_size + hdr_size;
