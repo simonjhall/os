@@ -64,7 +64,7 @@ bool Elf::Load(void *base, unsigned int size)
 	m_pHeader->e_shnum = swap_bytes(m_pHeader->e_shnum, m_littleEndian);
 	m_pHeader->e_shstrndx = swap_bytes(m_pHeader->e_shstrndx, m_littleEndian);
 
-	if (m_pHeader->e_type != 2)
+	if (m_pHeader->e_type != ET_EXEC && m_pHeader->e_type != ET_DYN)
 	{
 		//not an executable elf format
 		return false;

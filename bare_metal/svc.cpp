@@ -171,6 +171,57 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		ASSERT(0);
 		return 0;
 	}
+	case 192:		//sys_mmap_pgoff
+	{
+		void *pDest = (void *)pRegisters[0];
+		unsigned int length = (pRegisters[1] + 4095) & ~4095;
+		unsigned int length_pages = length >> 12;
+		int file = (int)pRegisters[4];
+
+		ASSERT(((unsigned int)pDest >> 12) == 0);
+
+		static unsigned int highZero = 0x60000000;
+		bool usingHigh = false;
+
+		if (pDest == 0)
+		{
+			pDest = (void *)highZero;
+			highZero += length;
+			usingHigh = true;
+		}
+
+		if (file == -1)
+		{
+			void *to_return = pDest;
+
+			for (unsigned int count = 0; count < length_pages; count++)
+			{
+				void *pPhys = PhysPages::FindPage();
+				if (pPhys == (void *)-1)
+				{
+//					if (usingHigh)
+//						highZero -= l
+					ASSERT(0);
+					return -1;
+				}
+
+				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+				{
+					ASSERT(0);
+					return -1;
+				}
+
+				pDest = (void *)((unsigned int)pDest + 4096);
+			}
+
+			return (unsigned int)to_return;
+		}
+
+		return -1;
+	}
+	case 33:		//access
+		if (!pName)
+			pName = "access";
 	case 20:		//sys_getpid
 		if (!pName)
 			pName = "sys_getpid";
@@ -183,9 +234,6 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 175:		//compat_sys_rt_sigprocmask
 		if (!pName)
 			pName = "compat_sys_rt_sigprocmask";
-	case 192:		//sys_mmap_pgoff
-		if (!pName)
-			pName = "sys_mmap_pgoff";
 	case 197:		//fstat64
 		if (!pName)
 			pName = "fstat64";

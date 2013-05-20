@@ -103,10 +103,13 @@ unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
 
 //testing elf
-extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start;
-extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size;
-//extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
-//extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
+//extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start;
+//extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size;
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
+extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
+
+extern unsigned int _binary_ld_stripped_so_start;
+extern unsigned int _binary_ld_stripped_so_size;
 /////////
 
 struct FixedStack
@@ -289,6 +292,105 @@ void DumpMem(T *pVirtual, unsigned int len)
 	}
 }
 
+void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
+{
+	PrinterUart<PL011> p;
+
+	has_tls = false;
+
+	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
+	{
+		void *pData;
+		unsigned int vaddr;
+		unsigned int memSize, fileSize;
+
+		int p_type = elf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
+
+		vaddr += voffset;
+
+		p.PrintString("Header ");
+		p.Print(count);
+		p.PrintString(" file data ");
+		p.Print((unsigned int)pData);
+		p.PrintString(" virtual address ");
+		p.Print(vaddr);
+		p.PrintString(" memory size ");
+		p.Print(memSize);
+		p.PrintString(" file size ");
+		p.Print(fileSize);
+		p.PrintString("\r\n");
+
+		if (p_type == PT_TLS)
+		{
+			tls_memsize = memSize;
+			tls_filesize = fileSize;
+			tls_vaddr = vaddr;
+			has_tls = true;
+		}
+
+		if (p_type == PT_INTERP)
+		{
+			p.PrintString("interpreter :");
+			p.PrintString((char *)pData);
+			p.PrintString("\r\n");
+		}
+
+		if (p_type == PT_LOAD)
+		{
+			unsigned int beginVirt = vaddr & ~4095;
+			unsigned int endVirt = ((vaddr + memSize) + 4095) & ~4095;
+			unsigned int pagesNeeded = (endVirt - beginVirt) >> 12;
+
+			for (unsigned int i = 0; i < pagesNeeded; i++)
+			{
+				void *pPhys = PhysPages::FindPage();
+				ASSERT(pPhys != (void *)-1);
+
+				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096,
+						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+				ASSERT(ok);
+
+				//clear the page
+				memset((void *)beginVirt, 0, 4096);
+
+				//next page
+				beginVirt += 4096;
+			}
+
+			//copy in the file data
+			for (unsigned int c = 0; c < fileSize; c++)
+			{
+				((unsigned char *)vaddr)[c] = ((unsigned char *)pData)[c];
+			}
+		}
+	}
+}
+
+unsigned int FillPHdr(Elf &elf, ElfW(Phdr) *pHdr, unsigned int voffset)
+{
+	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
+	{
+		void *pData;
+		unsigned int vaddr;
+		unsigned int memSize, fileSize;
+
+		int p_type = elf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
+
+		vaddr += voffset;
+
+		pHdr[count].p_align = 2;
+		pHdr[count].p_filesz = fileSize;
+		pHdr[count].p_flags = 0;
+		pHdr[count].p_memsz = memSize;
+		pHdr[count].p_offset = 0;
+		pHdr[count].p_paddr = vaddr;
+		pHdr[count].p_type = p_type;
+		pHdr[count].p_vaddr = vaddr;
+	}
+
+	return elf.GetNumProgramHeaders();
+}
+
 extern "C" void Setup(unsigned int entryPoint)
 {
 	VectorTable::SetTableAddress(0);
@@ -323,74 +425,26 @@ extern "C" void Setup(unsigned int entryPoint)
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
 
-	Elf startingElf;
-	startingElf.Load(&_binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start,
-			(unsigned int)&_binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size);
+	Elf startingElf, interpElf;
+
+	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
+			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
+
+	interpElf.Load(&_binary_ld_stripped_so_start,
+			(unsigned int)&_binary_ld_stripped_so_size);
 
 	bool has_tls = false;
 	unsigned int tls_memsize, tls_filesize, tls_vaddr;
 
-	for (unsigned int count = 0; count < startingElf.GetNumProgramHeaders(); count++)
-	{
-		void *pData;
-		unsigned int vaddr;
-		unsigned int memSize, fileSize;
-
-		int p_type = startingElf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
-
-		p.PrintString("Header ");
-		p.Print(count);
-		p.PrintString(" file data ");
-		p.Print((unsigned int)pData);
-		p.PrintString(" virtual address ");
-		p.Print(vaddr);
-		p.PrintString(" memory size ");
-		p.Print(memSize);
-		p.PrintString(" file size ");
-		p.Print(fileSize);
-		p.PrintString("\r\n");
-
-		if (p_type == PT_TLS)
-		{
-			tls_memsize = memSize;
-			tls_filesize = fileSize;
-			tls_vaddr = vaddr;
-			has_tls = true;
-		}
-
-		if (p_type == PT_LOAD)
-		{
-			unsigned int beginVirt = vaddr & ~4095;
-			unsigned int endVirt = ((vaddr + memSize) + 4095) & ~4095;
-			unsigned int pagesNeeded = (endVirt - beginVirt) >> 12;
-
-			for (unsigned int i = 0; i < pagesNeeded; i++)
-			{
-				void *pPhys = PhysPages::FindPage();
-				ASSERT(pPhys != (void *)-1);
-
-				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096,
-						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-				ASSERT(ok);
-
-				//clear the page
-				memset((void *)beginVirt, 0, 4096);
-
-				//next page
-				beginVirt += 4096;
-			}
-
-			//copy in the file data
-			for (unsigned int c = 0; c < fileSize; c++)
-			{
-				((unsigned char *)vaddr)[c] = ((unsigned char *)pData)[c];
-			}
-		}
-	}
+	//////////////////////////////////////
+	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+	ASSERT(has_tls == false);
+	LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+	//////////////////////////////////////
 
 	RfeData rfe;
 //	rfe.m_pPc = &_start;
-	rfe.func = startingElf.GetEntryPoint();
+	rfe.func = (void *)((unsigned int)interpElf.GetEntryPoint() + 0x70000000);
 	rfe.m_pSp = (unsigned int *)0xffeffffc;		//4095MB-4b
 
 	memset(&rfe.m_cpsr, 0, 4);
@@ -411,7 +465,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	const char *pEnv = "VAR=var";
 
 	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
-	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 3;
+	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 4;
 
 	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
 
@@ -419,11 +473,17 @@ extern "C" void Setup(unsigned int entryPoint)
 	pAuxVec[0].a_un.a_val = (unsigned int)pHdr;
 
 	pAuxVec[1].a_type = AT_PHNUM;
-	pAuxVec[1].a_un.a_val = 1;
+//	pAuxVec[1].a_un.a_val = 1;
 
-	pAuxVec[2].a_type = AT_NULL;
+	pAuxVec[2].a_type = AT_ENTRY;
+	pAuxVec[2].a_un.a_val = (unsigned int)startingElf.GetEntryPoint();
 
-	pHdr->p_align = 2;
+	pAuxVec[3].a_type = AT_BASE;
+	pAuxVec[3].a_un.a_val = 0x70000000;
+
+	pAuxVec[4].a_type = AT_NULL;
+
+	/*pHdr->p_align = 2;
 //	pHdr->p_filesz = (unsigned int)&thread_section_mid - (unsigned int)&thread_section_begin;
 //	pHdr->p_memsz = (unsigned int)&thread_section_end - (unsigned int)&thread_section_begin;
 	pHdr->p_offset = 0;
@@ -442,9 +502,11 @@ extern "C" void Setup(unsigned int entryPoint)
 		pHdr->p_filesz = 0;
 		pHdr->p_memsz = 0;
 		pHdr->p_vaddr = 0;
-	}
+	}*/
 
-	unsigned int hdr_size = sizeof(ElfW(Phdr));
+
+	pAuxVec[1].a_un.a_val = FillPHdr(startingElf, pHdr, 0);
+	unsigned int hdr_size = sizeof(ElfW(Phdr)) * pAuxVec[1].a_un.a_val;
 
 	unsigned int text_start_addr = (unsigned int)pAuxVec + aux_size + hdr_size;
 
