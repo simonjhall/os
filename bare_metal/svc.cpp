@@ -15,6 +15,7 @@
 #include <sys/uio.h>
 #include <asm-generic/errno-base.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 extern unsigned int stored_state;
 
@@ -66,6 +67,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		p.PrintString("sys_open ");
 		p.PrintString(pFilename);
 		p.PrintString("\r\n");
+
+		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+		{
+			static int fd = 3;
+			return fd++;
+		}
+		else
+			p.PrintString("UNIMPLEMENTED OPEN\r\rn");
 
 		return -1;
 	}
@@ -144,6 +153,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				p.PrintChar(pBuf[count]);
 			return len;
 		}
+		else
+			p.PrintString("UNIMPLEMENTED WRITE\r\rn");
 
 		return -1;
 	}
@@ -163,6 +174,20 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			}
 			return len;
 		}
+		else if (fd == 3)	//libgcc
+		{
+			static unsigned int offset = 0;
+			unsigned char *c = (unsigned char *)&_binary_libgcc_s_so_1_start;
+			for (unsigned int count = 0; count < len; count++)
+			{
+				pBuf[count] = c[offset + count];
+			}
+
+			offset += len;
+			return len;
+		}
+		else
+			p.PrintString("UNIMPLEMENTED READ\r\rn");
 
 		return -1;
 	}
@@ -181,6 +206,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		unsigned int length = (pRegisters[1] + 4095) & ~4095;
 		unsigned int length_pages = length >> 12;
 		int file = (int)pRegisters[4];
+		int off = (int)pRegisters[5] << 12;
 
 		ASSERT(((unsigned int)pDest >> 12) == 0);
 
@@ -220,6 +246,35 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 			return (unsigned int)to_return;
 		}
+		else if (file == 3)			//gcc
+		{
+			void *to_return = pDest;
+			void *pVirtSource = (void *)&_binary_libgcc_s_so_1_start;
+
+			pVirtSource = (void *)((unsigned int)pVirtSource + off);
+
+			for (unsigned int count = 0; count < length_pages; count++)
+			{
+				void *pPhys;
+				bool ok = VirtMem::VirtToPhys(pVirtSource,&pPhys);
+
+				if (!ok)
+					return -ENOMEM;
+
+				//map it in
+				ok = VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+
+				if (!ok)
+					return -ENOMEM;
+
+				pVirtSource = (void *)((unsigned int)pVirtSource + 4096);
+				pDest = (void *)((unsigned int)pDest + 4096);
+			}
+
+			return (unsigned int)to_return;
+		}
+		else
+			p.PrintString("UNIMPLEMENTED mmap\r\rn");
 
 		return -1;
 	}
@@ -238,13 +293,58 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (!ok)
 			return -ENOMEM;
 
-		p.PrintString("unimplement mprotect\r\n");
+		p.PrintString("unimplemented mprotect\r\n");
 		return 0;
 	}
 	case 20:		//sys_getpid
 	{
+		p.PrintString("UNIMPLEMENTED GETPID\r\rn");
 		return 0;
 	}
+	case 195:		//stat64
+	{
+		char *pFilename = (char *)pRegisters[0];
+		struct stat *pBuf = (struct stat *)pRegisters[1];
+
+		if (!pFilename || !pBuf)
+			return -EFAULT;
+
+		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+		{
+			memset(pBuf, 0, sizeof(struct stat));
+			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;
+			return 0;
+		}
+		else
+			p.PrintString("UNIMPLEMENTED STAT\r\rn");
+
+		return -EBADF;
+	}
+	case 197:		//fstat64
+	{
+		int handle = (int)pRegisters[0];
+		struct stat *pBuf = (struct stat *)pRegisters[1];
+
+		if (!pBuf)
+			return -EFAULT;
+
+		if (handle == 3)
+		{
+			memset(pBuf, 0, sizeof(struct stat));
+			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;
+			return 0;
+		}
+		else
+			p.PrintString("UNIMPLEMENTED FSTAT\r\rn");
+
+		return -EBADF;
+	}
+	case 6:			//close
+		if (!pName)
+			pName = "close";
+	case 19:		//lseek
+		if (!pName)
+			pName = "lseek";
 	case 33:		//access
 		if (!pName)
 			pName = "access";
@@ -257,9 +357,6 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 175:		//compat_sys_rt_sigprocmask
 		if (!pName)
 			pName = "compat_sys_rt_sigprocmask";
-	case 197:		//fstat64
-		if (!pName)
-			pName = "fstat64";
 	case 199:		//getuid32
 		if (!pName)
 			pName = "getuid32";
