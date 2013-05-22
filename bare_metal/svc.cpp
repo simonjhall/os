@@ -204,11 +204,12 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	{
 		void *pDest = (void *)pRegisters[0];
 		unsigned int length = (pRegisters[1] + 4095) & ~4095;
+		unsigned int length_unrounded = pRegisters[1];
 		unsigned int length_pages = length >> 12;
 		int file = (int)pRegisters[4];
 		int off = (int)pRegisters[5] << 12;
 
-		ASSERT(((unsigned int)pDest >> 12) == 0);
+		ASSERT(((unsigned int)pDest & 4095) == 0);
 
 		static unsigned int highZero = 0x60000000;
 		bool usingHigh = false;
@@ -241,6 +242,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 					return -1;
 				}
 
+				memset(pDest, 0, 4096);
+
 				pDest = (void *)((unsigned int)pDest + 4096);
 			}
 
@@ -248,28 +251,32 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		}
 		else if (file == 3)			//gcc
 		{
-			void *to_return = pDest;
-			void *pVirtSource = (void *)&_binary_libgcc_s_so_1_start;
-
-			pVirtSource = (void *)((unsigned int)pVirtSource + off);
+			unsigned char *to_return = (unsigned char *)pDest;
+			unsigned char *pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
+//			ASSERT((unsigned int)pVirtSource & 4095);
 
 			for (unsigned int count = 0; count < length_pages; count++)
 			{
-				void *pPhys;
-				bool ok = VirtMem::VirtToPhys(pVirtSource,&pPhys);
+				void *pPhys = PhysPages::FindPage();
+				if (pPhys == (void *)-1)
+				{
+//					if (usingHigh)
+//						highZero -= l
+					ASSERT(0);
+					return -1;
+				}
 
-				if (!ok)
-					return -ENOMEM;
+				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+				{
+					ASSERT(0);
+					return -1;
+				}
 
-				//map it in
-				ok = VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-
-				if (!ok)
-					return -ENOMEM;
-
-				pVirtSource = (void *)((unsigned int)pVirtSource + 4096);
 				pDest = (void *)((unsigned int)pDest + 4096);
 			}
+
+			for (unsigned int count = 0; count < length_unrounded; count++)
+				to_return[count] = pVirtSource[count];
 
 			return (unsigned int)to_return;
 		}
@@ -340,8 +347,13 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		return -EBADF;
 	}
 	case 6:			//close
-		if (!pName)
-			pName = "close";
+	{
+		int fd = pRegisters[0];
+		p.PrintString("UNIMPLEMENTED CLOSE\r\rn");
+		if (fd == 3)
+			return 0;
+		return -1;
+	}
 	case 19:		//lseek
 		if (!pName)
 			pName = "lseek";
