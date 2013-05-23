@@ -21,6 +21,11 @@ extern unsigned int stored_state;
 
 extern unsigned int _binary_libgcc_s_so_1_start;
 extern unsigned int _binary_libgcc_s_so_1_size;
+unsigned int libgcc_offset = 0;
+
+extern unsigned int _binary_libc_2_17_so_start;
+extern unsigned int _binary_libc_2_17_so_size;
+unsigned int libc_offset = 0;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
@@ -32,7 +37,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	p.Print(stored_state);
 	p.PrintString(" code ");
 	p.Print(r7);
-	p.PrintString("\r\n");*/
+	p.PrintString("\n");*/
 
 	switch (r7)
 	{
@@ -66,15 +71,20 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 		p.PrintString("sys_open ");
 		p.PrintString(pFilename);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
+
+		static int fd = 3;
 
 		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
 		{
-			static int fd = 3;
+			return fd++;
+		}
+		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
+		{
 			return fd++;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED OPEN\r\rn");
+			p.PrintString("UNIMPLEMENTED OPEN\n");
 
 		return -1;
 	}
@@ -87,7 +97,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 		for (int count = 0; count < iovcnt; count++)
 		{
-			p.PrintString((char *)pIov[count].iov_base);
+			p.PrintString((char *)pIov[count].iov_base, true, pIov[count].iov_len);
 			written += pIov[count].iov_len;
 		}
 
@@ -154,7 +164,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			return len;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED WRITE\r\rn");
+			p.PrintString("UNIMPLEMENTED WRITE\n");
 
 		return -1;
 	}
@@ -174,20 +184,32 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			}
 			return len;
 		}
-		else if (fd == 3)	//libgcc
+		else if (fd == 3 || fd == 4)	//libgcc and libc
 		{
-			static unsigned int offset = 0;
-			unsigned char *c = (unsigned char *)&_binary_libgcc_s_so_1_start;
-			for (unsigned int count = 0; count < len; count++)
+			unsigned char *c;
+			unsigned int *offset;
+
+			if (fd == 3)
 			{
-				pBuf[count] = c[offset + count];
+				c = (unsigned char *)&_binary_libgcc_s_so_1_start;
+				offset = &libgcc_offset;
+			}
+			else if (fd == 4)
+			{
+				c = (unsigned char *)&_binary_libc_2_17_so_start;
+				offset = &libc_offset;
 			}
 
-			offset += len;
+			for (unsigned int count = 0; count < len; count++)
+			{
+				pBuf[count] = c[*offset + count];
+			}
+
+			*offset += len;
 			return len;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED READ\r\rn");
+			p.PrintString("UNIMPLEMENTED READ\n");
 
 		return -1;
 	}
@@ -249,10 +271,15 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 			return (unsigned int)to_return;
 		}
-		else if (file == 3)			//gcc
+		else if (file == 3 || file == 4)			//gcc and c
 		{
 			unsigned char *to_return = (unsigned char *)pDest;
-			unsigned char *pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
+			unsigned char *pVirtSource;
+
+			if (file == 3)
+				pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
+			else if (file == 4)
+				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;
 //			ASSERT((unsigned int)pVirtSource & 4095);
 
 			for (unsigned int count = 0; count < length_pages; count++)
@@ -281,7 +308,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			return (unsigned int)to_return;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED mmap\r\rn");
+			p.PrintString("UNIMPLEMENTED mmap\n");
 
 		return -1;
 	}
@@ -300,58 +327,82 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (!ok)
 			return -ENOMEM;
 
-		p.PrintString("unimplemented mprotect\r\n");
+		p.PrintString("unimplemented mprotect\n");
 		return 0;
 	}
 	case 20:		//sys_getpid
 	{
-		p.PrintString("UNIMPLEMENTED GETPID\r\rn");
+//		p.PrintString("UNIMPLEMENTED GETPID\n");
 		return 0;
 	}
 	case 195:		//stat64
 	{
 		char *pFilename = (char *)pRegisters[0];
-		struct stat *pBuf = (struct stat *)pRegisters[1];
+		struct stat64 *pBuf = (struct stat64 *)pRegisters[1];
 
 		if (!pFilename || !pBuf)
 			return -EFAULT;
 
 		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
 		{
-			memset(pBuf, 0, sizeof(struct stat));
+			memset(pBuf, 0, sizeof(struct stat64));
 			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;
+			pBuf->st_ino = 1;
+			return 0;
+		}
+		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
+		{
+			memset(pBuf, 0, sizeof(struct stat64));
+			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;
+			pBuf->st_ino = 2;
 			return 0;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED STAT\r\rn");
+			p.PrintString("UNIMPLEMENTED STAT\n");
 
 		return -EBADF;
 	}
 	case 197:		//fstat64
 	{
 		int handle = (int)pRegisters[0];
-		struct stat *pBuf = (struct stat *)pRegisters[1];
+		struct stat64 *pBuf = (struct stat64 *)pRegisters[1];
 
 		if (!pBuf)
 			return -EFAULT;
 
 		if (handle == 3)
 		{
-			memset(pBuf, 0, sizeof(struct stat));
+			memset(pBuf, 0, sizeof(struct stat64));
 			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;
+			pBuf->st_ino = 1;
+			return 0;
+		}
+		else if (handle == 4)
+		{
+			memset(pBuf, 0, sizeof(struct stat64));
+			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;
+			pBuf->st_ino = 2;
 			return 0;
 		}
 		else
-			p.PrintString("UNIMPLEMENTED FSTAT\r\rn");
+			p.PrintString("UNIMPLEMENTED FSTAT\n");
 
 		return -EBADF;
 	}
 	case 6:			//close
 	{
 		int fd = pRegisters[0];
-		p.PrintString("UNIMPLEMENTED CLOSE\r\rn");
+		p.PrintString("UNIMPLEMENTED CLOSE\n");
 		if (fd == 3)
+		{
+			libgcc_offset = 0;
 			return 0;
+		}
+		else if (fd == 4)
+		{
+			libc_offset = 0;
+			return 0;
+		}
 		return -1;
 	}
 	case 19:		//lseek
@@ -398,16 +449,16 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	default:
 		if (!known)
 			p.PrintString("UNKNOWN");
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 		p.PrintString("supervisor call ");
 		p.Print(r7);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 
 		for (int count = 0; count < 7; count++)
 		{
 			p.PrintString("\t");
 			p.Print(pRegisters[count]);
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 		}
 		return (unsigned int)-4095;
 	}

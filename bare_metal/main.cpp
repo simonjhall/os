@@ -131,13 +131,13 @@ extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * con
 	PrinterUart<PL011> p;
 	p.PrintString("undefined instruction at ");
 	p.Print(addr);
-	p.PrintString("\r\n");
+	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
 		p.Print(pRegisters[count]);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 	}
 }
 
@@ -150,13 +150,13 @@ extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pReg
 	PrinterUart<PL011> p;
 	p.PrintString("prefetch abort at ");
 	p.Print(addr);
-	p.PrintString("\r\n");
+	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
 		p.Print(pRegisters[count]);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 	}
 
 	ASSERT(0);
@@ -168,13 +168,13 @@ extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegiste
 	PrinterUart<PL011> p;
 	p.PrintString("data abort at ");
 	p.Print(addr);
-	p.PrintString("\r\n");
+	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
 		p.Print(pRegisters[count]);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 	}
 
 	ASSERT(0);
@@ -287,7 +287,7 @@ void DumpMem(T *pVirtual, unsigned int len)
 		p.Print((unsigned int)pVirtual);
 		p.PrintString(": ");
 		p.Print(*pVirtual);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 		pVirtual++;
 	}
 }
@@ -318,7 +318,7 @@ void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_me
 		p.Print(memSize);
 		p.PrintString(" file size ");
 		p.Print(fileSize);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 
 		if (p_type == PT_TLS)
 		{
@@ -332,7 +332,7 @@ void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_me
 		{
 			p.PrintString("interpreter :");
 			p.PrintString((char *)pData);
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 		}
 
 		if (p_type == PT_LOAD)
@@ -403,9 +403,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
 
 	PrinterUart<PL011> p;
-	p.PrintString("pre-mmu\r\n");
+	p.PrintString("pre-mmu\n");
 
-	p.PrintString("mmu enabled\r\n");
+	p.PrintString("mmu enabled\n");
 
 	__UndefinedInstruction_addr = (unsigned int)&_UndefinedInstruction;
 	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
@@ -416,11 +416,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf001b000);
 	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf001b000);
 	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf001b000);
-	p.PrintString("exception table inserted\r\n");
+	p.PrintString("exception table inserted\n");
 
 //	asm volatile ("swi 0");
 
-//	p.PrintString("swi\r\n");
+//	p.PrintString("swi\n");
 
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
@@ -527,23 +527,23 @@ extern "C" void Setup(unsigned int entryPoint)
 int main(int argc, const char **argv)
 {
 	PrinterUart<PL011> p;
-	p.PrintString("hello world\r\n");
+	p.PrintString("hello world\n");
 
 	PrinterUart<PL011> *pee = new PrinterUart<PL011>;
 
 	char buffer[100];
-	sprintf(buffer, "%p\r\n", pee);
+	sprintf(buffer, "%p\n", pee);
 	p.PrintString(buffer);
 
 	for (int count = 0; count < 10; count++)
 	{
 		p.Print(count);
-		p.PrintString("\r\n");
+		p.PrintString("\n");
 	}
 
 	for (int count = 0; count < argc; count++)
 	{
-		printf("%d: %s\r\n", count, argv[count]);
+		printf("%d: %s\n", count, argv[count]);
 	}
 
 	while (1)

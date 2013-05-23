@@ -70,7 +70,7 @@ namespace TranslationTable
 
 		void Print(Printer &p)
 		{
-			p.PrintString("FAULT\r\n");
+			p.PrintString("FAULT\n");
 		}
 
 		unsigned int m_zero:2;
@@ -97,7 +97,7 @@ namespace TranslationTable
 		{
 			p.PrintString("PTE     phys ");
 			p.Print(m_pageTableBase << 10);
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 		}
 
 		TableEntryL2 *GetPhysPageTable(void)
@@ -146,7 +146,7 @@ namespace TranslationTable
 			p.Print(m_b | (m_c << 1) | (m_tex << 2));
 			p.PrintString(" XN ");
 			p.Print(m_xn);
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 		}
 
 		unsigned int m_pxn:1;
@@ -253,7 +253,7 @@ namespace TranslationTable
 			p.Print(m_b | (m_c << 1) | (m_tex << 2));
 			p.PrintString(" XN ");
 			p.Print(m_xn);
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 		}
 
 		unsigned int m_xn:1;

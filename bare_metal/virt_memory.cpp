@@ -6,7 +6,6 @@
  */
 
 #include "virt_memory.h"
-#include "fixed_size_allocator.h"
 
 #include <functional>
 
@@ -81,7 +80,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 			p.Print(physStart);
 			p.PrintString(" len ");
 			p.Print(len);
-			p.PrintString("\r\n");*/
+			p.PrintString("\n");*/
 
 
 			ASSERT((len & 0xfff) == 0);					//page multiple
@@ -103,7 +102,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 				p.Print(len);
 				p.PrintString(" to_map ");
 				p.Print(to_map);
-				p.PrintString("\r\n");*/
+				p.PrintString("\n");*/
 
 				//clamp to the end of the megabyte
 				if ((virtEnd >> 20) != (virtStart >> 20))
@@ -345,12 +344,12 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 
 		if (pL1Virt[count].Print(p) && withL2)
 		{
-			p.PrintString("\r\n");
+			p.PrintString("\n");
 			TranslationTable::TableEntryL2 *pL2Phys = pL1Virt[count].pageTable.GetPhysPageTable();
 			TranslationTable::TableEntryL2 *pL2Virt;
 
 			if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt))
-				p.PrintString("\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\r\n");
+				p.PrintString("\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\n");
 			else
 			{
 				for (unsigned int inner = 0; inner < 256; inner++)
@@ -364,7 +363,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 					pL2Virt[inner].Print(p);
 				}
 
-				p.PrintString("\r\n");
+				p.PrintString("\n");
 			}
 		}
 	}

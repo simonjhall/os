@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "translation_table.h"
+#include "fixed_size_allocator.h"
 
 namespace VirtMem
 {
@@ -33,13 +34,13 @@ bool InitL1L2Allocators(void);
 //debug
 void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault);
 
+template <class T>
+bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned int numMb = 4096, int depth = 0);
+
 //translation of virtual to physical
 template <class T>
-bool VirtToPhys(T *pVirtual, T **ppPhysical, int depth = 0)
+bool VirtToPhys(T *pVirtual, T **ppPhysical)
 {
-	if (depth == 10)
-		return false;
-
 	unsigned int megabyte = (unsigned int)pVirtual >> 20;
 	TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt();
 
@@ -57,10 +58,13 @@ bool VirtToPhys(T *pVirtual, T **ppPhysical, int depth = 0)
 		TranslationTable::TableEntryL2 *pPtePhys = pMainTableVirt[megabyte].pageTable.GetPhysPageTable();
 		TranslationTable::TableEntryL2 *pPteVirt;
 
-		if (VirtToPhys(pPtePhys, &pPteVirt, depth++))
+		extern FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
+		extern FixedSizeAllocator<TranslationTable::L2Table, 1048576 / sizeof(TranslationTable::L2Table)> g_subTables;
+
+		if (PhysToVirt(pPtePhys, &pPteVirt, g_subTables.GetVirtBaseInMb(), g_subTables.GetLengthMb()))
 		{
 			//page within the megabyte
-			unsigned int page = ((unsigned int)pVirtual >> 12) & 4095;
+			unsigned int page = ((unsigned int)pVirtual >> 12) & 255;
 
 			if (pPteVirt[page].IsFault())
 				return false;

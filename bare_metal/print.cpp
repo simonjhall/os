@@ -9,12 +9,37 @@
 
 #include <stdio.h>
 
-void Printer::PrintString(const char *pString)
+void Printer::PrintString(const char *pString, bool with_len, size_t len)
 {
 	const char *p = pString;
 
-	while (*p)
-			PrintChar(*p++);
+
+	if (with_len)
+	{
+		for (size_t count = 0; count < len; count++)
+		{
+			char c = p[count];
+			if (c == '\n')
+			{
+				PrintChar('\r');
+				PrintChar('\n');
+			}
+			else
+				PrintChar(c);
+		}
+	}
+	else
+		while (*p)
+		{
+			char c = *p++;
+			if (c == '\n')
+			{
+				PrintChar('\r');
+				PrintChar('\n');
+			}
+			else
+				PrintChar(c);
+	}
 }
 
 char *Printer::NibbleToHexString(char *pIn, unsigned int a)
