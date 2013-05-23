@@ -23,8 +23,8 @@ extern unsigned int _binary_libgcc_s_so_1_start;
 extern unsigned int _binary_libgcc_s_so_1_size;
 unsigned int libgcc_offset = 0;
 
-extern unsigned int _binary_libc_2_17_so_start;
-extern unsigned int _binary_libc_2_17_so_size;
+extern unsigned int _binary_libc_strip_so_start;
+extern unsigned int _binary_libc_strip_so_size;
 unsigned int libc_offset = 0;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
@@ -160,7 +160,16 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (fd == 1 || fd == 2)	//stdout or stderr
 		{
 			for (unsigned int count = 0; count < len; count++)
-				p.PrintChar(pBuf[count]);
+			{
+				char c = pBuf[count];
+				if (c == '\n')
+				{
+					p.PrintChar('\r');
+					p.PrintChar('\n');
+				}
+				else
+					p.PrintChar(c);
+			}
 			return len;
 		}
 		else
@@ -196,7 +205,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			}
 			else if (fd == 4)
 			{
-				c = (unsigned char *)&_binary_libc_2_17_so_start;
+				c = (unsigned char *)&_binary_libc_strip_so_start;
 				offset = &libc_offset;
 			}
 
@@ -234,15 +243,21 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		ASSERT(((unsigned int)pDest & 4095) == 0);
 
 		static unsigned int highZero = 0x60000000;
-		bool usingHigh = false;
 
 		if (pDest == 0)
-		{
 			pDest = (void *)highZero;
-			highZero += length;
-			usingHigh = true;
-		}
 
+		/*p.PrintString("mmap of file ");
+		p.Print(file);
+		p.PrintString(" off ");
+		p.Print(off);
+		p.PrintString(" len ");
+		p.Print(length);
+		p.PrintString(" into vaddr ");
+		p.Print((unsigned int)pDest);
+		p.PrintString(" highzero is ");
+		p.Print(highZero);
+*/
 		if (file == -1)
 		{
 			void *to_return = pDest;
@@ -269,6 +284,13 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				pDest = (void *)((unsigned int)pDest + 4096);
 			}
 
+			if ((unsigned int)pDest > highZero)
+				highZero = (unsigned int)pDest;
+
+			/*p.PrintString(" highzero now ");
+			p.Print(highZero);
+			p.PrintString("\n");*/
+
 			return (unsigned int)to_return;
 		}
 		else if (file == 3 || file == 4)			//gcc and c
@@ -279,7 +301,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			if (file == 3)
 				pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
 			else if (file == 4)
-				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;
+				pVirtSource = (unsigned char *)&_binary_libc_strip_so_start + off;
 //			ASSERT((unsigned int)pVirtSource & 4095);
 
 			for (unsigned int count = 0; count < length_pages; count++)
@@ -304,6 +326,13 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 			for (unsigned int count = 0; count < length_unrounded; count++)
 				to_return[count] = pVirtSource[count];
+
+			if ((unsigned int)pDest > highZero)
+				highZero = (unsigned int)pDest;
+
+		/*	p.PrintString(" highzero now ");
+			p.Print(highZero);
+			p.PrintString("\n");*/
 
 			return (unsigned int)to_return;
 		}
@@ -353,7 +382,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;
+			pBuf->st_size = *(unsigned int *)&_binary_libc_strip_so_size;
 			pBuf->st_ino = 2;
 			return 0;
 		}
@@ -380,7 +409,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		else if (handle == 4)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;
+			pBuf->st_size = (unsigned int)&_binary_libc_strip_so_size;
 			pBuf->st_ino = 2;
 			return 0;
 		}

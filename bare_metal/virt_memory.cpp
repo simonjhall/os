@@ -64,6 +64,12 @@ bool InitL1L2Allocators(void)
 	return true;
 }
 
+void FlushTlb(void)
+{
+	asm volatile ("mrc p15, 0, r0, c3, c0, 0\n");
+	asm volatile ("mcr p15, 0, r0, c3, c0, 0\n");
+}
+
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
 {
@@ -252,6 +258,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 		bool ok = mapper(true);
 		ASSERT(ok);
 
+		FlushTlb();
 		return ok;
 	}
 	else

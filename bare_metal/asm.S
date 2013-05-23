@@ -193,6 +193,32 @@ ChangeModeAndJump:
 .endfunc
 .size ChangeModeAndJump, .-ChangeModeAndJump
 
+.global EnableFpu
+.func EnableFpu
+EnableFpu:
+	#get existing nsacr
+	mrc p15, 0, r1, c1, c1, 2
+	orr r1, #(3 << 10)
+	#set it
+	mcr p15, 0, r1, c1, c1, 2
+
+	#get existing cpacr
+	mrc p15, 0, r1, c1, c0, 2
+	#enable cp 11 and 10
+	mov r0, #(0xf << 20)
+	orr r1, r0
+	#set it back
+	mcr p15, 0, r1, c1, c0, 2
+
+	#get the existing fpexc
+	vmrs r1, FPEXC
+	orr r1, #(1 << 30)
+	vmsr FPEXC, r1
+
+	bx lr
+.endfunc
+.size EnableFpu, .-EnableFpu
+
 .global TlsLow
 .global TlsHigh
 

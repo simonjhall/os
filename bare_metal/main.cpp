@@ -218,6 +218,8 @@ extern "C" void __DataAbort(void);
 extern "C" void __Irq(void);
 extern "C" void __Fiq(void);
 
+extern "C" void EnableFpu(bool);
+
 static inline void SetupMmu(unsigned int physEntryPoint)
 {
 	unsigned int virt_phys_offset = (unsigned int)&entry - physEntryPoint;
@@ -403,9 +405,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
 
 	PrinterUart<PL011> p;
-	p.PrintString("pre-mmu\n");
 
-	p.PrintString("mmu enabled\n");
+	p.PrintString("mmu and uart enabled\n");
 
 	__UndefinedInstruction_addr = (unsigned int)&_UndefinedInstruction;
 	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
@@ -417,6 +418,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf001b000);
 	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf001b000);
 	p.PrintString("exception table inserted\n");
+
+	EnableFpu(true);
 
 //	asm volatile ("swi 0");
 
@@ -462,7 +465,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[0] = 1;
 	//fill in argv
 	const char *pElfName = "/init.elf";
-	const char *pEnv = "LD_DEBUG=all";
+	const char *pEnv = "LAD_DEBUG=none";
 
 	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
 	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 4;
