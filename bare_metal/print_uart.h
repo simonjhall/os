@@ -79,9 +79,9 @@ public:
 
 private:
 #ifdef PBES
-	static const unsigned int sm_baseAddress = 0x48020000;
+	static const unsigned int sm_baseAddress = 0xfd020000;
 #else
-	static const unsigned int sm_baseAddress = 0x101f1000;
+	static const unsigned int sm_baseAddress = 0xfd0f1000;
 #endif
 	//offsets in words
 	static const unsigned int sm_data = 0;

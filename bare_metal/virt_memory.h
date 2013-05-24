@@ -32,7 +32,7 @@ TranslationTable::TableEntryL1 *GetL1TableVirt(void);
 bool InitL1L2Allocators(void);
 
 //flushing TLB
-void FlushTlb(void);
+extern "C" void FlushTlb(void);
 
 //debug
 void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault);

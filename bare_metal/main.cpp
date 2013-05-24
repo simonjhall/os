@@ -252,10 +252,10 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
 #ifdef PBES
-    MapPhysToVirt((void *)(1152 * 1048576), (void *)(1152 * 1048576), 1048576,
+    MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #else
-    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(257 * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #endif
 
@@ -465,7 +465,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[0] = 1;
 	//fill in argv
 	const char *pElfName = "/init.elf";
-	const char *pEnv = "LAD_DEBUG=none";
+	const char *pEnv = "LD_DEBUG=all";
 
 	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
 	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 4;
@@ -487,6 +487,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	pAuxVec[3].a_un.a_val = 0x70000000;
 
 	pAuxVec[4].a_type = AT_NULL;
+	pAuxVec[4].a_un.a_val = 0;
 
 	/*pHdr->p_align = 2;
 //	pHdr->p_filesz = (unsigned int)&thread_section_mid - (unsigned int)&thread_section_begin;

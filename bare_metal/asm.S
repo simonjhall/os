@@ -219,6 +219,28 @@ EnableFpu:
 .endfunc
 .size EnableFpu, .-EnableFpu
 
+.global FlushTlb
+.func FlushTlb
+FlushTlb:
+	#ensure table writes are visible
+	dsb
+	#todo insert cache flush
+
+	#flush all tlb
+	mcr p15, 0, r0, c8, c7, 0
+
+	#ensure flush is finished
+	dsb
+
+	#get instruction fetch working ok
+	isb
+
+	bx lr
+.endfunc
+.size FlushTlb, .-FlushTlb
+
+/***************************************/
+
 .global TlsLow
 .global TlsHigh
 

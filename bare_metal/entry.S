@@ -81,8 +81,9 @@ map_loop:
 	subs r1, #1
 	bne map_loop
 
-	#insert the page table
+	#insert the page table into ttbr0
 	mcr p15, 0, lr, c2, c0, 0
+	mcr p15, 0, lr, c2, c0, 1		/* and ttbr1 */
 
 	#change the domain to client
 	mov r2, #1
@@ -91,11 +92,23 @@ map_loop:
 	#get ready to jump
 	ldr r3, =virt_entry
 
+	#ensure the write has gone through
+	dsb
+
+	#set ttbr0 and ttbr1 to have an even 2GB split
+	mrc p15, 0, r2, c2, c0, 2
+	orr r2, #1
+	mcr p15, 0, r2, c2, c0, 2
+
 	#turn on the mmu
 	#get the current value
 	mrc p15, 0, r2, c1, c0, 0
 	orr r2, #1					/* enable */
-	mcr p15, 0, r2, c1, c0, 0	/* turn on*/
+	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
+
+	#good to go
+	dsb
+	isb
 
 	#keep the load addr
 	mov r4, lr

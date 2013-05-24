@@ -64,12 +64,6 @@ bool InitL1L2Allocators(void)
 	return true;
 }
 
-void FlushTlb(void)
-{
-	asm volatile ("mrc p15, 0, r0, c3, c0, 0\n");
-	asm volatile ("mcr p15, 0, r0, c3, c0, 0\n");
-}
-
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
 {
@@ -339,7 +333,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 {
 	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt();
 
-	for (unsigned int count = (unsigned int)pStart >> 20; count < (unsigned int)pEnd >> 20; count++)
+	for (unsigned int count = (unsigned int)pStart >> 20; count <= (unsigned int)pEnd >> 20; count++)
 	{
 		if (noFault && pL1Virt[count].IsFault())
 			continue;
