@@ -116,12 +116,18 @@ map_loop:
 	bx r3
 
 virt_entry:
-	#clear bss with memset (as it doesn't use the stack)
+	#clear bs
 	ldr r0, =__bss_start__
 	ldr r2, =__bss_end__
-	sub r2, r0
+	subs r2, r0
 	mov r1, #0
-	bl memset
+	beq done_clear
+
+bss_clear:
+	subs r2, #1
+	strb r1, [r0], #1
+	bne bss_clear
+done_clear:
 
 	cps #31
 	ldr sp, =initial_stack

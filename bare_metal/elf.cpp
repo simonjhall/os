@@ -154,6 +154,4 @@ unsigned int Elf::GetProgramHeader(int i, void **data, unsigned int *vaddr, unsi
 
 Elf::~Elf()
 {
-	if (m_initialised && m_allocated)
-		delete[] (unsigned char *)m_pElf;
 }

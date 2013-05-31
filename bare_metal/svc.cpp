@@ -164,7 +164,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				char c = pBuf[count];
 				if (c == '\n')
 				{
-					p.PrintChar('\r');
+//					p.PrintChar('\r');
 					p.PrintChar('\n');
 				}
 				else

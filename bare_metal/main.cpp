@@ -1,5 +1,6 @@
 #include "print_uart.h"
 #include "common.h"
+#include "PL181.h"
 
 int main(int argc, const char **argv);
 
@@ -198,7 +199,7 @@ extern unsigned int TlsLow, TlsHigh;
 extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
 
 extern unsigned int entry;
-extern unsigned int _end;
+extern unsigned int __end__;
 
 
 extern unsigned int __trampoline_start__;
@@ -220,11 +221,11 @@ extern "C" void __Fiq(void);
 
 extern "C" void EnableFpu(bool);
 
-static inline void SetupMmu(unsigned int physEntryPoint)
+static void MapKernel(unsigned int physEntryPoint)
 {
 	unsigned int virt_phys_offset = (unsigned int)&entry - physEntryPoint;
     //the end of the program, rounded up to the nearest phys page
-    unsigned int virt_end = ((unsigned int)&_end + 4095) & ~4095;
+    unsigned int virt_end = ((unsigned int)&__end__ + 4095) & ~4095;
     unsigned int image_length_4k_align = virt_end - (unsigned int)&entry;
     ASSERT((image_length_4k_align & 4095) == 0);
     unsigned int image_length_section_align = (image_length_4k_align + 1048575) & ~1048575;
@@ -242,19 +243,13 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
     	pEntries[i].fault.Init();
 
-    SetHighBrk((void *)virt_end);
-
-    //executable top section
-    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
-    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    //process stack
-    pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
-    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     //IO sections
 #ifdef PBES
     MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #else
+    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfef * 1048576), 1048576,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #endif
@@ -266,6 +261,14 @@ static inline void SetupMmu(unsigned int physEntryPoint)
     unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
     VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096,
     		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    SetHighBrk((void *)virt_end);
+
+    //executable top section
+    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
+    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    //process stack
+    pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
+    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
 
     //copy in the high code
     unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
@@ -397,7 +400,7 @@ extern "C" void Setup(unsigned int entryPoint)
 {
 	VectorTable::SetTableAddress(0);
 
-	SetupMmu(entryPoint);
+	MapKernel(entryPoint);
 
 	PL011::EnableFifo(false);
 	PL011::EnableUart(true);
@@ -420,6 +423,27 @@ extern "C" void Setup(unsigned int entryPoint)
 	p.PrintString("exception table inserted\n");
 
 	EnableFpu(true);
+
+
+//	{
+		PL181 sd((volatile void *)(0xfef * 1048576 + 0x5000));
+		sd.GoIdleState();
+		unsigned int ocr = sd.SendOcr();
+
+		unsigned int cid = sd.AllSendCid();
+		unsigned int rela = sd.SendRelativeAddr();
+
+		p.PrintString("CID "); p.Print(cid); p.PrintString("\n");
+		p.PrintString("RCA "); p.Print(rela >> 16); p.PrintString("\n");
+		p.PrintString("STATUS "); p.Print(rela & 0xffff); p.PrintString("\n");
+
+		sd.SelectDeselectCard(rela >> 16);
+
+		sd.ReadDataUntilStop(0);
+
+		char buffer[100];
+		sd.ReadOutData(buffer, 100);
+//	}
 
 //	asm volatile ("swi 0");
 
@@ -526,35 +550,4 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[4] = 0;
 
 	ChangeModeAndJump(0, 0, 0, &rfe);
-}
-
-int main(int argc, const char **argv)
-{
-	PrinterUart<PL011> p;
-	p.PrintString("hello world\n");
-
-	PrinterUart<PL011> *pee = new PrinterUart<PL011>;
-
-	char buffer[100];
-	sprintf(buffer, "%p\n", pee);
-	p.PrintString(buffer);
-
-	for (int count = 0; count < 10; count++)
-	{
-		p.Print(count);
-		p.PrintString("\n");
-	}
-
-	for (int count = 0; count < argc; count++)
-	{
-		printf("%d: %s\n", count, argv[count]);
-	}
-
-	while (1)
-	{
-		int c = getchar();
-		if (c != EOF)
-			printf("%c", c);
-	}
-	return 0;
 }
