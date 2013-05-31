@@ -1,6 +1,7 @@
 #include "print_uart.h"
 #include "common.h"
 #include "PL181.h"
+#include "FatFS.h"
 
 int main(int argc, const char **argv);
 
@@ -427,22 +428,124 @@ extern "C" void Setup(unsigned int entryPoint)
 
 //	{
 		PL181 sd((volatile void *)(0xfef * 1048576 + 0x5000));
+
 		sd.GoIdleState();
-		unsigned int ocr = sd.SendOcr();
+		if (!sd.GoReadyState())
+			p.PrintString("no card\n");
+		else
+		{
+			if (!sd.GoIdentificationState())
+				p.PrintString("definitely no card\n");
+			else
+			{
+				unsigned int rca;
+				bool ok = sd.GetCardRcaAndGoStandbyState(rca);
+				ASSERT(ok);
 
-		unsigned int cid = sd.AllSendCid();
-		unsigned int rela = sd.SendRelativeAddr();
+				ok = sd.GoTransferState(rca);
+				ASSERT(ok);
 
-		p.PrintString("CID "); p.Print(cid); p.PrintString("\n");
-		p.PrintString("RCA "); p.Print(rela >> 16); p.PrintString("\n");
-		p.PrintString("STATUS "); p.Print(rela & 0xffff); p.PrintString("\n");
+//				char buffer[100];
+//				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
+//				ASSERT(ok);
 
-		sd.SelectDeselectCard(rela >> 16);
+				FatFS fat(sd);
+				fat.ReadBpb();
+				fat.ReadEbr();
 
-		sd.ReadDataUntilStop(0);
+				unsigned int fat_size = fat.FatSize();
+				fat_size = (fat_size + 4095) & ~4095;
+				unsigned int fat_pages = fat_size >> 12;
 
-		char buffer[100];
-		sd.ReadOutData(buffer, 100);
+				for (unsigned int count = 0; count < fat_pages; count++)
+				{
+					void *pPhysPage = PhysPages::FindPage();
+					ASSERT(pPhysPage != (void *)-1);
+
+					ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0x90000000 + count * 4096),
+							4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
+							TranslationTable::kOuterInnerWbWa, 0);
+					ASSERT(ok);
+				}
+
+				fat.HaveFatMemory((void *)0x90000000);
+				fat.LoadFat();
+
+
+				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes());
+				fat.LoadDirectory(pDir, fat.RootDirectoryAbsCluster());
+
+				unsigned int slot = 0;
+				FatFS::DirEnt dirent;
+				bool next_cluster;
+
+				do
+				{
+					ok = fat.IterateDirectory(pDir, slot, dirent, next_cluster);
+					if (ok)
+					{
+						p.PrintString("file "); p.PrintString(dirent.m_name);
+						p.PrintString(" rel cluster "); p.Print(dirent.m_cluster);
+						p.PrintString(" abs cluster "); p.Print(fat.RelativeToAbsoluteCluster(dirent.m_cluster));
+						p.PrintString("\n");
+					}
+					ASSERT(next_cluster == false);
+
+//					if (strcmp(dirent.m_name, "ld-2.15.so") == 0)
+					{
+						unsigned int file_size = dirent.m_size;
+						//round up to cluster size too
+						file_size = (file_size + 4095) & ~4095;
+						unsigned int file_pages = file_size >> 12;
+
+						for (unsigned int count = 0; count < file_pages; count++)
+						{
+							void *pPhysPage = PhysPages::FindPage();
+							ASSERT(pPhysPage != (void *)-1);
+
+							ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0xa0000000 + count * 4096),
+									4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
+									TranslationTable::kOuterInnerWbWa, 0);
+							ASSERT(ok);
+						}
+
+						int to_read = (int)file_size;
+						unsigned char *pReadInto = (unsigned char *)0xa0000000;
+						unsigned int cluster = dirent.m_cluster;
+						while (to_read > 0)
+						{
+							fat.ReadCluster(pReadInto, fat.RelativeToAbsoluteCluster(cluster));
+							to_read -= fat.ClusterSizeInBytes();
+							pReadInto += fat.ClusterSizeInBytes();
+							ok = fat.NextCluster(cluster, cluster);
+
+							ASSERT(ok || to_read <= 0);
+						}
+					}
+				} while (ok);
+
+				p.PrintString("\n");
+			}
+		}
+
+//		sd.GoIdleState();
+//		unsigned int ocr = sd.SendOcr();
+//
+//		unsigned int cid = sd.AllSendCid();
+//		unsigned int rela = sd.SendRelativeAddr();
+//
+//		p.PrintString("CID "); p.Print(cid); p.PrintString("\n");
+//		p.PrintString("RCA "); p.Print(rela >> 16); p.PrintString("\n");
+//		p.PrintString("STATUS "); p.Print(rela & 0xffff); p.PrintString("\n");
+//
+//		sd.SelectDeselectCard(rela >> 16);
+//
+//		sd.ReadDataUntilStop(0);
+//
+//		char buffer[100];
+//		sd.ReadOutData(buffer, 100);
+//
+//		sd.StopTransmission();
 //	}
 
 //	asm volatile ("swi 0");

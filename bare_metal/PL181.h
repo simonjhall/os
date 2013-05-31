@@ -18,17 +18,137 @@ public:
 	PL181(volatile void *pBaseAddress);
 	virtual ~PL181();
 
-//protected:
 	virtual void GoIdleState(void)
 	{
 		Command(kGoIdleState, false);
+		SetState(kIdleState);
 	}
 
+	virtual bool GoReadyState(void)
+	{
+		if (GetState() != kIdleState)
+			return false;
+
+		unsigned int ocr = SendOcr();
+		if (ocr == 0)
+		{
+			SetState(kInactiveState);
+			return false;
+		}
+		else
+		{
+			SetState(kReadyState);
+			return true;
+		}
+	}
+
+	virtual bool GoIdentificationState(void)
+	{
+		if (GetState() != kReadyState && GetState() != kStandbyState)
+			return false;
+
+		unsigned int cid = AllSendCid();
+		if (cid == 0)
+		{
+			SetState(kStandbyState);
+			return false;
+		}
+		else
+		{
+			SetState(kIdentificationState);
+			return true;
+		}
+	}
+
+	virtual void GoInactiveState(void)
+	{
+		Command(kGoInactiveState, false);
+		SetState(kInactiveState);
+	}
+
+	virtual bool GoStandbyState(unsigned int rca)
+	{
+		State current = GetState();
+
+		if (current == kStandbyState)
+		{
+			//nothing
+		}
+		else if (current == kIdentificationState)
+			SelectDeselectCard(rca);
+		else if (current == kTransferState || current == kSendingDataState)
+			SelectDeselectCard(rca);
+		else if (current == kReceiveDataState || current == kProgrammingState)
+			return false;
+		else
+		{
+			//invalid state transition
+			return false;
+		}
+
+		SetState(kStandbyState);
+		return true;
+	}
+
+	virtual bool GetCardRcaAndGoStandbyState(unsigned int &rRca)
+	{
+		if (!kIdentificationState)
+			return false;
+
+		unsigned int rca_status = SendRelativeAddr();
+		SetState(kStandbyState);
+
+		rRca = rca_status >> 16;
+		return true;
+	}
+
+	virtual bool GoTransferState(unsigned int rca)
+	{
+		State current = GetState();
+
+		if (current == kTransferState)
+		{
+			//nothing
+		}
+		else if (current == kStandbyState)
+			SelectDeselectCard(rca);
+		else if (current == kSendingDataState)
+			StopTransmission();
+		else
+		{
+			//invalid state transition
+			return false;
+		}
+
+		SetState(kTransferState);
+		return true;
+	}
+
+	virtual bool ReadDataFromLogicalAddress(unsigned int address, void *pDest, unsigned int byteCount)
+	{
+		if (GetState() != kTransferState)
+			return false;
+
+		//read the slack into a dummy buffer
+		if (address & 511)
+		{
+			char dummy[512];
+
+			ReadDataUntilStop(address & ~511);
+			ReadOutData(dummy, address & 511);
+		}
+		else
+			ReadDataUntilStop(address);
+
+		ReadOutData(pDest, byteCount);
+		StopTransmission();
+
+		return true;
+	}
+
+protected:
 	virtual unsigned int SendOcr(void)
 	{
-//		Command(kSendOpCmd, true);
-//		return Response();
-
 		Command(kSdAppCmd, true);
 		if (Response() & (1 << 5))
 		{
@@ -61,22 +181,13 @@ public:
 	virtual void ReadDataUntilStop(unsigned int address)
 	{
 		ASSERT((address & 511) == 0);
-		CommandArgument(kReadDatUntilStop, address >> 9, false);
+		CommandArgument(kReadDatUntilStop, address, false);
 	}
 
 	virtual unsigned int StopTransmission(void)
 	{
 		Command(kStopTransmission, true);
 		return Response();
-	}
-
-	virtual void kSdAppOpCondUNSURE(unsigned int voltage)
-	{
-//		Command(kSdAppCmd, true);
-//		if (Response() & (1 << 5))
-//		{
-//			Command(kSdAppOpCond, true);
-//		}
 	}
 
 	virtual void ReadOutData(void *pDest, unsigned int byteCount)
@@ -93,6 +204,9 @@ public:
 
 			*pOutW++ = ((unsigned int *)m_pBaseAddress)[32];
 			byteCount -= 4;
+
+			//qemu issue
+			Status();
 		}
 
 		unsigned char *pOutB = (unsigned char *)pOutW;
@@ -107,6 +221,9 @@ public:
 
 			*pOutB++ = ((unsigned char *)m_pBaseAddress)[0x80];
 			byteCount--;
+
+			//qemu issue
+			Status();
 		}
 	}
 

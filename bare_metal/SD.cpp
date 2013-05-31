@@ -8,6 +8,8 @@
 #include "SD.h"
 
 SD::SD()
+: BlockDevice(),
+  m_cardState(kIdleState)
 {
 	// TODO Auto-generated constructor stub
 
