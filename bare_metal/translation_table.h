@@ -70,7 +70,7 @@ namespace TranslationTable
 
 		void Print(Printer &p)
 		{
-			p.PrintString("FAULT\n");
+			p << "FAULT\n";
 		}
 
 		unsigned int m_zero:2;
@@ -95,9 +95,7 @@ namespace TranslationTable
 
 		void Print(Printer &p)
 		{
-			p.PrintString("PTE     phys ");
-			p.Print(m_pageTableBase << 10);
-			p.PrintString("\n");
+			p << "PTE     phys " << (m_pageTableBase << 10) << "\n";
 		}
 
 		TableEntryL2 *GetPhysPageTable(void)
@@ -138,15 +136,15 @@ namespace TranslationTable
 
 		void Print(Printer &p)
 		{
-			p.PrintString("Section phys ");
-			p.Print(m_sectionBase << 20);
-			p.PrintString(" AP ");
-			p.Print(m_ap | (m_ap2 << 2));
-			p.PrintString(" TEX ");
-			p.Print(m_b | (m_c << 1) | (m_tex << 2));
-			p.PrintString(" XN ");
-			p.Print(m_xn);
-			p.PrintString("\n");
+			p << "Section phys "
+					<< (m_sectionBase << 20)
+					<< " AP "
+					<< (m_ap | (m_ap2 << 2))
+					<< " TEX "
+					<< (m_b | (m_c << 1) | (m_tex << 2))
+					<< " XN "
+					<< m_xn
+					<< "\n";
 		}
 
 		unsigned int m_pxn:1;
@@ -245,15 +243,15 @@ namespace TranslationTable
 
 		void Print(Printer &p)
 		{
-			p.PrintString("4k page phys ");
-			p.Print(m_pageBase << 12);
-			p.PrintString(" AP ");
-			p.Print(m_ap | (m_ap2 << 2));
-			p.PrintString(" TEX ");
-			p.Print(m_b | (m_c << 1) | (m_tex << 2));
-			p.PrintString(" XN ");
-			p.Print(m_xn);
-			p.PrintString("\n");
+			p << "4k page phys "
+					<< (m_pageBase << 12)
+					<< " AP "
+					<< (m_ap | (m_ap2 << 2))
+					<< " TEX "
+					<< (m_b | (m_c << 1) | (m_tex << 2))
+					<< " XN "
+					<< m_xn
+					<< "\n";
 		}
 
 		unsigned int m_xn:1;

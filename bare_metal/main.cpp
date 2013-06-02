@@ -10,6 +10,7 @@ int main(int argc, const char **argv);
 #include <link.h>
 #include <elf.h>
 #include "elf.h"
+#include "malloc.h"
 
 struct VectorTable
 {
@@ -249,9 +250,9 @@ static void MapKernel(unsigned int physEntryPoint)
     MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #else
-    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfef * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #endif
 
@@ -410,7 +411,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	PrinterUart<PL011> p;
 
-	p.PrintString("mmu and uart enabled\n");
+	p << "mmu and uart enabled\n";
 
 	__UndefinedInstruction_addr = (unsigned int)&_UndefinedInstruction;
 	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
@@ -421,21 +422,21 @@ extern "C" void Setup(unsigned int entryPoint)
 	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf001b000);
 	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf001b000);
 	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf001b000);
-	p.PrintString("exception table inserted\n");
+	p << "exception table inserted\n";
 
 	EnableFpu(true);
 
 
 //	{
-		PL181 sd((volatile void *)(0xfef * 1048576 + 0x5000));
+		PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
 
 		sd.GoIdleState();
 		if (!sd.GoReadyState())
-			p.PrintString("no card\n");
+			p << "no card\n";
 		else
 		{
 			if (!sd.GoIdentificationState())
-				p.PrintString("definitely no card\n");
+				p << "definitely no card\n";
 			else
 			{
 				unsigned int rca;
@@ -472,59 +473,79 @@ extern "C" void Setup(unsigned int entryPoint)
 				fat.LoadFat();
 
 
-				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes());
-				fat.LoadDirectory(pDir, fat.RootDirectoryAbsCluster());
+//				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes() * fat.CountClusters(fat.RootDirectoryRelCluster()));
+//				fat.ReadClusterChain(pDir, fat.RootDirectoryRelCluster());
+//
+//				unsigned int slot = 0;
+//				FatFS::DirEnt dirent;
 
-				unsigned int slot = 0;
-				FatFS::DirEnt dirent;
-				bool next_cluster;
+				fat.ListDirectory(p, fat.RootDirectoryRelCluster());
 
-				do
-				{
-					ok = fat.IterateDirectory(pDir, slot, dirent, next_cluster);
-					if (ok)
-					{
-						p.PrintString("file "); p.PrintString(dirent.m_name);
-						p.PrintString(" rel cluster "); p.Print(dirent.m_cluster);
-						p.PrintString(" abs cluster "); p.Print(fat.RelativeToAbsoluteCluster(dirent.m_cluster));
-						p.PrintString("\n");
-					}
-					ASSERT(next_cluster == false);
+//				do
+//				{
+//					ok = fat.IterateDirectory(pDir, slot, dirent);
+//					if (ok)
+//					{
+//						p.PrintString("file "); p.PrintString(dirent.m_name);
+//						p.PrintString(" rel cluster "); p.Print(dirent.m_cluster);
+//						p.PrintString(" abs cluster "); p.Print(fat.RelativeToAbsoluteCluster(dirent.m_cluster));
+//						p.PrintString(" size "); p.Print(dirent.m_size);
+//						p.PrintString(" attr "); p.Print(dirent.m_type);
+//						p.PrintString("\n");
+//					}
+//
+////					if (strcmp(dirent.m_name, "ld-2.15.so") == 0)
+////					{
+////						unsigned int file_size = dirent.m_size;
+////						unsigned page_file_size = (file_size + 4095) & ~4095;
+////						unsigned int file_pages = page_file_size >> 12;
+////
+////						for (unsigned int count = 0; count < file_pages; count++)
+////						{
+////							void *pPhysPage = PhysPages::FindPage();
+////							ASSERT(pPhysPage != (void *)-1);
+////
+////							ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0xa0000000 + count * 4096),
+////									4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
+////									TranslationTable::kOuterInnerWbWa, 0);
+////							ASSERT(ok);
+////						}
+////
+////						unsigned int to_read = file_size;
+////						unsigned char *pReadInto = (unsigned char *)0xa0000000;
+////						unsigned int cluster = dirent.m_cluster;
+////						while (to_read > 0)
+////						{
+////							bool full_read;
+////							unsigned int reading;
+////
+////							if (fat.ClusterSizeInBytes() > to_read)		//not enough data left
+////							{
+////								full_read = false;
+////								reading = to_read;
+////							}
+////							else
+////							{
+////								full_read = true;
+////								reading = fat.ClusterSizeInBytes();
+////							}
+////
+////							fat.ReadCluster(pReadInto, fat.RelativeToAbsoluteCluster(cluster), reading);
+////							to_read -= reading;
+////							pReadInto += reading;
+////
+////							if (full_read)
+////							{
+////								ok = fat.NextCluster(cluster, cluster);
+////								ASSERT(ok);
+////							}
+////							else
+////								ASSERT(to_read == 0);
+////						}
+////					}
+//				} while (ok);
 
-//					if (strcmp(dirent.m_name, "ld-2.15.so") == 0)
-					{
-						unsigned int file_size = dirent.m_size;
-						//round up to cluster size too
-						file_size = (file_size + 4095) & ~4095;
-						unsigned int file_pages = file_size >> 12;
-
-						for (unsigned int count = 0; count < file_pages; count++)
-						{
-							void *pPhysPage = PhysPages::FindPage();
-							ASSERT(pPhysPage != (void *)-1);
-
-							ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0xa0000000 + count * 4096),
-									4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
-									TranslationTable::kOuterInnerWbWa, 0);
-							ASSERT(ok);
-						}
-
-						int to_read = (int)file_size;
-						unsigned char *pReadInto = (unsigned char *)0xa0000000;
-						unsigned int cluster = dirent.m_cluster;
-						while (to_read > 0)
-						{
-							fat.ReadCluster(pReadInto, fat.RelativeToAbsoluteCluster(cluster));
-							to_read -= fat.ClusterSizeInBytes();
-							pReadInto += fat.ClusterSizeInBytes();
-							ok = fat.NextCluster(cluster, cluster);
-
-							ASSERT(ok || to_read <= 0);
-						}
-					}
-				} while (ok);
-
-				p.PrintString("\n");
+				p << "\n";
 			}
 		}
 
@@ -557,11 +578,11 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	Elf startingElf, interpElf;
 
-	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
-			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
-
-	interpElf.Load(&_binary_ld_stripped_so_start,
-			(unsigned int)&_binary_ld_stripped_so_size);
+//	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
+//			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
+//
+//	interpElf.Load(&_binary_ld_stripped_so_start,
+//			(unsigned int)&_binary_ld_stripped_so_size);//no thanks
 
 	bool has_tls = false;
 	unsigned int tls_memsize, tls_filesize, tls_vaddr;

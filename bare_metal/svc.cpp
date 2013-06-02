@@ -19,12 +19,12 @@
 
 extern unsigned int stored_state;
 
-extern unsigned int _binary_libgcc_s_so_1_start;
-extern unsigned int _binary_libgcc_s_so_1_size;
+//extern unsigned int _binary_libgcc_s_so_1_start;
+//extern unsigned int _binary_libgcc_s_so_1_size;
 unsigned int libgcc_offset = 0;
 
-extern unsigned int _binary_libc_2_17_so_start;
-extern unsigned int _binary_libc_2_17_so_size;
+//extern unsigned int _binary_libc_2_17_so_start;
+//extern unsigned int _binary_libc_2_17_so_size;
 unsigned int libc_offset = 0;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
@@ -200,12 +200,12 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 			if (fd == 3)
 			{
-				c = (unsigned char *)&_binary_libgcc_s_so_1_start;
+//				c = (unsigned char *)&_binary_libgcc_s_so_1_start;		//no thanks
 				offset = &libgcc_offset;
 			}
 			else if (fd == 4)
 			{
-				c = (unsigned char *)&_binary_libc_2_17_so_start;
+//				c = (unsigned char *)&_binary_libc_2_17_so_start;		//no thanks
 				offset = &libc_offset;
 			}
 
@@ -298,10 +298,10 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			unsigned char *to_return = (unsigned char *)pDest;
 			unsigned char *pVirtSource;
 
-			if (file == 3)
+			/*if (file == 3)
 				pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
 			else if (file == 4)
-				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;
+				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;*/	//no thanks
 //			ASSERT((unsigned int)pVirtSource & 4095);
 
 			for (unsigned int count = 0; count < length_pages; count++)
@@ -375,14 +375,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;
+//			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;		//no thanks
 			pBuf->st_ino = 1;
 			return 0;
 		}
 		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;
+//			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;		//no thanks
 			pBuf->st_ino = 2;
 			return 0;
 		}
@@ -402,14 +402,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (handle == 3)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;
+//			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;	//no thanks
 			pBuf->st_ino = 1;
 			return 0;
 		}
 		else if (handle == 4)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
-			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;
+//			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;	//no thanks
 			pBuf->st_ino = 2;
 			return 0;
 		}

@@ -21,6 +21,31 @@ public:
 	virtual void Print(int i) { Print((unsigned int)i); };
 
 	virtual void PrintChar(char c) = 0;
+
+	Printer &operator << (const char *pString)
+	{
+		PrintString(pString);
+		return *this;
+	}
+
+	Printer &operator << (char c)
+	{
+		PrintChar(c);
+		return *this;
+	}
+
+	Printer &operator << (unsigned int i)
+	{
+		Print(i);
+		return *this;
+	}
+
+	Printer &operator << (int i)
+	{
+		Print(i);
+		return *this;
+	}
+
 private:
 	virtual char *NibbleToHexString(char *, unsigned int);
 };

@@ -52,14 +52,19 @@ public:
 			return m_biosParameterBlock.m_reservedSectors + m_biosParameterBlock.m_numFats * m_biosParameterBlock.m_sectorsPerFat;		//div sectors/cluster
 	}
 
+	unsigned int RootDirectoryRelCluster(void) const
+	{
+		return 2;
+	}
+
 	unsigned int RelativeToAbsoluteCluster(unsigned int c)
 	{
 		return c - 2 + RootDirectoryAbsCluster();
 	}
 
-	void ReadCluster(void *pDest, unsigned int cluster)
+	void ReadCluster(void *pDest, unsigned int cluster, unsigned int sizeInBytes)
 	{
-		m_rDevice.ReadDataFromLogicalAddress(SectorToBytes(ClusterToSector(cluster)), pDest, ClusterSizeInBytes());
+		m_rDevice.ReadDataFromLogicalAddress(SectorToBytes(ClusterToSector(cluster)), pDest, sizeInBytes);
 	}
 
 	void HaveFatMemory(void *pFat)
@@ -88,20 +93,60 @@ public:
 		}
 	}
 
+	unsigned int CountClusters(unsigned int start)
+	{
+		unsigned int total = 1;
+		while (NextCluster(start, start))
+			total++;
+		return total;
+	}
+
 	inline unsigned int ClusterSizeInBytes(void) const
 	{
 		return SectorToBytes(ClusterToSector(1));
 	}
 
-	void LoadDirectory(void *pCluster, unsigned int absCluster)
+	void ReadClusterChain(void *pCluster, unsigned int cluster)
 	{
-		union {
-			FatFS::DirEnt83 *p83;
-			FatFS::DirEntLong *pLong;
-		} dir;
+		do
+		{
+			ReadCluster(pCluster, RelativeToAbsoluteCluster(cluster), ClusterSizeInBytes());
+			pCluster = (void *)((unsigned char *)pCluster + ClusterSizeInBytes());
 
-		dir.p83 = (FatFS::DirEnt83 *)pCluster;
-		ReadCluster(dir.p83, absCluster);
+		} while (NextCluster(cluster, cluster));
+	}
+
+	void ListDirectory(Printer &p, unsigned int cluster, int indent = 0)
+	{
+		void *pDir = __builtin_alloca(ClusterSizeInBytes() * CountClusters(cluster));
+		ReadClusterChain(pDir, cluster);
+
+		unsigned int slot = 0;
+		DirEnt dirent;
+
+		bool ok;
+
+		do
+		{
+			ok = IterateDirectory(pDir, slot, dirent);
+			if (ok)
+			{
+				for (int count = 0; count < indent; count++)
+					p.PrintChar(' ');
+
+				p << "file " << dirent.m_name;
+				p << " rel cluster " << dirent.m_cluster;
+				p << " abs cluster " << RelativeToAbsoluteCluster(dirent.m_cluster);
+				p << " size " << dirent.m_size;
+				p << " attr " << dirent.m_type;
+				p << "\n";
+
+				if (dirent.m_type == DirEnt::kDirectory && dirent.m_cluster != cluster)
+					ListDirectory(p, dirent.m_cluster, indent + 1);
+			}
+		} while (ok);
+
+		p << "\n";
 	}
 
 	struct DirEnt
@@ -121,7 +166,7 @@ public:
 		} m_type;
 	};
 
-	bool IterateDirectory(void *pCluster, unsigned int &rEntry, DirEnt &rOut, bool &rNeedsNextCluster, int copyOffset = 0)
+	bool IterateDirectory(void *pCluster, unsigned int &rEntry, DirEnt &rOut, bool reentry = false)
 	{
 		union {
 			FatFS::DirEnt83 *p83;
@@ -130,12 +175,6 @@ public:
 
 		dir.p83 = (FatFS::DirEnt83 *)pCluster;
 
-		//do we need the next cluster in the directory
-		if (rEntry * 32 == ClusterSizeInBytes() - 32)
-			rNeedsNextCluster = true;
-		else
-			rNeedsNextCluster = false;
-
 		//does it exist
 		if (dir.p83[rEntry].m_name83[0] == 0 || dir.p83[rEntry].m_name83[0] == 0xe5)
 		{
@@ -143,11 +182,13 @@ public:
 			return false;
 		}
 
+		if (reentry == false)
+			memset(rOut.m_name, 0, sizeof(rOut.m_name));
+
 		//is it a long filename
 		if (dir.p83[rEntry].m_attributes == 0xf)
 		{
-			//tricky
-			ASSERT(rNeedsNextCluster == false);
+			int copyOffset = ((dir.p83[rEntry].m_name83[0] & ~0x40) - 1) * 13;
 
 			for (int count = 0; count < 5; count++)
 				rOut.m_name[copyOffset + count] = dir.pLong[rEntry].m_firstFive[count] & 0xff;
@@ -158,12 +199,12 @@ public:
 			for (int count = 0; count < 2; count++)
 				rOut.m_name[copyOffset + count + 5 + 6] = dir.pLong[rEntry].m_finalTwo[count] & 0xff;
 
-			IterateDirectory(pCluster, ++rEntry, rOut, rNeedsNextCluster, copyOffset + 5 + 6 + 2);
+			IterateDirectory(pCluster, ++rEntry, rOut, true);
 		}
 		else
 		{
 			//fill in the cluster info
-			rOut.m_cluster = dir.p83[rEntry].m_lowCluster | dir.p83[rEntry].m_highCluster;
+			rOut.m_cluster = dir.p83[rEntry].m_lowCluster | (dir.p83[rEntry].m_highCluster << 16);
 
 			//type
 			rOut.m_type = (DirEnt::DirEntType)dir.p83[rEntry].m_attributes;
@@ -172,11 +213,8 @@ public:
 			rOut.m_size = dir.p83[rEntry].m_fileSize;
 
 			//copy in the name if appropriate
-			if (copyOffset == 0)
-			{
-				memset(rOut.m_name, 0, sizeof(rOut.m_name));
+			if (reentry == false)
 				memcpy(rOut.m_name, dir.p83[rEntry].m_name83, sizeof(dir.p83[rEntry].m_name83));
-			}
 			rEntry++;
 		}
 

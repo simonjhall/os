@@ -245,6 +245,17 @@ extern "C" int strncmp (const char *s1, const char *s2, size_t n)
   return c1 - c2;
 }
 
+extern "C" void abort(void)
+{
+	ASSERT(0);
+}
+
+extern "C" int raise (int sig)
+{
+//  __set_errno (ENOSYS);
+  return -1;
+}
+
 void *operator new( size_t stAllocateBlock ) {
 //   static int fInOpNew = 0;   // Guard flag.
 //

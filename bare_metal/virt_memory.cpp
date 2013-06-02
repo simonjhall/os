@@ -340,17 +340,16 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 
 		PrinterUart<PL011> p;
 
-		p.Print(count * 1048576);
-		p.PrintString(": ");
+		p << count * 1048576 << ": ";
 
 		if (pL1Virt[count].Print(p) && withL2)
 		{
-			p.PrintString("\n");
+			p << "\n";
 			TranslationTable::TableEntryL2 *pL2Phys = pL1Virt[count].pageTable.GetPhysPageTable();
 			TranslationTable::TableEntryL2 *pL2Virt;
 
 			if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt))
-				p.PrintString("\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\n");
+				p << "\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\n";
 			else
 			{
 				for (unsigned int inner = 0; inner < 256; inner++)
