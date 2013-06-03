@@ -12,30 +12,26 @@ SECTIONS
 	}
 	
  	.text phys : AT(phys) {
- 		code = .;
- 		*(.text)
- 		*(.rodata)
+ 		*(.text .text.*)
  		. = ALIGN(4096);
  	}
-	.data : AT(phys + (data - code))
-	{
-		data = .;
-		*(.data)
-		. = ALIGN(4096);
+	.rodata : {
+	*(.rodata .rodata.*)
 	}
+	
+	.data : {
+	*(.data .data.*)
+	}
+
 	__bss_start__ = .;
-	.bss : AT(phys + (bss - code))
+	.bss : 
 	{
-		bss = .;
 		*(.bss)
-		. = ALIGN(4096);
 	}
 	__bss_end__ = .;
-	.note.gnu.build-id : AT(phys + (note_gnu_build_id - code))
-	{
+
+	.note.gnu.build-id : {
 		note_gnu_build_id = .;
-		*(.note.gnu.build-id)
-		. = ALIGN(4096);
 	}
 	__end__ = .;
 }

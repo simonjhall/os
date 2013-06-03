@@ -239,6 +239,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		unsigned int length_pages = length >> 12;
 		int file = (int)pRegisters[4];
 		int off = (int)pRegisters[5] << 12;
+		int prot = pRegisters[2];
+		int flags = pRegisters[3];
 
 		ASSERT(((unsigned int)pDest & 4095) == 0);
 
@@ -260,38 +262,48 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 */
 		if (file == -1)
 		{
-			void *to_return = pDest;
+//			void *to_return = pDest;
+//
+//			for (unsigned int count = 0; count < length_pages; count++)
+//			{
+//				void *pPhys = PhysPages::FindPage();
+//				if (pPhys == (void *)-1)
+//				{
+////					if (usingHigh)
+////						highZero -= l
+//					ASSERT(0);
+//					return -1;
+//				}
+//
+//				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+//				{
+//					ASSERT(0);
+//					return -1;
+//				}
+//
+//				memset(pDest, 0, 4096);
+//
+//				pDest = (void *)((unsigned int)pDest + 4096);
+//			}
+//
+//			if ((unsigned int)pDest > highZero)
+//				highZero = (unsigned int)pDest;
+//
+//			/*p.PrintString(" highzero now ");
+//			p.Print(highZero);
+//			p.PrintString("\n");*/
+//
+//			return (unsigned int)to_return;
 
-			for (unsigned int count = 0; count < length_pages; count++)
+			void *mmap_result = internal_mmap(pDest, length_unrounded, prot, flags, file, 0, false);
+			if (mmap_result != (void *)-1)
 			{
-				void *pPhys = PhysPages::FindPage();
-				if (pPhys == (void *)-1)
-				{
-//					if (usingHigh)
-//						highZero -= l
-					ASSERT(0);
-					return -1;
-				}
-
-				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
-				{
-					ASSERT(0);
-					return -1;
-				}
-
-				memset(pDest, 0, 4096);
-
-				pDest = (void *)((unsigned int)pDest + 4096);
+				pDest = (void *)((unsigned int)pDest + length);		//rounded up length
+				if ((unsigned int)pDest > highZero)
+					highZero = (unsigned int)pDest;
 			}
 
-			if ((unsigned int)pDest > highZero)
-				highZero = (unsigned int)pDest;
-
-			/*p.PrintString(" highzero now ");
-			p.Print(highZero);
-			p.PrintString("\n");*/
-
-			return (unsigned int)to_return;
+			return (unsigned int)mmap_result;
 		}
 		else if (file == 3 || file == 4)			//gcc and c
 		{

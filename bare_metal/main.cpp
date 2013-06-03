@@ -2,6 +2,8 @@
 #include "common.h"
 #include "PL181.h"
 #include "FatFS.h"
+#include "elf.h"
+#include "VirtualFS.h"
 
 int main(int argc, const char **argv);
 
@@ -9,8 +11,6 @@ int main(int argc, const char **argv);
 #include <string.h>
 #include <link.h>
 #include <elf.h>
-#include "elf.h"
-#include "malloc.h"
 
 struct VectorTable
 {
@@ -426,60 +426,64 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	EnableFpu(true);
 
+	if (!InitMempool((void *)0xa0000000, 256))
+		ASSERT(0);
+
 
 //	{
 		PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
 
 		sd.GoIdleState();
 		if (!sd.GoReadyState())
-			p << "no card\n";
-		else
 		{
-			if (!sd.GoIdentificationState())
-				p << "definitely no card\n";
-			else
-			{
-				unsigned int rca;
-				bool ok = sd.GetCardRcaAndGoStandbyState(rca);
-				ASSERT(ok);
+			p << "no card\n";
+			ASSERT(0);
+		}
+		if (!sd.GoIdentificationState())
+		{
+			p << "definitely no card\n";
+			ASSERT(0);
+		}
+		unsigned int rca;
+		bool ok = sd.GetCardRcaAndGoStandbyState(rca);
+		ASSERT(ok);
 
-				ok = sd.GoTransferState(rca);
-				ASSERT(ok);
-
-//				char buffer[100];
-//				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
-//				ASSERT(ok);
-
-				FatFS fat(sd);
-				fat.ReadBpb();
-				fat.ReadEbr();
-
-				unsigned int fat_size = fat.FatSize();
-				fat_size = (fat_size + 4095) & ~4095;
-				unsigned int fat_pages = fat_size >> 12;
-
-				for (unsigned int count = 0; count < fat_pages; count++)
-				{
-					void *pPhysPage = PhysPages::FindPage();
-					ASSERT(pPhysPage != (void *)-1);
-
-					ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0x90000000 + count * 4096),
-							4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
-							TranslationTable::kOuterInnerWbWa, 0);
-					ASSERT(ok);
-				}
-
-				fat.HaveFatMemory((void *)0x90000000);
-				fat.LoadFat();
-
-
-//				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes() * fat.CountClusters(fat.RootDirectoryRelCluster()));
-//				fat.ReadClusterChain(pDir, fat.RootDirectoryRelCluster());
+		ok = sd.GoTransferState(rca);
+		ASSERT(ok);
 //
-//				unsigned int slot = 0;
-//				FatFS::DirEnt dirent;
-
-				fat.ListDirectory(p, fat.RootDirectoryRelCluster());
+////				char buffer[100];
+////				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
+////				ASSERT(ok);
+//
+//				fat.ReadBpb();
+//				fat.ReadEbr();
+//
+//				unsigned int fat_size = fat.FatSize();
+//				fat_size = (fat_size + 4095) & ~4095;
+//				unsigned int fat_pages = fat_size >> 12;
+//
+//				for (unsigned int count = 0; count < fat_pages; count++)
+//				{
+//					void *pPhysPage = PhysPages::FindPage();
+//					ASSERT(pPhysPage != (void *)-1);
+//
+//					ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0x90000000 + count * 4096),
+//							4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
+//							TranslationTable::kOuterInnerWbWa, 0);
+//					ASSERT(ok);
+//				}
+//
+//				fat.HaveFatMemory((void *)0x90000000);
+//				fat.LoadFat();
+//
+//
+////				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes() * fat.CountClusters(fat.RootDirectoryRelCluster()));
+////				fat.ReadClusterChain(pDir, fat.RootDirectoryRelCluster());
+////
+////				unsigned int slot = 0;
+////				FatFS::DirEnt dirent;
+//
+//				fat.ListDirectory(p, fat.RootDirectoryRelCluster());
 
 //				do
 //				{
@@ -541,13 +545,35 @@ extern "C" void Setup(unsigned int entryPoint)
 ////							}
 ////							else
 ////								ASSERT(to_read == 0);
-////						}
+////				ReadEbr		}
 ////					}
 //				} while (ok);
 
-				p << "\n";
-			}
-		}
+//				p << "\n";
+//			}
+//		}
+
+		VirtualFS vfs;
+		vfs.Mkdir("/", "Volumes");
+		vfs.Mkdir("/Volumes", "sd");
+
+		FatFS fat(sd);
+
+		vfs.Attach(fat, "/Volumes/sd");
+
+		BaseDirent *b = vfs.Locate("/");
+		b = vfs.Locate("/Volumes");
+		b = vfs.Locate("/Volumes/sd");
+		b = vfs.Locate("/Volumes/sd/Libraries");
+
+		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
+
+		b = vfs.Locate("/Volumes/sd/Programs/tester");
+
+		fat.Attach(vfs, "/Programs");
+
+		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
+
 
 //		sd.GoIdleState();
 //		unsigned int ocr = sd.SendOcr();

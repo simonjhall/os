@@ -10,6 +10,8 @@
 
 #include "print_uart.h"
 
+#include <sys/types.h>
+
 static inline void assert_func(void)
 {
 	volatile bool wait = false;
@@ -22,6 +24,11 @@ static inline void assert_func(void)
 #include "virt_memory.h"
 #include "translation_table.h"
 
+bool InitMempool(void *pBase, unsigned int numPages);
+
+void *internal_mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset, bool isPriv);
+int internal_munmap(void *addr, size_t length);
 
 void *GetHighBrk(void);
 void SetHighBrk(void *);

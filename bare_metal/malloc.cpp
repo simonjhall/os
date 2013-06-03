@@ -526,7 +526,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define malloc_getpagesize 4096
 #define LACKS_TIME_H 1
 #define ONLY_MSPACES 1
-#define HAVE_MMAP 0
+//#define HAVE_MMAP 0
 
 /* Version identifier to allow people to support multiple versions */
 #ifndef DLMALLOC_VERSION
@@ -1643,14 +1643,14 @@ unsigned char _BitScanReverse(unsigned long *index, unsigned long mask);
 #if HAVE_MMAP
 
 #ifndef WIN32
-#define MUNMAP_DEFAULT(a, s)  munmap((a), (s))
+#define MUNMAP_DEFAULT(a, s)  internal_munmap((a), (s))
 #define MMAP_PROT            (PROT_READ|PROT_WRITE)
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS        MAP_ANON
 #endif /* MAP_ANON */
 #ifdef MAP_ANONYMOUS
 #define MMAP_FLAGS           (MAP_PRIVATE|MAP_ANONYMOUS)
-#define MMAP_DEFAULT(s)       mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
+#define MMAP_DEFAULT(s)       internal_mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0, true)
 #else /* MAP_ANONYMOUS */
 /*
    Nearly all versions of mmap support MAP_ANONYMOUS, so the following

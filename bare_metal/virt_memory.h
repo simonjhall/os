@@ -24,6 +24,9 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain);
 bool UnmapVirt(void *pVirt, unsigned int length);
 
+bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain);
+
 //master kernel L1 table
 bool AllocL1Table(unsigned int entryPoint);
 TranslationTable::TableEntryL1 *GetL1TableVirt(void);

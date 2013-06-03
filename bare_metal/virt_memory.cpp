@@ -369,6 +369,29 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 	}
 }
 
+bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+{
+	unsigned char *pMap = (unsigned char *)pBase;
+
+	for (unsigned int count = 0; count < numPages; count++)
+	{
+		void *pPhys = PhysPages::FindPage();
+		if (pPhys == (void *)-1)
+			return false;											//needs to catch errors properly
+
+		bool ok = VirtMem::MapPhysToVirt(pPhys, pMap, 4096,
+				perm, xn, type,
+				domain);
+		if (!ok)
+			return false;
+
+		pMap += 4096;
+	}
+
+	return true;
+}
+
 }
 
 
