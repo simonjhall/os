@@ -11,28 +11,36 @@
 #include "BaseFS.h"
 #include "print_uart.h"
 
-class Stdio //: public BaseFS
+class Stdio : public File
 {
 public:
-	class Stdin : public File
+	enum Mode
 	{
-	public:
-		Stdin(PL011 &rUart, BaseFS &fileSystem)
-		: File("stdin", 0, fileSystem),
-		  m_rUart(rUart)
-		{
-		};
-
-		virtual ssize_t ReadFrom(void *pBuf, size_t count, off_t offset);
-		virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
-		virtual bool Seekable(off_t);
-
-	protected:
-		PL011 &m_rUart;
+		kStdin = 0,
+		kStdout = 1,
+		kStderr = 2,
+	};
+	Stdio(Mode m, PL011 &rUart, BaseFS &fileSystem)
+	: File(m == kStdin ? "stdin" : (m == kStdout ? "stdout" : "stderr"), 0, fileSystem),
+	  m_rUart(rUart),
+	  m_mode(m)
+	{
 	};
 
-	Stdio();
-	virtual ~Stdio();
+	virtual ssize_t ReadFrom(void *pBuf, size_t count, off_t offset);
+	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
+	virtual bool Seekable(off_t);
+
+	//no locking
+	virtual bool LockRead(void) { return true; }
+	virtual bool LockWrite(void) { return true; }
+	virtual void Unlock(void) { }
+
+	virtual bool Reparent(Directory *pParent);
+
+protected:
+	PL011 &m_rUart;
+	Mode m_mode;
 };
 
 #endif /* STDIO_H_ */

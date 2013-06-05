@@ -6,6 +6,7 @@
 #include "VirtualFS.h"
 #include "WrappedFile.h"
 #include "Stdio.h"
+#include "TTY.h"
 
 int main(int argc, const char **argv);
 
@@ -577,9 +578,16 @@ extern "C" void Setup(unsigned int entryPoint)
 //
 //		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
 
-		BaseDirent *f = vfs.Open("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", O_RDONLY);
+		BaseDirent *f = vfs.OpenByName("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", O_RDONLY);
 		ASSERT(f);
-		ProcessFS pfs;
+		ProcessFS pfs("/Volumes", "/sd/Programs");
+
+		char string[500];
+		pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500);
+		pfs.BuildFullPath("Volumes/sd/Libraries/ld-2.15.so", string, 500);
+		pfs.Chdir("Volumes");
+		pfs.Chdir("/sd");
+
 		int fd = pfs.Open(*f);
 		ASSERT(fd >= 0);
 		int fd2 = pfs.Dup(fd);
@@ -591,6 +599,28 @@ extern "C" void Setup(unsigned int entryPoint)
 		pfs.Close(fd);
 		w = pfs.GetFile(fd);
 
+		vfs.Mkdir("/", "Devices");
+
+		PL011 uart;
+		Stdio in(Stdio::kStdin, uart, vfs);
+		vfs.AddOrphanFile("/Devices", in);
+
+		BaseDirent *pIn = vfs.OpenByName("/Devices/stdin", O_WRONLY);
+
+		Stdio out(Stdio::kStdout, uart, vfs);
+		vfs.AddOrphanFile("/Devices", out);
+
+		BaseDirent *pOut = vfs.OpenByName("/Devices/stdout", O_WRONLY);
+		((File *)pOut)->WriteTo("hello", strlen("hello"), 0);
+
+		TTY tty(in, out, vfs);
+		vfs.AddOrphanFile("/Devices", tty);
+
+		int ld = pfs.Open(*vfs.OpenByName(pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500),
+				O_RDONLY));
+
+		char elf_header[100];
+		pfs.GetFile(ld)->Read(elf_header, 100);
 
 //		sd.GoIdleState();
 //		unsigned int ocr = sd.SendOcr();

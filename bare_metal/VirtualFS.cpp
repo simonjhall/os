@@ -21,25 +21,19 @@ VirtualFS::~VirtualFS()
 	// TODO Auto-generated destructor stub
 }
 
-BaseDirent *VirtualFS::Open(const char *pFilename, unsigned int flags)
+BaseDirent *VirtualFS::OpenByHandle(BaseDirent &rFile, unsigned int flags)
 {
-	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
+	if (flags & O_CREAT)
 		return 0;
 
-	BaseDirent *f = Locate(pFilename);
-
-	if (!f)
-		return 0;
-
-	if (&f->GetFilesystem() == this)
-		return Open(*f, flags);
+	if (((flags & O_ACCMODE) == O_RDONLY) && rFile.LockRead())
+		return &rFile;
+	else if (((flags & O_ACCMODE) == O_WRONLY) && rFile.LockWrite())
+		return &rFile;
+	else if (((flags & O_ACCMODE) == O_RDWR) && rFile.LockWrite())
+		return &rFile;
 	else
-		return f->GetFilesystem().Open(*f, flags);
-}
-
-BaseDirent *VirtualFS::Open(BaseDirent &rFile, unsigned int flags)
-{
-	return 0;
+		return 0;
 }
 
 
@@ -53,10 +47,6 @@ bool VirtualFS::Close(BaseDirent &f)
 	else
 		return f.GetFilesystem().Close(f);
 }
-
-//WrappedFile &VirtualFS::Dup(WrappedFile &)
-//{
-//}
 
 bool VirtualFS::Stat(const char *pFilename, struct stat &rBuf)
 {
@@ -84,6 +74,24 @@ bool VirtualFS::Mkdir(const char *pFilePath, const char *pFilename)
 bool VirtualFS::Rmdir(const char *pFilename)
 {
 	return false;
+}
+
+bool VirtualFS::AddOrphanFile(const char *pFilePath, BaseDirent &rFile)
+{
+	ASSERT(pFilePath);
+	BaseDirent *f = Locate(pFilePath);
+
+	if (!f->IsDirectory())
+		return false;
+
+	Directory *d = (Directory *)f;
+	if (!d->AddChild(&rFile))
+		return false;
+
+	if (rFile.Reparent(d) == false)
+		ASSERT(0);
+
+	return true;
 }
 
 BaseDirent *VirtualFS::Locate(const char *pFilename, Directory *pParent)

@@ -31,9 +31,12 @@ public:
 	bool IsDirectory(void) { return m_directory; }
 	BaseFS &GetFilesystem(void) { return m_rFileSystem; };
 
-	bool LockRead(void);
-	bool LockWrite(void);
-	void Unlock(void);
+	virtual bool LockRead(void);
+	virtual bool LockWrite(void);
+	virtual void Unlock(void);
+
+	//todo not so sure here
+	virtual bool Reparent(Directory *pParent);
 
 protected:
 	BaseDirent(const char *pName, Directory *pParent, BaseFS &fileSystem,
@@ -45,6 +48,8 @@ protected:
 	bool m_directory;			//no rtti
 
 	bool m_orphan;				//no parent
+
+private:
 	unsigned int m_readLockCount;
 	bool m_writeLock;
 };
@@ -97,8 +102,8 @@ class BaseFS
 {
 
 public:
-	virtual BaseDirent *Open(const char *pFilename, unsigned int flags) = 0;
-	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags) = 0;
+	virtual BaseDirent *OpenByName(const char *pFilename, unsigned int flags);
+	virtual BaseDirent *OpenByHandle(BaseDirent &rFile, unsigned int flags) = 0;
 	virtual bool Close(BaseDirent &) = 0;
 
 	virtual bool Stat(const char *pFilename, struct stat &rBuf) = 0;

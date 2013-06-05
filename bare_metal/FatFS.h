@@ -78,14 +78,13 @@ protected:
 
 class FatFS : public BaseFS
 {
+	friend class FatFile;
 public:
 	FatFS(BlockDevice &rDevice);
 	virtual ~FatFS();
 
-	virtual BaseDirent *Open(const char *pFilename, unsigned int flags);
-	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags);
+	virtual BaseDirent *OpenByHandle(BaseDirent &rFile, unsigned int flags);
 	virtual bool Close(BaseDirent &);
-//	virtual WrappedFile &Dup(WrappedFile &);
 
 	virtual bool Stat(const char *pFilename, struct stat &rBuf);
 	virtual bool Lstat(const char *pFilename, struct stat &rBuf);

@@ -39,6 +39,25 @@ bool BaseFS::Detach(const char *pTarget)
 	return false;
 }
 
+BaseDirent *BaseFS::OpenByName(const char *pFilename, unsigned int flags)
+{
+	if (flags & O_CREAT)
+		return 0;
+
+	BaseDirent *f = Locate(pFilename);
+
+	if (!f)
+		return 0;
+
+	if (&f->GetFilesystem() == this)
+		return OpenByHandle(*f, flags);
+	else
+		return f->GetFilesystem().OpenByHandle(*f, flags);
+}
+
+
+//////////////////////////////////////////
+
 BaseDirent::BaseDirent(const char *pName, Directory *pParent, BaseFS &fileSystem, bool directory)
 : m_pParent(pParent),
   m_rFileSystem(fileSystem),
@@ -55,6 +74,11 @@ BaseDirent::BaseDirent(const char *pName, Directory *pParent, BaseFS &fileSystem
 		m_orphan = false;
 	else
 		m_orphan = true;
+}
+
+bool BaseDirent::Reparent(Directory *pParent)
+{
+	return false;
 }
 
 bool BaseDirent::LockRead(void)
@@ -86,6 +110,8 @@ bool BaseDirent::LockWrite(void)
 	m_writeLock = true;
 	return true;
 }
+
+///////////////////////////////
 
 void *File::Mmap(void *addr, size_t length, int prot, int flags, off_t offset, bool isPriv)
 {

@@ -24,6 +24,9 @@ public:
 
 	virtual bool AddChild(BaseDirent *p)
 	{
+		if (!p)
+			return false;
+
 		m_files.push_back(p);
 		return true;
 	}
@@ -51,16 +54,16 @@ public:
 	VirtualFS();
 	virtual ~VirtualFS();
 
-	virtual BaseDirent *Open(const char *pFilename, unsigned int flags);
-	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags);
+	virtual BaseDirent *OpenByHandle(BaseDirent &rFile, unsigned int flags);
 	virtual bool Close(BaseDirent &);
-//	virtual WrappedFile &Dup(WrappedFile &);
 
 	virtual bool Stat(const char *pFilename, struct stat &rBuf);
 	virtual bool Lstat(const char *pFilename, struct stat &rBuf);
 
 	virtual bool Mkdir(const char *pFilePath, const char *pFilename);
 	virtual bool Rmdir(const char *pFilename);
+
+	virtual bool AddOrphanFile(const char *pFilePath, BaseDirent &rFile);
 
 protected:
 	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);

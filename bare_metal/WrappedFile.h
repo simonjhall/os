@@ -44,12 +44,12 @@ protected:
 class ProcessFS
 {
 public:
-	ProcessFS(BaseFS &, const char *pRootFilename, const char *pInitialDirectory);
+	ProcessFS(const char *pRootFilename, const char *pInitialDirectory);
 	virtual ~ProcessFS();
 
 	virtual void Chdir(const char *pPath);
 
-	void BuildFullPath(const char *pIn, char *pOut, size_t outLen);
+	virtual const char *BuildFullPath(const char *pIn, char *pOut, size_t outLen);
 
 	virtual int Open(BaseDirent &rHopefullyFile);
 	virtual bool Close(int file);

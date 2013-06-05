@@ -8,6 +8,7 @@
 #include "FatFS.h"
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
 
 FatFS::FatFS(BlockDevice &rDevice)
 : m_rDevice (rDevice)
@@ -36,23 +37,7 @@ FatFS::~FatFS()
 
 /////////////main interface
 
-BaseDirent *FatFS::Open(const char *pFilename, unsigned int flags)
-{
-	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
-		return 0;
-
-	BaseDirent *f = Locate(pFilename);
-
-	if (!f)
-		return 0;
-
-	if (&f->GetFilesystem() == this)
-		return Open(*f, flags);
-	else
-		return f->GetFilesystem().Open(*f, flags);
-}
-
-BaseDirent *FatFS::Open(BaseDirent &rFile, unsigned int flags)
+BaseDirent *FatFS::OpenByHandle(BaseDirent &rFile, unsigned int flags)
 {
 	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
 		return 0;
@@ -154,7 +139,50 @@ BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
 //stuff done on opened files
 ssize_t FatFile::ReadFrom(void *pBuf, size_t count, off_t offset)
 {
-	return 0;
+	size_t initial_count = count;
+
+	//todo double-check it's the FS we think it is
+	FatFS *fatfs = (FatFS *)&m_rFileSystem;
+	//figure out how many clusters in the offset is
+	unsigned int cluster_offset = offset / fatfs->ClusterSizeInBytes();
+	unsigned int start_cluster = m_cluster;
+
+	for (unsigned int i = 0; i < cluster_offset; i++)
+		if (!fatfs->NextCluster(start_cluster, start_cluster))
+			return -EINVAL;
+
+	//we should now have the correct starting cluster
+	//se how many bytes to omit
+	cluster_offset = offset % fatfs->ClusterSizeInBytes();
+
+	unsigned char *pOutBuf = (unsigned char *)pBuf;
+
+	do
+	{
+		//compute the starting address in logical bytes
+		unsigned int start_pos = fatfs->SectorToBytes(fatfs->ClusterToSector(fatfs->RelativeToAbsoluteCluster(start_cluster))) + cluster_offset;
+		//compute amount of bytes to read from this cluster
+		unsigned int max_read_bytes = fatfs->ClusterSizeInBytes() - cluster_offset;
+		unsigned int read_bytes = count > max_read_bytes ? max_read_bytes : count;
+
+		if (!fatfs->m_rDevice.ReadDataFromLogicalAddress(start_pos, pOutBuf, read_bytes))
+			return -EIO;
+
+		//we will now be aligned to the beginning of the cluster
+		cluster_offset = 0;
+		count -= read_bytes;
+
+		//move up the data buffer
+		pOutBuf += read_bytes;
+
+		//next cluster if appropriate
+		if (count)
+			if (!fatfs->NextCluster(start_cluster, start_cluster))
+				return -EINVAL;
+	} while (count);
+
+
+	return initial_count;
 }
 
 ssize_t FatFile::WriteTo(const void *pBuf, size_t count, off_t offset)

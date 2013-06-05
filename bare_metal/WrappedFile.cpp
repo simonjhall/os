@@ -9,6 +9,7 @@
 #include "WrappedFile.h"
 #include <fcntl.h>
 #include <errno.h>
+#include <string.h>
 
 ssize_t WrappedFile::Read(void *pBuf, size_t count)
 {
@@ -114,7 +115,7 @@ void WrappedFile::Close(void)
 	}
 }
 
-ProcessFS::ProcessFS(BaseFS &, const char *pRootFilename, const char *pInitialDirectory)
+ProcessFS::ProcessFS(const char *pRootFilename, const char *pInitialDirectory)
 {
 	if (pRootFilename)
 	{
@@ -141,13 +142,48 @@ void ProcessFS::Chdir(const char *pPath)
 {
 	ASSERT(pPath);
 
-	ASSERT(strlen(pPath) + 1 < sm_maxLength);
-	strncpy(m_currentDirectory, pPath, strlen(pPath) + 1);
+	if (pPath[0] == '/')
+	{
+		ASSERT(strlen(pPath) + 1 < sm_maxLength);
+		memset(m_currentDirectory, 0, sm_maxLength);
+		strncpy(m_currentDirectory, pPath, strlen(pPath) + 1);
+	}
+	else
+	{
+		size_t existing = strlen(m_currentDirectory);
+		ASSERT(existing + strlen(pPath) + 1 + 1 < sm_maxLength);
+		strcpy(m_currentDirectory + existing, "/");
+		strncpy(m_currentDirectory + existing + 1, pPath, strlen(pPath) + 1);
+	}
 }
 
-void ProcessFS::BuildFullPath(const char *pIn, char *pOut, size_t outLen)
+const char *ProcessFS::BuildFullPath(const char *pIn, char *pOut, size_t outLen)
 {
-	ASSERT(0);
+	size_t rootLen = strlen(m_rootDirectory);
+	size_t inLen = strlen(pIn);
+	size_t curLen = strlen(m_currentDirectory);
+
+	if (pIn[0] == '/')
+		curLen = 0;
+
+	if (rootLen + curLen + inLen + 1 + 1 > outLen)
+		return 0;
+
+	memset(pOut, 0, outLen);
+
+	//copy in the root
+	strcpy(pOut, m_rootDirectory);
+	//copy in the current directory
+	strncpy(pOut + rootLen, m_currentDirectory, curLen);
+	if (curLen)
+	{
+		strncpy(pOut + rootLen + curLen, "/", curLen);
+		curLen++;
+	}
+	//copy in the actual path
+	strcpy(pOut + rootLen + curLen, pIn);
+
+	return pOut;
 }
 
 int ProcessFS::Open(BaseDirent &rFile)
