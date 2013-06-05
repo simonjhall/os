@@ -4,6 +4,8 @@
 #include "FatFS.h"
 #include "elf.h"
 #include "VirtualFS.h"
+#include "WrappedFile.h"
+#include "Stdio.h"
 
 int main(int argc, const char **argv);
 
@@ -11,6 +13,7 @@ int main(int argc, const char **argv);
 #include <string.h>
 #include <link.h>
 #include <elf.h>
+#include <fcntl.h>
 
 struct VectorTable
 {
@@ -561,18 +564,32 @@ extern "C" void Setup(unsigned int entryPoint)
 
 		vfs.Attach(fat, "/Volumes/sd");
 
-		BaseDirent *b = vfs.Locate("/");
-		b = vfs.Locate("/Volumes");
-		b = vfs.Locate("/Volumes/sd");
-		b = vfs.Locate("/Volumes/sd/Libraries");
-
-		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
-
-		b = vfs.Locate("/Volumes/sd/Programs/tester");
-
+//		BaseDirent *b = vfs.Locate("/");
+//		b = vfs.Locate("/Volumes");
+//		b = vfs.Locate("/Volumes/sd");
+//		b = vfs.Locate("/Volumes/sd/Libraries");
+//
+//		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
+//
+//		b = vfs.Locate("/Volumes/sd/Programs/tester");
+//
 		fat.Attach(vfs, "/Programs");
+//
+//		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
 
-		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
+		BaseDirent *f = vfs.Open("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", O_RDONLY);
+		ASSERT(f);
+		ProcessFS pfs;
+		int fd = pfs.Open(*f);
+		ASSERT(fd >= 0);
+		int fd2 = pfs.Dup(fd);
+		int fd3 = pfs.Dup(fd2);
+		WrappedFile *w = pfs.GetFile(fd2);
+		pfs.Close(fd2);
+		w = pfs.GetFile(fd3);
+		pfs.Close(fd3);
+		pfs.Close(fd);
+		w = pfs.GetFile(fd);
 
 
 //		sd.GoIdleState();

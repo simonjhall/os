@@ -51,7 +51,8 @@ public:
 	VirtualFS();
 	virtual ~VirtualFS();
 
-	virtual bool Open(const char *pFilename, unsigned int flags, BaseDirent &rOut);
+	virtual BaseDirent *Open(const char *pFilename, unsigned int flags);
+	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags);
 	virtual bool Close(BaseDirent &);
 //	virtual WrappedFile &Dup(WrappedFile &);
 
@@ -61,7 +62,7 @@ public:
 	virtual bool Mkdir(const char *pFilePath, const char *pFilename);
 	virtual bool Rmdir(const char *pFilename);
 
-//protected:
+protected:
 	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);
 
 private:

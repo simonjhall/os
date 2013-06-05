@@ -7,6 +7,7 @@
 
 #include "VirtualFS.h"
 #include <string.h>
+#include <fcntl.h>
 
 VirtualFS::VirtualFS()
 {
@@ -20,14 +21,37 @@ VirtualFS::~VirtualFS()
 	// TODO Auto-generated destructor stub
 }
 
-bool VirtualFS::Open(const char *pFilename, unsigned int flags, BaseDirent &rOut)
+BaseDirent *VirtualFS::Open(const char *pFilename, unsigned int flags)
 {
-	return false;
+	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
+		return 0;
+
+	BaseDirent *f = Locate(pFilename);
+
+	if (!f)
+		return 0;
+
+	if (&f->GetFilesystem() == this)
+		return Open(*f, flags);
+	else
+		return f->GetFilesystem().Open(*f, flags);
 }
 
-bool VirtualFS::Close(BaseDirent &)
+BaseDirent *VirtualFS::Open(BaseDirent &rFile, unsigned int flags)
 {
-	return false;
+	return 0;
+}
+
+
+bool VirtualFS::Close(BaseDirent &f)
+{
+	if (&f.GetFilesystem() == this)
+	{
+		ASSERT(0);
+		return false;
+	}
+	else
+		return f.GetFilesystem().Close(f);
 }
 
 //WrappedFile &VirtualFS::Dup(WrappedFile &)

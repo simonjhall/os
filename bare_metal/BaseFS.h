@@ -28,8 +28,12 @@ public:
 
 	const char *GetName(void) { return m_pName; };
 	Directory *GetParent(void) { return m_pParent; };
-
 	bool IsDirectory(void) { return m_directory; }
+	BaseFS &GetFilesystem(void) { return m_rFileSystem; };
+
+	bool LockRead(void);
+	bool LockWrite(void);
+	void Unlock(void);
 
 protected:
 	BaseDirent(const char *pName, Directory *pParent, BaseFS &fileSystem,
@@ -40,7 +44,9 @@ protected:
 	BaseFS &m_rFileSystem;
 	bool m_directory;			//no rtti
 
-	bool m_orphan;
+	bool m_orphan;				//no parent
+	unsigned int m_readLockCount;
+	bool m_writeLock;
 };
 
 class File : public BaseDirent
@@ -50,16 +56,13 @@ public:
 	{
 	};
 
-	virtual ssize_t Read(void *pBuf, size_t count);
-	virtual ssize_t Write(const void *pBuf, size_t count);
-	virtual ssize_t Writev(const struct iovec *iov, int iovcnt);
-	virtual ssize_t Readv(const struct iovec *iov, int iovcnt);
+	virtual ssize_t ReadFrom(void *pBuf, size_t count, off_t offset) = 0;
+	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset) = 0;
+	virtual bool Seekable(off_t) = 0;
 
-	virtual off_t Lseek(off_t offset, int whence);
-
-	virtual void *Mmap(void *addr, size_t length, int prot, int flags, off_t offset);
+	virtual void *Mmap(void *addr, size_t length, int prot, int flags, off_t offset, bool isPriv);
 	virtual void *Mmap2(void *addr, size_t length, int prot,
-                    int flags, off_t pgoffset);
+                    int flags, off_t pgoffset, bool isPriv);
 	virtual bool Munmap(void *addr, size_t length);
 
 protected:
@@ -89,26 +92,14 @@ protected:
 
 };
 
-/*
-class WrappedFile : public BaseFile
-{
-public:
-	virtual ~WrappedFile()
-	{
-	};
-
-	int m_handle;	//needs to be per-process
-};*/
 
 class BaseFS
 {
-public:
-	BaseFS();
-	virtual ~BaseFS();
 
-	virtual bool Open(const char *pFilename, unsigned int flags, BaseDirent &rOut) = 0;
+public:
+	virtual BaseDirent *Open(const char *pFilename, unsigned int flags) = 0;
+	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags) = 0;
 	virtual bool Close(BaseDirent &) = 0;
-//	virtual WrappedFile &Dup(WrappedFile &) = 0;
 
 	virtual bool Stat(const char *pFilename, struct stat &rBuf) = 0;
 	virtual bool Lstat(const char *pFilename, struct stat &rBuf) = 0;
@@ -119,8 +110,11 @@ public:
 	virtual bool Attach(BaseFS &, const char *pTarget);
 	virtual bool Detach(const char *pTarget);
 
-//protected:
 	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0) = 0;
+protected:
+	BaseFS();
+	virtual ~BaseFS();
+
 
 	struct Attachment
 	{
@@ -135,15 +129,6 @@ public:
 	};
 
 	std::vector<Attachment *> m_attachments;
-};
-
-class ProcessFS
-{
-public:
-	ProcessFS(BaseFS &, const char *pRootFilename, const char *pInitialDirectory);
-	virtual ~ProcessFS();
-
-	bool Chdir(const char *pPath);
 };
 
 #endif /* BASEFS_H_ */

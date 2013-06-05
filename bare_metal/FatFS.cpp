@@ -7,6 +7,7 @@
 
 #include "FatFS.h"
 #include <stdlib.h>
+#include <fcntl.h>
 
 FatFS::FatFS(BlockDevice &rDevice)
 : m_rDevice (rDevice)
@@ -35,19 +36,43 @@ FatFS::~FatFS()
 
 /////////////main interface
 
-bool FatFS::Open(const char *pFilename, unsigned int flags, BaseDirent &rOut)
+BaseDirent *FatFS::Open(const char *pFilename, unsigned int flags)
 {
-	return false;
+	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
+		return 0;
+
+	BaseDirent *f = Locate(pFilename);
+
+	if (!f)
+		return 0;
+
+	if (&f->GetFilesystem() == this)
+		return Open(*f, flags);
+	else
+		return f->GetFilesystem().Open(*f, flags);
 }
 
-bool FatFS::Close(BaseDirent &)
+BaseDirent *FatFS::Open(BaseDirent &rFile, unsigned int flags)
 {
-	return false;
+	if ((flags & O_CREAT) || ((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR))
+		return 0;
+
+	if (((flags & O_ACCMODE) == O_RDONLY) && rFile.LockRead())
+		return &rFile;
+	else
+		return 0;
 }
 
-//WrappedFile &FatFS::Dup(WrappedFile &)
-//{
-//}
+bool FatFS::Close(BaseDirent &f)
+{
+	if (&f.GetFilesystem() == this)
+	{
+		f.Unlock();
+		return true;
+	}
+	else
+		return f.GetFilesystem().Close(f);
+}
 
 bool FatFS::Stat(const char *pFilename, struct stat &rBuf)
 {
@@ -124,6 +149,25 @@ BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
 
 	//not a mount point
 	return Locate(slash + 1, (Directory *)local);
+}
+
+//stuff done on opened files
+ssize_t FatFile::ReadFrom(void *pBuf, size_t count, off_t offset)
+{
+	return 0;
+}
+
+ssize_t FatFile::WriteTo(const void *pBuf, size_t count, off_t offset)
+{
+	return 0;
+}
+
+bool FatFile::Seekable(off_t o)
+{
+	if (o >=0 && o < m_size)
+		return true;
+	else
+		return false;
 }
 
 ///////////////////////////
@@ -256,7 +300,7 @@ void FatFS::ListDirectory(FatDirectory &rDir)
 				ListDirectory(*pFile);
 			}
 			else
-				FatFile *pFile = new FatFile(dirent.m_name, &rDir, *this, dirent.m_cluster);
+				FatFile *pFile = new FatFile(dirent.m_name, &rDir, *this, dirent.m_cluster, dirent.m_size);
 
 //			p << "file " << dirent.m_name;
 //			p << " rel cluster " << dirent.m_cluster;
@@ -323,4 +367,5 @@ bool FatFS::IterateDirectory(void *pCluster, unsigned int &rEntry, FATDirEnt &rO
 
 	return true;
 }
+
 

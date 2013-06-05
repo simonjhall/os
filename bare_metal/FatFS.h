@@ -60,14 +60,20 @@ class FatFile : public File
 {
 public:
 	FatFile(const char *pName, Directory *pParent, BaseFS &fileSystem,
-			unsigned int cluster)
+			unsigned int cluster, unsigned int size)
 	: File(pName, pParent, fileSystem),
-	  m_cluster(cluster)
+	  m_cluster(cluster),
+	  m_size(size)
 	{
 	};
 
+	virtual ssize_t ReadFrom(void *pBuf, size_t count, off_t offset);
+	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
+	virtual bool Seekable(off_t);
+
 protected:
 	unsigned int m_cluster;
+	unsigned int m_size;
 };
 
 class FatFS : public BaseFS
@@ -76,7 +82,8 @@ public:
 	FatFS(BlockDevice &rDevice);
 	virtual ~FatFS();
 
-	virtual bool Open(const char *pFilename, unsigned int flags, BaseDirent &rOut);
+	virtual BaseDirent *Open(const char *pFilename, unsigned int flags);
+	virtual BaseDirent *Open(BaseDirent &rFile, unsigned int flags);
 	virtual bool Close(BaseDirent &);
 //	virtual WrappedFile &Dup(WrappedFile &);
 
@@ -86,7 +93,7 @@ public:
 	virtual bool Mkdir(const char *pFilePath, const char *pFilename);
 	virtual bool Rmdir(const char *pFilename);
 
-//protected:
+protected:
 	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);
 
 protected:
