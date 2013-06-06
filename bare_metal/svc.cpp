@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <sys/mman.h>
 #include <asm-generic/errno-base.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -75,9 +76,9 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		int flags = (int)pRegisters[1];
 		mode_t mode = (mode_t)pRegisters[2];
 
-		p.PrintString("sys_open ");
-		p.PrintString(pFilename);
-		p.PrintString("\n");
+//		p.PrintString("sys_open ");
+//		p.PrintString(pFilename);
+//		p.PrintString("\n");
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
@@ -90,7 +91,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (f)
 		{
 			int fd = pfsA->Open(*f);
-			p << "fd = " << fd;
+//			p << "fd = " << fd << "\n";
 			return fd;
 		}
 
@@ -268,6 +269,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		unsigned int length_pages = length >> 12;
 		int file = (int)pRegisters[4];
 		int off = (int)pRegisters[5] << 12;
+		int off_pg = (int)pRegisters[5];
 		int prot = pRegisters[2];
 		int flags = pRegisters[3];
 
@@ -289,7 +291,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		p.PrintString(" highzero is ");
 		p.Print(highZero);
 */
-		if (file == -1)
+		if (flags & MAP_ANONYMOUS)
 		{
 //			void *to_return = pDest;
 //
@@ -324,7 +326,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 //
 //			return (unsigned int)to_return;
 
-			void *mmap_result = internal_mmap(pDest, length_unrounded, prot, flags, file, 0, false);
+			void *mmap_result = internal_mmap(pDest, length_unrounded, prot, flags, 0, 0, false);
 			if (mmap_result != (void *)-1)
 			{
 				pDest = (void *)((unsigned int)pDest + length);		//rounded up length
@@ -334,53 +336,70 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 			return (unsigned int)mmap_result;
 		}
-		else if (file == 3 || file == 4)			//gcc and c
-		{
-			unsigned char *to_return = (unsigned char *)pDest;
-			unsigned char *pVirtSource;
-
-			/*if (file == 3)
-				pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
-			else if (file == 4)
-				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;*/	//no thanks
-//			ASSERT((unsigned int)pVirtSource & 4095);
-
-			ASSERT(0);
-
-			for (unsigned int count = 0; count < length_pages; count++)
-			{
-				void *pPhys = PhysPages::FindPage();
-				if (pPhys == (void *)-1)
-				{
-//					if (usingHigh)
-//						highZero -= l
-					ASSERT(0);
-					return -1;
-				}
-
-				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
-				{
-					ASSERT(0);
-					return -1;
-				}
-
-				pDest = (void *)((unsigned int)pDest + 4096);
-			}
-
-			for (unsigned int count = 0; count < length_unrounded; count++)
-				to_return[count] = pVirtSource[count];
-
-			if ((unsigned int)pDest > highZero)
-				highZero = (unsigned int)pDest;
-
-		/*	p.PrintString(" highzero now ");
-			p.Print(highZero);
-			p.PrintString("\n");*/
-
-			return (unsigned int)to_return;
-		}
+//		else if (file == 3 || file == 4)			//gcc and c
+//		{
+//			unsigned char *to_return = (unsigned char *)pDest;
+//			unsigned char *pVirtSource;
+//
+//			/*if (file == 3)
+//				pVirtSource = (unsigned char *)&_binary_libgcc_s_so_1_start + off;
+//			else if (file == 4)
+//				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;*/	//no thanks
+////			ASSERT((unsigned int)pVirtSource & 4095);
+//
+//			ASSERT(0);
+//
+//			for (unsigned int count = 0; count < length_pages; count++)
+//			{
+//				void *pPhys = PhysPages::FindPage();
+//				if (pPhys == (void *)-1)
+//				{
+////					if (usingHigh)
+////						highZero -= l
+//					ASSERT(0);
+//					return -1;
+//				}
+//
+//				if (!VirtMem::MapPhysToVirt(pPhys, pDest, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+//				{
+//					ASSERT(0);
+//					return -1;
+//				}
+//
+//				pDest = (void *)((unsigned int)pDest + 4096);
+//			}
+//
+//			for (unsigned int count = 0; count < length_unrounded; count++)
+//				to_return[count] = pVirtSource[count];
+//
+//			if ((unsigned int)pDest > highZero)
+//				highZero = (unsigned int)pDest;
+//
+//		/*	p.PrintString(" highzero now ");
+//			p.Print(highZero);
+//			p.PrintString("\n");*/
+//
+//			return (unsigned int)to_return;
+//		}
+//		else
+//			p.PrintString("UNIMPLEMENTED mmap\n");
 		else
-			p.PrintString("UNIMPLEMENTED mmap\n");
+		{
+			//do it via the file handle instead
+			WrappedFile *f = pfsA->GetFile(file);
+			if (f)
+			{
+				void *mmap_result = f->Mmap2(pDest, length_unrounded, prot, flags, off_pg, false);
+				if (mmap_result != (void *)-1)
+				{
+					pDest = (void *)((unsigned int)pDest + length);		//rounded up length
+					if ((unsigned int)pDest > highZero)
+						highZero = (unsigned int)pDest;
+				}
+
+				return (unsigned int)mmap_result;
+			}
+		}
 
 		return -1;
 	}
@@ -408,6 +427,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		return 0;
 	}
 	case 195:		//stat64
+	case 196:		//lstat64
 	{
 		char *pFilename = (char *)pRegisters[0];
 		struct stat64 *pBuf = (struct stat64 *)pRegisters[1];
@@ -415,24 +435,39 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (!pFilename || !pBuf)
 			return -EFAULT;
 
-		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+//		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+//		{
+//			memset(pBuf, 0, sizeof(struct stat64));
+////			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;		//no thanks
+//			pBuf->st_ino = 1;
+//			ASSERT(0);
+//			return 0;
+//		}
+//		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
+//		{
+//			memset(pBuf, 0, sizeof(struct stat64));
+////			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;		//no thanks
+//			ASSERT(0);
+//			pBuf->st_ino = 2;
+//			return 0;
+//		}
+//		else
+//			p.PrintString("UNIMPLEMENTED STAT\n");
+
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+
+		if (f)
 		{
-			memset(pBuf, 0, sizeof(struct stat64));
-//			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;		//no thanks
-			pBuf->st_ino = 1;
-			ASSERT(0);
-			return 0;
+			bool ok = f->Fstat(*pBuf);
+			vfs->Close(*f);
+
+			if (ok)
+				return 0;
+			else
+				ASSERT(0);		//?
 		}
-		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
-		{
-			memset(pBuf, 0, sizeof(struct stat64));
-//			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;		//no thanks
-			ASSERT(0);
-			pBuf->st_ino = 2;
-			return 0;
-		}
-		else
-			p.PrintString("UNIMPLEMENTED STAT\n");
 
 		return -EBADF;
 	}
@@ -444,43 +479,104 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		if (!pBuf)
 			return -EFAULT;
 
-		if (handle == 3)
+//		if (handle == 3)
+//		{
+//			memset(pBuf, 0, sizeof(struct stat64));
+////			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;	//no thanks
+//			ASSERT(0);
+//			pBuf->st_ino = 1;
+//			return 0;
+//		}
+//		else if (handle == 4)
+//		{
+//			memset(pBuf, 0, sizeof(struct stat64));
+////			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;	//no thanks
+//			ASSERT(0);
+//			pBuf->st_ino = 2;
+//			return 0;
+//		}
+//		else
+//			p.PrintString("UNIMPLEMENTED FSTAT\n");
+
+		WrappedFile *f = pfsA->GetFile(handle);
+
+		if (f)
 		{
-			memset(pBuf, 0, sizeof(struct stat64));
-//			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;	//no thanks
-			ASSERT(0);
-			pBuf->st_ino = 1;
-			return 0;
+			bool ok = f->Fstat(*pBuf);
+
+			if (ok)
+				return 0;
+			else
+				ASSERT(0);		//?
 		}
-		else if (handle == 4)
-		{
-			memset(pBuf, 0, sizeof(struct stat64));
-//			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;	//no thanks
-			ASSERT(0);
-			pBuf->st_ino = 2;
-			return 0;
-		}
-		else
-			p.PrintString("UNIMPLEMENTED FSTAT\n");
 
 		return -EBADF;
 	}
 	case 6:			//close
 	{
 		int fd = pRegisters[0];
-		p.PrintString("UNIMPLEMENTED CLOSE\n");
-		if (fd == 3)
-		{
-			libgcc_offset = 0;
+//		p.PrintString("UNIMPLEMENTED CLOSE\n");
+//		if (fd == 3)
+//		{
+//			libgcc_offset = 0;
+//			return 0;
+//		}
+//		else if (fd == 4)
+//		{
+//			libc_offset = 0;
+//			return 0;
+//		}
+
+		if (pfsA->Close(fd))
 			return 0;
-		}
-		else if (fd == 4)
-		{
-			libc_offset = 0;
-			return 0;
-		}
+
 		return -1;
 	}
+	case 217:		//getdents64
+	{
+		int handle = (int)pRegisters[0];
+		linux_dirent64 *pDir = (linux_dirent64 *)pRegisters[1];
+		unsigned int len = pRegisters[2];
+
+		WrappedFile *f = pfsA->GetFile(handle);
+
+		if (f)
+			return f->Getdents64(pDir, len);
+
+		return -EBADF;
+	}
+	case 213:		//setuid32
+	{
+		uid_t uid = (uid_t)pRegisters[0];
+		p << "UIMPLEMENTED setuid32 changing uid to " << uid << "\n";
+
+		return 0;
+	}
+	case 214:		//setgid32
+	{
+		gid_t gid = (gid_t)pRegisters[0];
+		p << "UIMPLEMENTED setgid32 changing gid to " << gid << "\n";
+
+		return 0;
+	}
+	case 183:		//getcwd
+	{
+		char *pBuf = (char *)pRegisters[0];
+		size_t size = (size_t)pRegisters[1];
+		return 0;
+	}
+	case 40:		//rmdir
+		if (!pName)
+			pName = "rmdir";
+	case 221:		//fcntl64
+		if (!pName)
+			pName = "fcntl64";
+	case 54:		//ioctl
+		if (!pName)
+			pName = "ioctl";
+	case 64:		//getppid
+		if (!pName)
+			pName = "getppid";
 	case 19:		//lseek
 		if (!pName)
 			pName = "lseek";

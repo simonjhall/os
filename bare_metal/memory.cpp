@@ -44,7 +44,7 @@ void SetHighBrk(void *p)
 //}
 
 void *internal_mmap(void *addr, size_t length, int prot, int flags,
-                  int fd, off_t offset, bool isPriv)
+                  BaseDirent *f, off_t offset, bool isPriv)
 {
 	unsigned int length_rounded = (length + 4095) & ~4095;
 	unsigned int length_pages = length_rounded >> 12;
@@ -55,7 +55,7 @@ void *internal_mmap(void *addr, size_t length, int prot, int flags,
 		ASSERT(0);
 
 	if (VirtMem::AllocAndMapVirtContig(addr, length_pages,
-			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+			isPriv ? TranslationTable::kRwRo : TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
 	{
 		memset(addr, 0, length_pages << 12);
 		return addr;

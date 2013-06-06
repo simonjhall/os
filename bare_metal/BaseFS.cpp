@@ -115,16 +115,23 @@ bool BaseDirent::LockWrite(void)
 
 void *File::Mmap(void *addr, size_t length, int prot, int flags, off_t offset, bool isPriv)
 {
-	return 0;
+	void *res = internal_mmap(addr, length, prot, flags, this, offset, false);
+	if (res)
+	{
+		ASSERT(res == addr);
+		bool ok = ReadFrom(addr, length, offset);
+		ASSERT(ok);
+	}
+	return res;
 }
 
 void *File::Mmap2(void *addr, size_t length, int prot,
 				int flags, off_t pgoffset, bool isPriv)
 {
-	return 0;
+	return Mmap(addr, length, prot, flags, pgoffset << 12, isPriv);
 }
 
 bool File::Munmap(void *addr, size_t length)
 {
-	return false;
+	return internal_munmap(addr, length) ? true : false;
 }

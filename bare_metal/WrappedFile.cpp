@@ -15,10 +15,10 @@ ssize_t WrappedFile::Read(void *pBuf, size_t count)
 {
 	ASSERT(m_dupCount);
 
-	if (!m_pFile)
+	if (!m_pFile || m_pFile->IsDirectory())
 		return -EBADF;
 
-	ssize_t out = m_pFile->ReadFrom(pBuf, count, m_pos);
+	ssize_t out = ((File *)m_pFile)->ReadFrom(pBuf, count, m_pos);
 	if (out >= 0)
 		m_pos += out;
 
@@ -29,10 +29,10 @@ ssize_t WrappedFile::Write(const void *pBuf, size_t count)
 {
 	ASSERT(m_dupCount);
 
-	if (!m_pFile)
+	if (!m_pFile || m_pFile->IsDirectory())
 		return -EBADF;
 
-	ssize_t out = m_pFile->WriteTo(pBuf, count, m_pos);
+	ssize_t out = ((File *)m_pFile)->WriteTo(pBuf, count, m_pos);
 	if (out >= 0)
 		m_pos += out;
 
@@ -43,7 +43,7 @@ off_t WrappedFile::Lseek(off_t offset, int whence)
 {
 	ASSERT(m_dupCount);
 
-	if (!m_pFile)
+	if (!m_pFile || m_pFile->IsDirectory())
 		return -EBADF;
 
 	switch (whence)
@@ -62,7 +62,7 @@ off_t WrappedFile::Lseek(off_t offset, int whence)
 			break;
 	}
 
-	if (m_pFile->Seekable(m_pos) == false)
+	if (((File *)m_pFile)->Seekable(m_pos) == false)
 		return -EINVAL;
 
 	return m_pos;
@@ -72,7 +72,7 @@ ssize_t WrappedFile::Writev(const struct iovec *pIov, int iovcnt)
 {
 	ASSERT(m_dupCount);
 
-	if (!m_pFile)
+	if (!m_pFile || m_pFile->IsDirectory())
 		return -EBADF;
 
 	ssize_t written = 0;
@@ -90,7 +90,7 @@ ssize_t WrappedFile::Readv(const struct iovec *pIov, int iovcnt)
 {
 	ASSERT(m_dupCount);
 
-	if (!m_pFile)
+	if (!m_pFile || m_pFile->IsDirectory())
 		return -EBADF;
 
 	ssize_t read = 0;
@@ -117,7 +117,7 @@ void WrappedFile::Close(void)
 	}
 }
 
-bool WrappedFile::Fstat(struct stat &rBuf)
+bool WrappedFile::Fstat(struct stat64 &rBuf)
 {
 	ASSERT(m_dupCount);
 
@@ -125,6 +125,47 @@ bool WrappedFile::Fstat(struct stat &rBuf)
 		return m_pFile->Fstat(rBuf);
 	else
 		return 0;
+}
+
+void *WrappedFile::Mmap(void *addr, size_t length, int prot, int flags, off_t offset, bool isPriv)
+{
+	ASSERT(m_dupCount);
+
+	if (m_pFile && !m_pFile->IsDirectory())
+		return ((File *)m_pFile)->Mmap(addr, length, prot, flags, offset, isPriv);
+	else
+		return false;
+}
+
+void *WrappedFile::Mmap2(void *addr, size_t length, int prot,
+				int flags, off_t pgoffset, bool isPriv)
+{
+	ASSERT(m_dupCount);
+
+	if (m_pFile && !m_pFile->IsDirectory())
+		return ((File *)m_pFile)->Mmap2(addr, length, prot, flags, pgoffset, isPriv);
+	else
+		return false;
+}
+
+bool WrappedFile::Munmap(void *addr, size_t length)
+{
+	ASSERT(m_dupCount);
+
+	if (m_pFile && !m_pFile->IsDirectory())
+		return ((File *)m_pFile)->Munmap(addr, length);
+	else
+		return false;
+}
+
+int WrappedFile::Getdents64(linux_dirent64 *pDir, unsigned int count)
+{
+	ASSERT(m_dupCount);
+
+	if (m_pFile && m_pFile->IsDirectory())
+		return ((Directory *)m_pFile)->FillLinuxDirent(pDir, count, m_pos);
+	else
+		return -1;
 }
 
 ///////////////
@@ -171,6 +212,18 @@ void ProcessFS::Chdir(const char *pPath)
 	}
 }
 
+bool ProcessFS::Getcwd(char *pPath, size_t len)
+{
+	ASSERT(pPath);
+
+	if (strlen(m_currentDirectory) >= len)
+		return false;
+
+	memset(pPath, 0, len);
+	strncpy(pPath, m_currentDirectory, strlen(m_currentDirectory));
+	return true;
+}
+
 const char *ProcessFS::BuildFullPath(const char *pIn, char *pOut, size_t outLen)
 {
 	size_t rootLen = strlen(m_rootDirectory);
@@ -202,12 +255,7 @@ const char *ProcessFS::BuildFullPath(const char *pIn, char *pOut, size_t outLen)
 
 int ProcessFS::Open(BaseDirent &rFile)
 {
-	if (rFile.IsDirectory())
-		return false;
-
-	File *file = (File *)&rFile;
-
-	WrappedFile *f = new WrappedFile(file);
+	WrappedFile *f = new WrappedFile(&rFile);
 	ASSERT(f);
 	f->Inc();
 

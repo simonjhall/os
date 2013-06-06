@@ -11,6 +11,15 @@
 #include <vector>
 #include <sys/uio.h>
 
+struct linux_dirent64
+{
+	unsigned long long d_ino;
+	signed long long d_off;
+	unsigned short  d_reclen;
+	unsigned char   d_type;
+	char            d_name[0];
+ };
+
 class Directory;
 class BaseFS;
 
@@ -21,7 +30,7 @@ public:
 	{
 	};
 
-	virtual bool Fstat(struct stat &rBuf)
+	virtual bool Fstat(struct stat64 &rBuf)
 	{
 		return false;
 	};
@@ -88,6 +97,11 @@ public:
 	virtual bool AddChild(BaseDirent *p) = 0;
 	virtual unsigned int GetNumChildren(void) = 0;
 	virtual BaseDirent *GetChild(unsigned int) = 0;
+
+	virtual int FillLinuxDirent(linux_dirent64 *, unsigned int len, off_t &rChild)
+	{
+		return -1;
+	}
 
 protected:
 	Directory(const char *pName, Directory *pParent, BaseFS &fileSystem)

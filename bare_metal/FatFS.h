@@ -51,6 +51,9 @@ public:
 		return m_cluster;
 	}
 
+	virtual bool Fstat(struct stat64 &rBuf);
+	virtual int FillLinuxDirent(linux_dirent64 *, unsigned int len, off_t &rChild);
+
 protected:
 	std::vector<BaseDirent *> m_files;
 	unsigned int m_cluster;
@@ -71,7 +74,7 @@ public:
 	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
 	virtual bool Seekable(off_t);
 
-	virtual bool Fstat(struct stat &rBuf);
+	virtual bool Fstat(struct stat64 &rBuf);
 
 protected:
 	unsigned int m_cluster;

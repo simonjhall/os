@@ -267,7 +267,6 @@ static void MapKernel(unsigned int physEntryPoint)
     unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
     VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096,
     		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    SetHighBrk((void *)virt_end);
 
     //executable top section
     pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
@@ -682,7 +681,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	int exe = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
 			O_RDONLY));
-	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-linux.so.3", string, 500),
+	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-minimal", string, 500),
 			O_RDONLY));
 
 	pfsB = new ProcessFS("/Volumes/sd", "/");
@@ -696,7 +695,7 @@ extern "C" void Setup(unsigned int entryPoint)
 //			O_RDONLY));
 
 //	char elf_header[100];
-	stat exe_stat, ld_stat;
+	stat64 exe_stat, ld_stat;
 	pfsA->GetFile(exe)->Fstat(exe_stat);
 	pfsA->GetFile(ld)->Fstat(ld_stat);
 
@@ -722,6 +721,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	ASSERT(has_tls == false);
 	LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+	SetHighBrk((void *)0x10000000);
 	//////////////////////////////////////
 
 	RfeData rfe;
@@ -743,11 +743,12 @@ extern "C" void Setup(unsigned int entryPoint)
 	//fill in argc
 	rfe.m_pSp[0] = 1;
 	//fill in argv
-	const char *pElfName = "/init.elf";
-	const char *pEnv = "LD_DEBUG=all";
+	//const char *pElfName = "/init.elf";
+	const char *pElfName = "find";
+	const char *pEnv = "LAD_DEBUG=all";
 
 	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
-	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 4;
+	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 6;
 
 	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
 
@@ -765,8 +766,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	pAuxVec[3].a_type = AT_BASE;
 	pAuxVec[3].a_un.a_val = 0x70000000;
 
-	pAuxVec[4].a_type = AT_NULL;
-	pAuxVec[4].a_un.a_val = 0;
+	pAuxVec[4].a_type = AT_PAGESZ;
+	pAuxVec[4].a_un.a_val = 4096;
+
+	pAuxVec[5].a_type = AT_NULL;
+	pAuxVec[5].a_un.a_val = 0;
 
 	/*pHdr->p_align = 2;
 //	pHdr->p_filesz = (unsigned int)&thread_section_mid - (unsigned int)&thread_section_begin;

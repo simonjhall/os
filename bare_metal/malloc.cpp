@@ -1650,7 +1650,7 @@ unsigned char _BitScanReverse(unsigned long *index, unsigned long mask);
 #endif /* MAP_ANON */
 #ifdef MAP_ANONYMOUS
 #define MMAP_FLAGS           (MAP_PRIVATE|MAP_ANONYMOUS)
-#define MMAP_DEFAULT(s)       internal_mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0, true)
+#define MMAP_DEFAULT(s)       internal_mmap(0, (s), MMAP_PROT, MMAP_FLAGS, 0, 0, true)
 #else /* MAP_ANONYMOUS */
 /*
    Nearly all versions of mmap support MAP_ANONYMOUS, so the following

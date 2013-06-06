@@ -41,8 +41,7 @@ bool VirtualFS::Close(BaseDirent &f)
 {
 	if (&f.GetFilesystem() == this)
 	{
-		ASSERT(0);
-		return false;
+		return true;
 	}
 	else
 		return f.GetFilesystem().Close(f);
@@ -108,8 +107,10 @@ BaseDirent *VirtualFS::Locate(const char *pFilename, Directory *pParent)
 	//we want the root directory
 	if (pFilename[0] == '/')
 	{
-		ASSERT(pParent == m_pRoot);
-		return Locate(pFilename + 1, m_pRoot);
+		if (pParent == m_pRoot)
+			return Locate(pFilename + 1, m_pRoot);
+		else
+			return Locate(pFilename + 1, pParent);
 	}
 
 	//check if there's a path in here or just a lone name
@@ -118,6 +119,16 @@ BaseDirent *VirtualFS::Locate(const char *pFilename, Directory *pParent)
 
 	if (slash)
 		length = slash - pFilename;
+
+	if (strncmp(pFilename, ".", length) == 0)
+		return Locate(pFilename + 1, pParent);
+
+	if (strncmp(pFilename, "..", length) == 0)
+	{
+		ASSERT(pParent);
+		ASSERT(pParent->GetParent());
+		return Locate(pFilename + 1, pParent->GetParent());
+	}
 
 	BaseDirent *local = 0;
 	for (unsigned int count = 0; count < pParent->GetNumChildren(); count++)

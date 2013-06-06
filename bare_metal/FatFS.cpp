@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
 
 FatFS::FatFS(BlockDevice &rDevice)
 : m_rDevice (rDevice)
@@ -93,8 +94,10 @@ BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
 	//we want the root directory
 	if (pFilename[0] == '/')
 	{
-		ASSERT(pParent == m_pRoot);
-		return Locate(pFilename + 1, m_pRoot);
+		if (pParent == m_pRoot)
+			return Locate(pFilename + 1, m_pRoot);
+		else
+			return Locate(pFilename + 1, pParent);
 	}
 
 	//check if there's a path in here or just a lone name
@@ -103,6 +106,16 @@ BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
 
 	if (slash)
 		length = slash - pFilename;
+
+	if (strncmp(pFilename, ".", length) == 0)
+		return Locate(pFilename + 1, pParent);
+
+	if (strncmp(pFilename, "..", length) == 0)
+	{
+		ASSERT(pParent);
+		ASSERT(pParent->GetParent());
+		return Locate(pFilename + 1, pParent->GetParent());
+	}
 
 	BaseDirent *local = 0;
 	for (unsigned int count = 0; count < pParent->GetNumChildren(); count++)
@@ -198,9 +211,9 @@ bool FatFile::Seekable(off_t o)
 		return false;
 }
 
-bool FatFile::Fstat(struct stat &rBuf)
+bool FatFile::Fstat(struct stat64 &rBuf)
 {
-	memset(&rBuf, 0, sizeof(struct stat));
+	memset(&rBuf, 0, sizeof(rBuf));
 	rBuf.st_dev = (dev_t)&m_rFileSystem;
 	rBuf.st_ino = (ino_t)this;
 	rBuf.st_size = m_size;
@@ -208,6 +221,62 @@ bool FatFile::Fstat(struct stat &rBuf)
 	rBuf.st_blocks = ((m_size + 511) & ~511) / 512;
 	return true;
 };
+
+bool FatDirectory::Fstat(struct stat64 &rBuf)
+{
+	memset(&rBuf, 0, sizeof(rBuf));
+	rBuf.st_dev = (dev_t)&m_rFileSystem;
+	rBuf.st_ino = (ino_t)this;
+	rBuf.st_size = 0;
+	rBuf.st_mode = S_IFDIR;
+	rBuf.st_rdev = (dev_t)1;
+	rBuf.st_blksize = 512;
+	rBuf.st_blocks = 1;
+	return true;
+}
+
+int FatDirectory::FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t &rChild)
+{
+	int written = 0;
+	int base_size = sizeof(linux_dirent64);
+	bool no_more_children = false;
+
+	while (len)
+	{
+		if (base_size >= len)
+			return -EINVAL;
+
+		BaseDirent *pChild = GetChild(rChild);
+		if (!pChild)
+		{
+			no_more_children = true;
+			break;
+		}
+
+		pOut->d_ino = (unsigned long long)pChild;
+		pOut->d_ino = pOut->d_ino & 0xffffffff;
+		pOut->d_off = rChild;
+		pOut->d_type = pChild->IsDirectory() ? DT_DIR : DT_REG;
+
+		size_t name_len = strlen(pChild->GetName()) + 1;
+		if (base_size + name_len > len)
+			break;
+
+		strcpy(pOut->d_name, pChild->GetName());
+		len -= base_size;
+		len -= name_len;
+
+		pOut->d_reclen = base_size + name_len;
+		written += pOut->d_reclen;
+		pOut = (linux_dirent64 *)((char *)pOut + pOut->d_reclen);
+		rChild++;
+	}
+
+	if (!written && !no_more_children)
+		return -EINVAL;
+	else
+		return written;
+}
 
 ///////////////////////////
 

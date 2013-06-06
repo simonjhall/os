@@ -12,6 +12,8 @@
 
 #include <sys/types.h>
 
+class BaseDirent;
+
 static inline void assert_func(void)
 {
 	volatile bool wait = false;
@@ -27,7 +29,7 @@ static inline void assert_func(void)
 bool InitMempool(void *pBase, unsigned int numPages);
 
 void *internal_mmap(void *addr, size_t length, int prot, int flags,
-                  int fd, off_t offset, bool isPriv);
+                  BaseDirent *f, off_t offset, bool isPriv);
 int internal_munmap(void *addr, size_t length);
 
 void *GetHighBrk(void);

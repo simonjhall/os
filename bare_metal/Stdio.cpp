@@ -6,6 +6,8 @@
  */
 
 #include "Stdio.h"
+#include <string.h>
+#include <sys/stat.h>
 
 ssize_t Stdio::ReadFrom(void *pBuf, size_t count, off_t offset)
 {
@@ -13,16 +15,21 @@ ssize_t Stdio::ReadFrom(void *pBuf, size_t count, off_t offset)
 		return -1;
 
 	unsigned char *pOut = (unsigned char *)pBuf;
+	unsigned int read_bytes = 0;
 
 	while(count)
 	{
 		unsigned char c;
-		while (m_rUart.ReadByte(c) == false);
-
-		*pOut++ = c;
-		count--;
+		if (m_rUart.ReadByte(c))
+		{
+			*pOut++ = c;
+			count--;
+			read_bytes++;
+		}
+		else
+			break;
 	}
-	return count;
+	return read_bytes;
 }
 
 ssize_t Stdio::WriteTo(const void *pBuf, size_t count, off_t offset)
@@ -31,16 +38,21 @@ ssize_t Stdio::WriteTo(const void *pBuf, size_t count, off_t offset)
 		return -1;
 
 	unsigned char *pIn = (unsigned char *)pBuf;
+	unsigned int written_bytes = 0;
 
 	while(count)
 	{
 		unsigned char c = *pIn++;
 		//potentially do the \r thing here
-		while (m_rUart.WriteByte(c) == false);
-
-		count--;
+		if (m_rUart.WriteByte(c))
+		{
+			count--;
+			written_bytes++;
+		}
+		else
+			break;
 	}
-	return count;
+	return written_bytes;
 }
 
 bool Stdio::Seekable(off_t)
@@ -60,5 +72,18 @@ bool Stdio::Reparent(Directory *pParent)
 		m_pParent = 0;
 		m_orphan = true;
 	}
+	return true;
+}
+
+bool Stdio::Fstat(struct stat64 &rBuf)
+{
+	memset(&rBuf, 0, sizeof(rBuf));
+	rBuf.st_dev = (dev_t)&m_rFileSystem;
+	rBuf.st_ino = (ino_t)this;
+	rBuf.st_size = 0;
+	rBuf.st_mode = S_IFCHR;
+	rBuf.st_rdev = (dev_t)1;
+	rBuf.st_blksize = 1;
+	rBuf.st_blocks = 0;
 	return true;
 }

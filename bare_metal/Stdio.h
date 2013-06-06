@@ -31,6 +31,8 @@ public:
 	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
 	virtual bool Seekable(off_t);
 
+	virtual bool Fstat(struct stat64 &rBuf);
+
 	//no locking
 	virtual bool LockRead(void) { return true; }
 	virtual bool LockWrite(void) { return true; }
