@@ -9,6 +9,8 @@
 
 #include "print_uart.h"
 #include "common.h"
+#include "WrappedFile.h"
+#include "VirtualFS.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,6 +28,10 @@ unsigned int libgcc_offset = 0;
 //extern unsigned int _binary_libc_2_17_so_start;
 //extern unsigned int _binary_libc_2_17_so_size;
 unsigned int libc_offset = 0;
+
+extern ProcessFS *pfsA;
+extern ProcessFS *pfsB;
+extern VirtualFS *vfs;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
@@ -73,20 +79,37 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		p.PrintString(pFilename);
 		p.PrintString("\n");
 
-		static int fd = 3;
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		BaseDirent *f;
+//		f = vfs->OpenByName(pfsB->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+//		if (f)
+//			return pfsB->Open(*f);
 
-		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+		f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		if (f)
 		{
-			return fd++;
+			int fd = pfsA->Open(*f);
+			p << "fd = " << fd;
+			return fd;
 		}
-		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
-		{
-			return fd++;
-		}
-		else
-			p.PrintString("UNIMPLEMENTED OPEN\n");
 
 		return -1;
+
+//		static int fd = 3;
+//
+//		if (strcmp(pFilename, "/usr/local/lib/libgcc_s.so.1") == 0)
+//		{
+//			return fd++;
+//		}
+//		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
+//		{
+//			return fd++;
+//		}
+//		else
+//			p.PrintString("UNIMPLEMENTED OPEN\n");
+//
+//		return -1;
 	}
 	case 146:		//compat_sys_writev
 	{
@@ -183,42 +206,48 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		unsigned char *pBuf = (unsigned char *)pRegisters[1];
 		unsigned int len = pRegisters[2];
 
-		if (fd == 0)	//stdin
-		{
-			for (unsigned int count = 0; count < len; count++)
-			{
-				unsigned char c;
-				while (PL011::ReadByte(c) == false);
-				pBuf[count] = c;
-			}
-			return len;
-		}
-		else if (fd == 3 || fd == 4)	//libgcc and libc
-		{
-			unsigned char *c;
-			unsigned int *offset;
+//		if (fd == 0)	//stdin
+//		{
+//			for (unsigned int count = 0; count < len; count++)
+//			{
+//				unsigned char c;
+//				while (PL011::ReadByte(c) == false);
+//				pBuf[count] = c;
+//			}
+//			return len;
+//		}
+//		else if (fd == 3 || fd == 4)	//libgcc and libc
+//		{
+//			unsigned char *c;
+//			unsigned int *offset;
+//
+//			if (fd == 3)
+//			{
+////				c = (unsigned char *)&_binary_libgcc_s_so_1_start;		//no thanks
+//				ASSERT(0);
+//				offset = &libgcc_offset;
+//			}
+//			else if (fd == 4)
+//			{
+////				c = (unsigned char *)&_binary_libc_2_17_so_start;		//no thanks
+//				ASSERT(0);
+//				offset = &libc_offset;
+//			}
+//
+//			for (unsigned int count = 0; count < len; count++)
+//			{
+//				pBuf[count] = c[*offset + count];
+//			}
+//
+//			*offset += len;
+//			return len;
+//		}
+//		else
+//			p.PrintString("UNIMPLEMENTED READ\n");
 
-			if (fd == 3)
-			{
-//				c = (unsigned char *)&_binary_libgcc_s_so_1_start;		//no thanks
-				offset = &libgcc_offset;
-			}
-			else if (fd == 4)
-			{
-//				c = (unsigned char *)&_binary_libc_2_17_so_start;		//no thanks
-				offset = &libc_offset;
-			}
-
-			for (unsigned int count = 0; count < len; count++)
-			{
-				pBuf[count] = c[*offset + count];
-			}
-
-			*offset += len;
-			return len;
-		}
-		else
-			p.PrintString("UNIMPLEMENTED READ\n");
+		WrappedFile *f = pfsA->GetFile(fd);
+		if (f)
+			return f->Read(pBuf, len);
 
 		return -1;
 	}
@@ -316,6 +345,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				pVirtSource = (unsigned char *)&_binary_libc_2_17_so_start + off;*/	//no thanks
 //			ASSERT((unsigned int)pVirtSource & 4095);
 
+			ASSERT(0);
+
 			for (unsigned int count = 0; count < length_pages; count++)
 			{
 				void *pPhys = PhysPages::FindPage();
@@ -389,12 +420,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			memset(pBuf, 0, sizeof(struct stat64));
 //			pBuf->st_size = *(unsigned int *)&_binary_libgcc_s_so_1_size;		//no thanks
 			pBuf->st_ino = 1;
+			ASSERT(0);
 			return 0;
 		}
 		else if (strcmp(pFilename, "/usr/local/lib/libc.so.6") == 0)
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
 //			pBuf->st_size = *(unsigned int *)&_binary_libc_2_17_so_size;		//no thanks
+			ASSERT(0);
 			pBuf->st_ino = 2;
 			return 0;
 		}
@@ -415,6 +448,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
 //			pBuf->st_size = (unsigned int)&_binary_libgcc_s_so_1_size;	//no thanks
+			ASSERT(0);
 			pBuf->st_ino = 1;
 			return 0;
 		}
@@ -422,6 +456,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		{
 			memset(pBuf, 0, sizeof(struct stat64));
 //			pBuf->st_size = (unsigned int)&_binary_libc_2_17_so_size;	//no thanks
+			ASSERT(0);
 			pBuf->st_ino = 2;
 			return 0;
 		}

@@ -16,6 +16,7 @@ class WrappedFile
 public:
 	WrappedFile(File *p)
 	: m_pFile(p),
+	  m_pos(0),
 	  m_dupCount(0)
 	{
 	}
@@ -34,6 +35,7 @@ public:
 	virtual ssize_t Readv(const struct iovec *iov, int iovcnt);
 
 	virtual off_t Lseek(off_t offset, int whence);
+	virtual bool Fstat(struct stat &rBuf);
 
 protected:
 	File *m_pFile;

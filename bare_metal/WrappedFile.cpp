@@ -106,6 +106,8 @@ ssize_t WrappedFile::Readv(const struct iovec *pIov, int iovcnt)
 
 void WrappedFile::Close(void)
 {
+	ASSERT(m_dupCount);
+
 	if (m_pFile)
 	{
 		bool ok = m_pFile->GetFilesystem().Close(*m_pFile);
@@ -114,6 +116,18 @@ void WrappedFile::Close(void)
 		m_pFile = 0;
 	}
 }
+
+bool WrappedFile::Fstat(struct stat &rBuf)
+{
+	ASSERT(m_dupCount);
+
+	if (m_pFile)
+		return m_pFile->Fstat(rBuf);
+	else
+		return 0;
+}
+
+///////////////
 
 ProcessFS::ProcessFS(const char *pRootFilename, const char *pInitialDirectory)
 {

@@ -275,6 +275,7 @@ static void MapKernel(unsigned int physEntryPoint)
     //process stack
     pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
+    memset((void *)(4094U * 1048576), 0, 1048576);
 
     //copy in the high code
     unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
@@ -402,6 +403,10 @@ unsigned int FillPHdr(Elf &elf, ElfW(Phdr) *pHdr, unsigned int voffset)
 	return elf.GetNumProgramHeaders();
 }
 
+ProcessFS *pfsA;
+ProcessFS *pfsB;
+VirtualFS *vfs;
+
 extern "C" void Setup(unsigned int entryPoint)
 {
 	VectorTable::SetTableAddress(0);
@@ -430,7 +435,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	EnableFpu(true);
 
-	if (!InitMempool((void *)0xa0000000, 256))
+	if (!InitMempool((void *)0xa0000000, 256 * 2))		//2MB
 		ASSERT(0);
 
 
@@ -557,70 +562,70 @@ extern "C" void Setup(unsigned int entryPoint)
 //			}
 //		}
 
-		VirtualFS vfs;
-		vfs.Mkdir("/", "Volumes");
-		vfs.Mkdir("/Volumes", "sd");
-
-		FatFS fat(sd);
-
-		vfs.Attach(fat, "/Volumes/sd");
-
-//		BaseDirent *b = vfs.Locate("/");
-//		b = vfs.Locate("/Volumes");
-//		b = vfs.Locate("/Volumes/sd");
-//		b = vfs.Locate("/Volumes/sd/Libraries");
+//		VirtualFS vfs;
+//		vfs.Mkdir("/", "Volumes");
+//		vfs.Mkdir("/Volumes", "sd");
 //
-//		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
+//		FatFS fat(sd);
 //
-//		b = vfs.Locate("/Volumes/sd/Programs/tester");
+//		vfs.Attach(fat, "/Volumes/sd");
 //
-		fat.Attach(vfs, "/Programs");
+////		BaseDirent *b = vfs.Locate("/");
+////		b = vfs.Locate("/Volumes");
+////		b = vfs.Locate("/Volumes/sd");
+////		b = vfs.Locate("/Volumes/sd/Libraries");
+////
+////		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
+////
+////		b = vfs.Locate("/Volumes/sd/Programs/tester");
+////
+//		fat.Attach(vfs, "/Programs");
+////
+////		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
 //
-//		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
-
-		BaseDirent *f = vfs.OpenByName("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", O_RDONLY);
-		ASSERT(f);
-		ProcessFS pfs("/Volumes", "/sd/Programs");
-
-		char string[500];
-		pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500);
-		pfs.BuildFullPath("Volumes/sd/Libraries/ld-2.15.so", string, 500);
-		pfs.Chdir("Volumes");
-		pfs.Chdir("/sd");
-
-		int fd = pfs.Open(*f);
-		ASSERT(fd >= 0);
-		int fd2 = pfs.Dup(fd);
-		int fd3 = pfs.Dup(fd2);
-		WrappedFile *w = pfs.GetFile(fd2);
-		pfs.Close(fd2);
-		w = pfs.GetFile(fd3);
-		pfs.Close(fd3);
-		pfs.Close(fd);
-		w = pfs.GetFile(fd);
-
-		vfs.Mkdir("/", "Devices");
-
-		PL011 uart;
-		Stdio in(Stdio::kStdin, uart, vfs);
-		vfs.AddOrphanFile("/Devices", in);
-
-		BaseDirent *pIn = vfs.OpenByName("/Devices/stdin", O_WRONLY);
-
-		Stdio out(Stdio::kStdout, uart, vfs);
-		vfs.AddOrphanFile("/Devices", out);
-
-		BaseDirent *pOut = vfs.OpenByName("/Devices/stdout", O_WRONLY);
-		((File *)pOut)->WriteTo("hello", strlen("hello"), 0);
-
-		TTY tty(in, out, vfs);
-		vfs.AddOrphanFile("/Devices", tty);
-
-		int ld = pfs.Open(*vfs.OpenByName(pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500),
-				O_RDONLY));
-
-		char elf_header[100];
-		pfs.GetFile(ld)->Read(elf_header, 100);
+//		BaseDirent *f = vfs.OpenByName("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", O_RDONLY);
+//		ASSERT(f);
+//		ProcessFS pfs("/Volumes", "/sd/Programs");
+//
+//		char string[500];
+//		pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", string, 500);
+//		pfs.BuildFullPath("Volumes/sd/Libraries/ld-2.17.so", string, 500);
+//		pfs.Chdir("Volumes");
+//		pfs.Chdir("/sd");
+//
+//		int fd = pfs.Open(*f);
+//		ASSERT(fd >= 0);
+//		int fd2 = pfs.Dup(fd);
+//		int fd3 = pfs.Dup(fd2);
+//		WrappedFile *w = pfs.GetFile(fd2);
+//		pfs.Close(fd2);
+//		w = pfs.GetFile(fd3);
+//		pfs.Close(fd3);
+//		pfs.Close(fd);
+//		w = pfs.GetFile(fd);
+//
+//		vfs.Mkdir("/", "Devices");
+//
+//		PL011 uart;
+//		Stdio in(Stdio::kStdin, uart, vfs);
+//		vfs.AddOrphanFile("/Devices", in);
+//
+//		BaseDirent *pIn = vfs.OpenByName("/Devices/stdin", O_WRONLY);
+//
+//		Stdio out(Stdio::kStdout, uart, vfs);
+//		vfs.AddOrphanFile("/Devices", out);
+//
+//		BaseDirent *pOut = vfs.OpenByName("/Devices/stdout", O_WRONLY);
+//		((File *)pOut)->WriteTo("hello", strlen("hello"), 0);
+//
+//		TTY tty(in, out, vfs);
+//		vfs.AddOrphanFile("/Devices", tty);
+//
+//		int ld = pfs.Open(*vfs.OpenByName(pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500),
+//				O_RDONLY));
+//
+//		char elf_header[100];
+//		pfs.GetFile(ld)->Read(elf_header, 100);
 
 //		sd.GoIdleState();
 //		unsigned int ocr = sd.SendOcr();
@@ -649,13 +654,66 @@ extern "C" void Setup(unsigned int entryPoint)
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
 
+	vfs = new VirtualFS();
+	//////
+	vfs->Mkdir("/", "Devices");
+	PL011 uart;
+	Stdio in(Stdio::kStdin, uart, *vfs);
+	vfs->AddOrphanFile("/Devices", in);
+
+	Stdio out(Stdio::kStdout, uart, *vfs);
+	vfs->AddOrphanFile("/Devices", out);
+
+	Stdio err(Stdio::kStderr, uart, *vfs);
+	vfs->AddOrphanFile("/Devices", err);
+	////
+	vfs->Mkdir("/", "Volumes");
+	vfs->Mkdir("/Volumes", "sd");
+
+	FatFS fat(sd);
+	vfs->Attach(fat, "/Volumes/sd");
+
+	pfsA = new ProcessFS("/Volumes/sd/minimal", "/");
+	char string[500];
+
+	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdin", O_RDONLY)) == 0);
+	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdout", O_RDONLY)) == 1);
+	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stderr", O_RDONLY)) == 2);
+
+	int exe = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
+			O_RDONLY));
+	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-linux.so.3", string, 500),
+			O_RDONLY));
+
+	pfsB = new ProcessFS("/Volumes/sd", "/");
+
+
+//	char string[500];
+
+//	int exe = pfsB.Open(*vfs.OpenByName(pfsB.BuildFullPath("/Programs/tester", string, 500),
+//			O_RDONLY));
+//	int ld = pfsB->Open(*vfs->OpenByName(pfsB->BuildFullPath("/Libraries/ld_stripped.so", string, 500),
+//			O_RDONLY));
+
+//	char elf_header[100];
+	stat exe_stat, ld_stat;
+	pfsA->GetFile(exe)->Fstat(exe_stat);
+	pfsA->GetFile(ld)->Fstat(ld_stat);
+
+	unsigned char *pProgramData, *pInterpData;
+	pProgramData = new unsigned char[exe_stat.st_size];
+	ASSERT(pProgramData);
+	pInterpData = new unsigned char[ld_stat.st_size];
+	ASSERT(pInterpData);
+
+	pfsA->GetFile(exe)->Read(pProgramData, exe_stat.st_size);
+	pfsA->GetFile(ld)->Read(pInterpData, ld_stat.st_size);
+
 	Elf startingElf, interpElf;
 
-//	startingElf.Load(&_binary__home_simon_workspace_tester_Debug_tester_strip_start,
-//			(unsigned int)&_binary__home_simon_workspace_tester_Debug_tester_strip_size);
-//
-//	interpElf.Load(&_binary_ld_stripped_so_start,
-//			(unsigned int)&_binary_ld_stripped_so_size);//no thanks
+	startingElf.Load(pProgramData, exe_stat.st_size);
+
+	interpElf.Load(pInterpData, ld_stat.st_size);
 
 	bool has_tls = false;
 	unsigned int tls_memsize, tls_filesize, tls_vaddr;
@@ -669,7 +727,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	RfeData rfe;
 //	rfe.m_pPc = &_start;
 	rfe.func = (void *)((unsigned int)interpElf.GetEntryPoint() + 0x70000000);
-	rfe.m_pSp = (unsigned int *)0xffeffffc;		//4095MB-4b
+	rfe.m_pSp = (unsigned int *)0xffeffff8;		//4095MB-8b
 
 	memset(&rfe.m_cpsr, 0, 4);
 	rfe.m_cpsr.m_mode = kUser;
@@ -681,7 +739,7 @@ extern "C" void Setup(unsigned int entryPoint)
 		rfe.m_cpsr.m_t = 1;
 
 	//move down enough for some stuff
-	rfe.m_pSp = rfe.m_pSp - 100;
+	rfe.m_pSp = rfe.m_pSp - 128;
 	//fill in argc
 	rfe.m_pSp[0] = 1;
 	//fill in argv

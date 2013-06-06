@@ -198,6 +198,17 @@ bool FatFile::Seekable(off_t o)
 		return false;
 }
 
+bool FatFile::Fstat(struct stat &rBuf)
+{
+	memset(&rBuf, 0, sizeof(struct stat));
+	rBuf.st_dev = (dev_t)&m_rFileSystem;
+	rBuf.st_ino = (ino_t)this;
+	rBuf.st_size = m_size;
+	rBuf.st_blksize = 512;			//get cluster size
+	rBuf.st_blocks = ((m_size + 511) & ~511) / 512;
+	return true;
+};
+
 ///////////////////////////
 
 //initialisation

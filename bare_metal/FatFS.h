@@ -71,6 +71,8 @@ public:
 	virtual ssize_t WriteTo(const void *pBuf, size_t count, off_t offset);
 	virtual bool Seekable(off_t);
 
+	virtual bool Fstat(struct stat &rBuf);
+
 protected:
 	unsigned int m_cluster;
 	unsigned int m_size;
