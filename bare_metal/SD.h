@@ -10,6 +10,11 @@
 
 #include "BlockDevice.h"
 
+/*
+http://rtds.cs.tamu.edu/web_462/techdocs/ARM/soc/DDI0205B_mmci_trm.pdf
+http://www.eetasia.com/ARTICLES/2004NOV/A/2004NOV26_MSD_AN.PDF
+*/
+
 enum SdCommand
 {
 	kGoIdleState = 0,

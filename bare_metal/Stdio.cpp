@@ -8,28 +8,43 @@
 #include "Stdio.h"
 #include <string.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 ssize_t Stdio::ReadFrom(void *pBuf, size_t count, off_t offset)
 {
 	if (m_mode != kStdin)
 		return -1;
 
+	size_t original_count = count;
+
 	unsigned char *pOut = (unsigned char *)pBuf;
 	unsigned int read_bytes = 0;
+	bool seen_newline = false;
 
-	while(count)
+	while(count && seen_newline == false)
 	{
 		unsigned char c;
-		if (m_rUart.ReadByte(c))
+		while (!m_rUart.ReadByte(c));
 		{
+			if (c == '\r')
+			{
+				c = '\n';
+				seen_newline = true;
+			}
+
 			*pOut++ = c;
 			count--;
 			read_bytes++;
 		}
-		else
-			break;
+//		else
+//			break;
 	}
-	return read_bytes;
+//	if (original_count == 0)
+//		return read_bytes;
+//	else if (read_bytes == 0)
+//		return -EAGAIN;
+//	else
+		return read_bytes;
 }
 
 ssize_t Stdio::WriteTo(const void *pBuf, size_t count, off_t offset)

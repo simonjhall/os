@@ -19,6 +19,9 @@
 #include <asm-generic/errno-base.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/signal.h>
+#include <poll.h>
+#include <errno.h>
 
 extern unsigned int stored_state;
 
@@ -33,6 +36,9 @@ unsigned int libc_offset = 0;
 extern ProcessFS *pfsA;
 extern ProcessFS *pfsB;
 extern VirtualFS *vfs;
+
+uid_t g_uid = 0;
+gid_t g_gid = 0;
 
 extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
 {
@@ -188,7 +194,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				char c = pBuf[count];
 				if (c == '\n')
 				{
-//					p.PrintChar('\r');
+					p.PrintChar('\r');
 					p.PrintChar('\n');
 				}
 				else
@@ -549,6 +555,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	{
 		uid_t uid = (uid_t)pRegisters[0];
 		p << "UIMPLEMENTED setuid32 changing uid to " << uid << "\n";
+		g_uid = uid;
 
 		return 0;
 	}
@@ -556,15 +563,113 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	{
 		gid_t gid = (gid_t)pRegisters[0];
 		p << "UIMPLEMENTED setgid32 changing gid to " << gid << "\n";
+		g_gid = gid;
 
 		return 0;
+	}
+	case 168:		//poll
+	{
+		struct pollfd *fds = (struct pollfd *)pRegisters[0];
+		nfds_t n = (nfds_t)pRegisters[1];
+		int timeout_ms = (int)pRegisters[2];
+
+		return 0;
+	}
+	case 199:		//getuid32
+	{
+		return g_uid;
+	}
+	case 200:		//getgid32
+	{
+		return g_gid;
+	}
+	case 12:		//chdir
+	{
+		char *pBuf = (char *)pRegisters[0];
+
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pBuf, filename, s_nameLength), O_RDONLY);
+
+		if (f)
+		{
+			if (f->IsDirectory())
+			{
+				vfs->Close(*f);
+
+				pfsA->Chdir(pBuf);
+				return 0;
+			}
+			else
+			{
+				vfs->Close(*f);
+				return -ENOTDIR;
+			}
+		}
+		else
+			return -ENOENT;
 	}
 	case 183:		//getcwd
 	{
 		char *pBuf = (char *)pRegisters[0];
 		size_t size = (size_t)pRegisters[1];
+
+		if (pfsA->Getcwd(pBuf, size))
+			return (unsigned int)size;			//I disagree...should be ptr
+		else
+			return -ENAMETOOLONG;
+	}
+	case 33:		//access
+	{
+		char *pFilename = (char*)pRegisters[0];
+		int mode = (int)pRegisters[1];
+
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+
+		if (f)
+		{
+			vfs->Close(*f);
+			return 0;
+			//todo check mode
+		}
+
+		return -ENOENT;
+	}
+	case 64:		//getppid
+	{
 		return 0;
 	}
+	case 174:		//compat_sys_rt_sigaction
+	{
+		int signum = (int)pRegisters[0];
+		const struct sigaction *act = (const struct sigaction *)pRegisters[1];
+		const struct sigaction *oldact = (const struct sigaction *)pRegisters[2];
+
+		p << "sigaction for signal " << signum << " ";
+		if (act->sa_handler == SIG_ERR)
+			p << "ERROR";
+		else if (act->sa_handler == SIG_DFL)
+			p << "DEFAULT";
+		else if (act->sa_handler == SIG_IGN)
+			p << "IGNORE";
+		else
+			p << (unsigned int)act->sa_handler;
+
+		p << "\n";
+
+		return 0;
+	}
+	case 322:		//openat
+		if (!pName)
+			pName = "openat";
+	case 120:		//clone
+		if (!pName)
+			pName = "clone";
+	case 114:		//wait4
+		if (!pName)
+			pName = "wait4";
 	case 40:		//rmdir
 		if (!pName)
 			pName = "rmdir";
@@ -574,30 +679,15 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 54:		//ioctl
 		if (!pName)
 			pName = "ioctl";
-	case 64:		//getppid
-		if (!pName)
-			pName = "getppid";
 	case 19:		//lseek
 		if (!pName)
 			pName = "lseek";
-	case 33:		//access
-		if (!pName)
-			pName = "access";
 	case 78:		//compat_sys_gettimeofday
 		if (!pName)
 			pName = "compat_sys_gettimeofday";
-	case 174:		//compat_sys_rt_sigaction
-		if (!pName)
-			pName = "compat_sys_rt_sigaction";
 	case 175:		//compat_sys_rt_sigprocmask
 		if (!pName)
 			pName = "compat_sys_rt_sigprocmask";
-	case 199:		//getuid32
-		if (!pName)
-			pName = "getuid32";
-	case 200:		//getgid32
-		if (!pName)
-			pName = "getgid32";
 	case 201:		//sys_geteuid
 		if (!pName)
 			pName = "sys_geteuid";

@@ -303,11 +303,11 @@ void DumpMem(T *pVirtual, unsigned int len)
 	}
 }
 
-void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
+char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
 {
 	PrinterUart<PL011> p;
-
 	has_tls = false;
+	char *pInterp = 0;
 
 	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
 	{
@@ -344,6 +344,7 @@ void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_me
 			p.PrintString("interpreter :");
 			p.PrintString((char *)pData);
 			p.PrintString("\n");
+			pInterp = pData;
 		}
 
 		if (p_type == PT_LOAD)
@@ -375,6 +376,8 @@ void LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_me
 			}
 		}
 	}
+
+	return pInterp;
 }
 
 unsigned int FillPHdr(Elf &elf, ElfW(Phdr) *pHdr, unsigned int voffset)
@@ -415,8 +418,6 @@ extern "C" void Setup(unsigned int entryPoint)
 	PL011::EnableFifo(false);
 	PL011::EnableUart(true);
 
-	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
-
 	PrinterUart<PL011> p;
 
 	p << "mmu and uart enabled\n";
@@ -434,7 +435,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	EnableFpu(true);
 
-	if (!InitMempool((void *)0xa0000000, 256 * 2))		//2MB
+	if (!InitMempool((void *)0xa0000000, 256 * 20))		//20MB
 		ASSERT(0);
 
 
@@ -681,7 +682,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	int exe = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
 			O_RDONLY));
-	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-minimal", string, 500),
+	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-linux.so.3", string, 500),
 			O_RDONLY));
 
 	pfsB = new ProcessFS("/Volumes/sd", "/");
@@ -720,13 +721,16 @@ extern "C" void Setup(unsigned int entryPoint)
 	//////////////////////////////////////
 	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	ASSERT(has_tls == false);
-	LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	SetHighBrk((void *)0x10000000);
 	//////////////////////////////////////
 
 	RfeData rfe;
 //	rfe.m_pPc = &_start;
-	rfe.func = (void *)((unsigned int)interpElf.GetEntryPoint() + 0x70000000);
+	if (pInterpName)
+		rfe.func = (void *)((unsigned int)interpElf.GetEntryPoint() + 0x70000000);
+	else
+		rfe.func = (void *)((unsigned int)startingElf.GetEntryPoint());
 	rfe.m_pSp = (unsigned int *)0xffeffff8;		//4095MB-8b
 
 	memset(&rfe.m_cpsr, 0, 4);
@@ -741,13 +745,13 @@ extern "C" void Setup(unsigned int entryPoint)
 	//move down enough for some stuff
 	rfe.m_pSp = rfe.m_pSp - 128;
 	//fill in argc
-	rfe.m_pSp[0] = 1;
+	rfe.m_pSp[0] = 3;
 	//fill in argv
-	//const char *pElfName = "/init.elf";
-	const char *pElfName = "find";
+	const char *pElfName = "busybox";
+//	const char *pElfName = "pwd";
 	const char *pEnv = "LAD_DEBUG=all";
 
-	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[5];
+	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[7];
 	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 6;
 
 	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
@@ -802,11 +806,17 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	unsigned int e = (unsigned int)strcpy((char *)text_start_addr, pEnv);
 	unsigned int a = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1, pElfName);
+	unsigned int b = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1 + strlen(pElfName) + 1, "ls");
+	unsigned int c = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1 + strlen(pElfName) + 1 + strlen("ls") + 1, "-l");
 
 	rfe.m_pSp[1] = a;
-	rfe.m_pSp[2] = 0;
-	rfe.m_pSp[3] = e;
+	rfe.m_pSp[2] = b;
+	rfe.m_pSp[3] = c;
 	rfe.m_pSp[4] = 0;
+	rfe.m_pSp[5] = e;
+	rfe.m_pSp[6] = 0;
+
+	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
 
 	ChangeModeAndJump(0, 0, 0, &rfe);
 }
