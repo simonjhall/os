@@ -46,6 +46,18 @@ public:
 		return *this;
 	}
 
+	Printer &operator << (void *i)
+	{
+		Print((unsigned int)i);
+		return *this;
+	}
+
+	Printer &operator << (volatile void *i)
+	{
+		Print((unsigned int)i);
+		return *this;
+	}
+
 private:
 	virtual char *NibbleToHexString(char *, unsigned int);
 };

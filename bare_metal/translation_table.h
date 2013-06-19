@@ -122,6 +122,7 @@ namespace TranslationTable
 			m_c = ((unsigned int)type >> 1) & 1;
 			m_xn = (unsigned int)xn;
 			m_domain = domain;
+			m_ignore1 = 1;
 			m_ap = (unsigned int)perm & 3;
 			m_tex = (unsigned int)type >> 2;
 			m_ap2 = (unsigned int)perm >> 2;

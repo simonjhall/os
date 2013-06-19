@@ -2,7 +2,7 @@
 
 .global Setup
 .global _start
-.global entry
+.global entry_maybe_misaligned
 .global initial_stack
 .global initial_stack_end
 
@@ -13,23 +13,158 @@
 
 .global master_tlb
 
+.macro PRINT_NEWLINE from
+	mov r10, #0
+	movt r10, #0x4802
+
+	mov r11, #'\r'
+	str r11, [r10]
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+
+	mov r11, #'\n'
+	str r11, [r10]
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+.endm
+
+.macro PRINT from
+	mov r10, #0
+	movt r10, #0x4802
+
+	mov r9, \from
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	mov r12, lr
+	bl wait
+	mov lr, r12
+
+	and r11, r9, #0xf0000000
+	lsr r11, #28
+	cmp r11, #10
+	addlt r11, #'0'
+	subge r11, #10
+	addge r11, #'a'
+	str r11, [r10]
+	lsl r9, #4
+
+	PRINT_NEWLINE
+.endm
+
 #16kb aligned
-.align 14
-entry:
+#.align 14
+entry_maybe_misaligned:
 master_tlb:
 	bl phys_entry
 	#fill it with fault entries
-	.fill 4095, 4, 0xfffffff0
+	#.fill 4095, 4, 0xfffffff0
+	#pbes
+	.fill 4079, 4, 0xfffffff0
 
 .func phys_entry
 phys_entry:
 	#we almost have our phys load point
 	sub lr, #4
+	#pbes
+	sub lr, #64
 	#clear the first entry
 	mov r0, #0xfffffff0
 	str r0, [lr]
 
-	ldr r0, =entry
+	ldr r0, =entry_maybe_misaligned
+	#pbes
+	sub r0, #64
 	ldr r1, =__end__
 
 	#round the end up to the megabyte
@@ -81,9 +216,20 @@ map_loop:
 	subs r1, #1
 	bne map_loop
 
+	#add the uart for debugging
+	mov r2, #0x480
+	lsl r2, #20
+
+	orr r2, #0x2e00			/* tex=2 | ap=3 | one | domain=0000| xn=0 | c=0 | b=0 | one | zero*/
+	orr r2, #0x2
+
+	str r2, [lr, r2, lsr #18]
+	mov r2, #0x480
+	ldr r2, [lr, r2, lsl #2]
+
 	#insert the page table into ttbr0
 	mcr p15, 0, lr, c2, c0, 0
-	mcr p15, 0, lr, c2, c0, 1		/* and ttbr1 */
+	#mcr p15, 0, lr, c2, c0, 1		/* and ttbr1 */
 
 	#change the domain to client
 	mov r2, #1
@@ -97,8 +243,8 @@ map_loop:
 
 	#set ttbr0 and ttbr1 to have an even 2GB split
 	mrc p15, 0, r2, c2, c0, 2
-	orr r2, #1
-	mcr p15, 0, r2, c2, c0, 2
+	/*orr r2, #1
+	mcr p15, 0, r2, c2, c0, 2*/
 
 	#turn on the mmu
 	#get the current value
@@ -145,8 +291,14 @@ done:
 	b done
 fail:
 	b fail
+wait:
+	mov r13, #0xf000
+wait_loop:
+	subs r13, #1
+	bne wait_loop
+	bx lr
 .endfunc
-.size entry, .-entry
+.size entry_maybe_misaligned, .-entry_maybe_misaligned
 
 .section .trampoline, "ax"
 

@@ -64,7 +64,7 @@ bool VirtToPhys(T *pVirtual, T **ppPhysical)
 		TranslationTable::TableEntryL2 *pPtePhys = pMainTableVirt[megabyte].pageTable.GetPhysPageTable();
 		TranslationTable::TableEntryL2 *pPteVirt;
 
-		extern FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
+//		extern FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
 		extern FixedSizeAllocator<TranslationTable::L2Table, 1048576 / sizeof(TranslationTable::L2Table)> g_subTables;
 
 		if (PhysToVirt(pPtePhys, &pPteVirt, g_subTables.GetVirtBaseInMb(), g_subTables.GetLengthMb()))

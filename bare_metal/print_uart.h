@@ -61,6 +61,7 @@ public:
 		if (transmit_full)
 			return false;
 
+		for (volatile int count = 0; count < 5000; count++);
 		p[sm_data] = b;
 		return true;
 	}
@@ -80,6 +81,7 @@ public:
 private:
 #ifdef PBES
 	static const unsigned int sm_baseAddress = 0xfd020000;
+//	static const unsigned int sm_baseAddress = 0x48020000;
 #else
 	static const unsigned int sm_baseAddress = 0xfd0f1000;
 #endif

@@ -1,6 +1,7 @@
 #include "print_uart.h"
 #include "common.h"
 #include "PL181.h"
+#include "MMCi.h"
 #include "FatFS.h"
 #include "elf.h"
 #include "VirtualFS.h"
@@ -204,7 +205,7 @@ extern "C" void _start(void);
 extern unsigned int TlsLow, TlsHigh;
 extern unsigned int thread_section_begin, thread_section_end, thread_section_mid;
 
-extern unsigned int entry;
+extern unsigned int entry_maybe_misaligned;
 extern unsigned int __end__;
 
 
@@ -229,10 +230,13 @@ extern "C" void EnableFpu(bool);
 
 static void MapKernel(unsigned int physEntryPoint)
 {
-	unsigned int virt_phys_offset = (unsigned int)&entry - physEntryPoint;
+	//entry may be pushed up a little bit
+	unsigned int entry_aligned_back = (unsigned int)&entry_maybe_misaligned & ~4095;
+	unsigned int virt_phys_offset = entry_aligned_back - physEntryPoint;
     //the end of the program, rounded up to the nearest phys page
     unsigned int virt_end = ((unsigned int)&__end__ + 4095) & ~4095;
-    unsigned int image_length_4k_align = virt_end - (unsigned int)&entry;
+    unsigned int image_length_4k_align = virt_end - entry_aligned_back;
+
     ASSERT((image_length_4k_align & 4095) == 0);
     unsigned int image_length_section_align = (image_length_4k_align + 1048575) & ~1048575;
 
@@ -245,14 +249,20 @@ static void MapKernel(unsigned int physEntryPoint)
     if (!VirtMem::InitL1L2Allocators())
     	ASSERT(0);
 
+    //clear any misalignment
+    for (unsigned int i = 0; i < ((unsigned int)&entry_maybe_misaligned & 16383) >> 2; i++)
+    	pEntries[i].fault.Init();
+
     //disable the existing phys map
     for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
     	pEntries[i].fault.Init();
 
     //IO sections
 #ifdef PBES
-    MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0 * 1048576), 1048576,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    VirtMem::MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
 #else
     VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
@@ -271,10 +281,12 @@ static void MapKernel(unsigned int physEntryPoint)
     //executable top section
     pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-    //process stack
+
     pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
+    VirtMem::FlushTlb();
     memset((void *)(4094U * 1048576), 0, 1048576);
+
 
     //copy in the high code
     unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
@@ -344,7 +356,7 @@ char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_m
 			p.PrintString("interpreter :");
 			p.PrintString((char *)pData);
 			p.PrintString("\n");
-			pInterp = pData;
+			pInterp = (char *)pData;
 		}
 
 		if (p_type == PT_LOAD)
@@ -415,10 +427,9 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	MapKernel(entryPoint);
 
+	PrinterUart<PL011> p;
 	PL011::EnableFifo(false);
 	PL011::EnableUart(true);
-
-	PrinterUart<PL011> p;
 
 	p << "mmu and uart enabled\n";
 
@@ -427,20 +438,35 @@ extern "C" void Setup(unsigned int entryPoint)
 	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
 	__DataAbort_addr = (unsigned int)&_DataAbort;
 
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf001b000);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf001b000);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf001b000);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf001b000);
+	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
+
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf000b000);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf000b000);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf000b000);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf000b000);
 	p << "exception table inserted\n";
 
 	EnableFpu(true);
 
-	if (!InitMempool((void *)0xa0000000, 256 * 20))		//20MB
+	p << "fpu enabled\n";
+
+	if (!InitMempool((void *)0xa0000000, 256 * 5))		//5MB
 		ASSERT(0);
+
+	p << "memory pool initialised\n";
 
 
 //	{
+#ifdef PBES
+		OMAP4460::MMCi sd((volatile void *)(0xfefU * 1048576 + 0x9c000), 1);
+
+		p << "resetting\n";
+		if (!sd.Reset())
+			p << "reset failed\n";
+#else
 		PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
+#endif
+
 
 		sd.GoIdleState();
 		if (!sd.GoReadyState())
@@ -459,6 +485,8 @@ extern "C" void Setup(unsigned int entryPoint)
 
 		ok = sd.GoTransferState(rca);
 		ASSERT(ok);
+		p << "finished\n";
+		while(1);
 //
 ////				char buffer[100];
 ////				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
@@ -815,8 +843,6 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[4] = 0;
 	rfe.m_pSp[5] = e;
 	rfe.m_pSp[6] = 0;
-
-	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
 
 	ChangeModeAndJump(0, 0, 0, &rfe);
 }

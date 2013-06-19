@@ -29,6 +29,12 @@ bool AllocL1Table(unsigned int entryPoint)
 	g_pPageTableL1Virt = (TranslationTable::TableEntryL1 *)&master_tlb;
 	g_pPageTableL1Phys = (TranslationTable::TableEntryL1 *)entryPoint;
 
+	//master tlb may be misaligned virtually, so re-align it
+	//but the physical address must definitely be aligned (else we wouldn't be able to get this far)
+
+	ASSERT(((unsigned int)g_pPageTableL1Phys & 16383) == 0);
+	g_pPageTableL1Virt = (TranslationTable::TableEntryL1 *)((unsigned int)g_pPageTableL1Virt & ~16383);
+
 	if (g_pPageTableL1Virt == (TranslationTable::TableEntryL1 *)-1)
 		return false;
 	else
@@ -38,6 +44,11 @@ bool AllocL1Table(unsigned int entryPoint)
 TranslationTable::TableEntryL1 *GetL1TableVirt(void)
 {
 	return g_pPageTableL1Virt;
+}
+
+TranslationTable::TableEntryL1 *GetL1TablePhys(void)
+{
+	return g_pPageTableL1Phys;
 }
 
 bool InitL1L2Allocators(void)
@@ -331,16 +342,23 @@ bool RemovePageTable(void *pVirtual)
 
 void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 {
+	PrinterUart<PL011> p;
 	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt();
+	TranslationTable::TableEntryL1 *pL1Phys = VirtMem::GetL1TablePhys();
+	TranslationTable::TableEntryL1 *pActualPhys = 0;
+
+	VirtToPhys(pL1Virt, &pActualPhys);
+
+	p << "Dumping virt->phys from " << pStart << " to " << pEnd << "\n";
+	p << "L1 table virt addr " << pL1Virt << " phys " << pActualPhys << " expected " << pL1Phys << "\n";
 
 	for (unsigned int count = (unsigned int)pStart >> 20; count <= (unsigned int)pEnd >> 20; count++)
 	{
 		if (noFault && pL1Virt[count].IsFault())
 			continue;
 
-		PrinterUart<PL011> p;
-
 		p << count * 1048576 << ": ";
+		p << *(unsigned int *)&pL1Virt[count] << " ";
 
 		if (pL1Virt[count].Print(p) && withL2)
 		{
@@ -360,6 +378,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 					p.PrintString("\t");
 					p.Print(count * 1048576 + inner * 4096);
 					p.PrintString(": ");
+					p << *(unsigned int *)&pL2Virt[inner] << " ";
 					pL2Virt[inner].Print(p);
 				}
 
@@ -367,6 +386,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 			}
 		}
 	}
+	p << "done\n";
 }
 
 bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,

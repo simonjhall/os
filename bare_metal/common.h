@@ -35,4 +35,14 @@ int internal_munmap(void *addr, size_t length);
 void *GetHighBrk(void);
 void SetHighBrk(void *);
 
+inline void DelaySecond(void)
+{
+	for (int count = 0; count < 3333333; count++);
+}
+
+inline void DelayMillisecond(void)
+{
+	for (int count = 0; count < 3333; count++);
+}
+
 #endif /* COMMON_H_ */

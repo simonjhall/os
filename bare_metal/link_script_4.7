@@ -1,12 +1,13 @@
 OUTPUT_FORMAT("elf32-littlearm")
-phys = 0xf001d000;
+phys = 0xf000d000;
 SECTIONS
 {
-	. = 0xf0010000;
+	. = 0xf0000040;
 	.entry : {
+	. = ALIGN(4);
 	*(.entry)
 	}
-	  . = 0xf001c000;
+	  . = 0xf000c000;
 	.trampoline : {
 	*(.trampoline)
 	}

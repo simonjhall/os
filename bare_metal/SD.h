@@ -22,6 +22,7 @@ enum SdCommand
 	kAllSendCid = 2,
 	kSendRelativeAddr = 3,
 	kSendDsr = 4,
+	kSleepAwake = 5,
 	kSwitchFunction = 6,
 	kSelectDeselectCard = 7,
 	kSendCsd = 9,

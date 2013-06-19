@@ -44,43 +44,10 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 
 char *Printer::NibbleToHexString(char *pIn, unsigned int a)
 {
-	switch (a)
-	{
-		case 0:
-			*pIn = '0'; break;
-		case 1:
-			*pIn = '1'; break;
-		case 2:
-			*pIn = '2'; break;
-		case 3:
-			*pIn = '3'; break;
-		case 4:
-			*pIn = '4'; break;
-		case 5:
-			*pIn = '5'; break;
-		case 6:
-			*pIn = '6'; break;
-		case 7:
-			*pIn = '7'; break;
-		case 8:
-			*pIn = '8'; break;
-		case 9:
-			*pIn = '9'; break;
-		case 10:
-			*pIn = 'a'; break;
-		case 11:
-			*pIn = 'b'; break;
-		case 12:
-			*pIn = 'c'; break;
-		case 13:
-			*pIn = 'd'; break;
-		case 14:
-			*pIn = 'e'; break;
-		case 15:
-			*pIn = 'f'; break;
-		default:
-			break;
-	}
+	if (a < 10)
+		*pIn = a + '0';
+	else
+		*pIn = (a - 10) + 'a';
 
 	return pIn + 1;
 }
