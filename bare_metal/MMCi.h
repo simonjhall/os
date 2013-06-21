@@ -10,6 +10,7 @@
 
 #include "SD.h"
 #include "common.h"
+#include "print_uart.h"
 
 namespace OMAP4460
 {
@@ -22,7 +23,7 @@ public:
 
 	virtual void GoIdleState(void)
 	{
-		Command(kGoIdleState, false, false);
+		Command(kGoIdleState, kNoResponse, false);
 		SetState(kIdleState);
 	}
 
@@ -31,16 +32,46 @@ public:
 		if (GetState() != kIdleState)
 			return false;
 
-		unsigned int ocr = SendOcr();
-		if (ocr == 0)
-		{
-			SetState(kInactiveState);
-			return false;
-		}
-		else
+		PrinterUart<PL011> p;
+
+		const unsigned int acceptable_voltages = (1 << 21) | (1 << 20);
+//
+//		unsigned int ocr = acceptable_voltages;
+//		unsigned int true_ocr;
+//		int times = 0;
+//
+//		do
+//		{
+//			p << "about to send ocr of " << ocr << "\n";
+//			ocr = SendOcr(ocr & acceptable_voltages & 0xff8000);
+//			p << "ocr is " << ocr << "\n";
+//			true_ocr = m_pBaseAddress[sm_rsp10];
+//			p << "response is " << true_ocr << "\n";
+//			p << "stat is " << m_pBaseAddress[sm_stat] << "\n";
+//			DelaySecond();
+//
+//			times++;
+//			if (times == 3)
+//				while(1);
+//		}
+//		while (!(true_ocr >> 31));
+		unsigned int ocr = SendOcr(0);
+		p << "first ocr is " << ocr << "\n";
+		ocr = SendOcr(ocr);
+		p << "second ocr is " << ocr << "\n";
+
+		while(1);
+
+
+		if (ocr & (1 << 31))
 		{
 			SetState(kReadyState);
 			return true;
+		}
+		else
+		{
+			SetState(kInactiveState);
+			return false;
 		}
 	}
 
@@ -64,7 +95,7 @@ public:
 
 	virtual void GoInactiveState(void)
 	{
-		Command(kGoInactiveState, false, false);
+		Command(kGoInactiveState, kNoResponse, false);
 		SetState(kInactiveState);
 	}
 
@@ -151,46 +182,59 @@ public:
 	virtual bool Reset(void);
 
 protected:
-	virtual unsigned int SendOcr(void)
+	virtual unsigned int SendOcr(int a)
 	{
-		Command(kSdAppCmd, true, false);
-		if (Response() & (1 << 5))
+		PrinterUart<PL011> p;
+//		Command(kSendOpCmd, true, false);
+//		unsigned int resp = Response();
+//		p << "response is " << resp << "\n";
+//		return resp;
+		p << "sending sd app cmd\n";
+		CommandArgument(kSdAppCmd, 0, k48bResponse, false);
+		unsigned int resp10 = Response(0);
+		unsigned int resp32 = Response(1);
+		p << "response is " << resp32 << resp10 << "\n";
+		if (resp10 & (1 << 5))
 		{
+			DelayMillisecond();
 			//fake voltage
-			CommandArgument(kSdAppOpCond, 1, true, false);
+			CommandArgument(kSdAppOpCond, a, k48bResponse, false);
+			DelayMillisecond();
 			return Response();
 		}
+		else
+			p << "no sd app cmd\n";
 
 		return -1;
 	}
 
 	virtual unsigned int AllSendCid(void)
 	{
-		Command(kAllSendCid, true, false);
-		return Response();
+		Command(kAllSendCid, k136bResponse, false);
+		return Response(0);
 	}
 
 	virtual unsigned int SendRelativeAddr(void)
 	{
-		Command(kSendRelativeAddr, true, false);
+		Command(kSendRelativeAddr, k48bResponse, false);
 		return Response();
 	}
 
 	virtual unsigned int SelectDeselectCard(unsigned int rca)
 	{
-		CommandArgument(kSelectDeselectCard, rca << 16, true, false);
+		CommandArgument(kSelectDeselectCard, rca << 16, k48bResponse, false);
 		return Response();
 	}
 
 	virtual void ReadDataUntilStop(unsigned int address)
 	{
 		ASSERT((address & 511) == 0);
-		CommandArgument(kReadDatUntilStop, address, false, true);
+		CommandArgument(kReadDatUntilStop, address, kNoResponse, true);
 	}
 
 	virtual unsigned int StopTransmission(void)
 	{
-		Command(kStopTransmission, true, false);
+		Command(kStopTransmission, k48bResponse, false);
 		return Response();
 	}
 
@@ -231,8 +275,8 @@ protected:
 		}
 	}
 private:
-	void Command(SdCommand c, bool wait, bool stream);
-	void CommandArgument(SdCommand c, unsigned int a, bool wait, bool stream);
+	void Command(SdCommand c, ::Response wait, bool stream, unsigned int a = 0);
+	void CommandArgument(SdCommand c, unsigned int a, ::Response wait, bool stream);
 	void CommandLineReset(void);
 	void ClockFrequencyChange(int divider);
 	unsigned int Response(unsigned int word = 0);
@@ -251,10 +295,15 @@ private:
 	static const unsigned int sm_con = 0x12c >> 2;
 	static const unsigned int sm_arg = 0x208 >> 2;
 	static const unsigned int sm_cmd = 0x20c >> 2;
+	static const unsigned int sm_rsp10 = 0x210 >> 2;
+	static const unsigned int sm_rsp32 = 0x214 >> 2;
+	static const unsigned int sm_rsp54 = 0x218 >> 2;
+	static const unsigned int sm_rsp76 = 0x21c >> 2;
 	static const unsigned int sm_pstate = 0x224 >> 2;
 	static const unsigned int sm_hctl = 0x228 >> 2;
 	static const unsigned int sm_sysctl = 0x22c >> 2;
 	static const unsigned int sm_stat = 0x230 >> 2;
+	static const unsigned int sm_ie = 0x234 >> 2;
 	static const unsigned int sm_capa = 0x240 >> 2;
 	static const unsigned int sm_curCapa = 0x248 >> 2;
 };

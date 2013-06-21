@@ -50,10 +50,26 @@ bool MMCi::Reset(void)
 			return false;
 	}
 
+	//reset sysctl - U-BOOT
+	m_pBaseAddress[sm_sysctl] |= (1 << 24);
+
+	timeout = 100000;
+	while (m_pBaseAddress[sm_sysctl] & (1 << 24))
+	{
+		p << "sys ctl " << m_pBaseAddress[sm_sysctl] << "\n";
+		timeout--;
+
+		if (!timeout)
+			return false;
+	}
+
 	/* SET MODULE HARDWARE CAPABILITIES 24.5.1.1.2.3 */
 
 	unsigned int capabilities = m_pBaseAddress[sm_capa];
 	unsigned int current_capabilities = m_pBaseAddress[sm_curCapa];
+
+	if (capabilities & (1 << 21))
+		p << "high speed supported\n";
 
 	if (capabilities & (1 << 26))
 		p << "1.8v supported\n";
@@ -74,7 +90,8 @@ bool MMCi::Reset(void)
 	p << "max current for 3.0v: " << ((current_capabilities >> 8) & 0xff) << "\n";
 	p << "max current for 3.3v: " << (current_capabilities & 0xff) << "\n";
 
-	m_pBaseAddress[sm_curCapa] = 0xffffff;
+//	m_pBaseAddress[sm_curCapa] = 0xffffff;
+	current_capabilities = m_pBaseAddress[sm_curCapa];
 
 	p << "max current for 1.8v: " << ((current_capabilities >> 16) & 0xff) << "\n";
 	p << "max current for 3.0v: " << ((current_capabilities >> 8) & 0xff) << "\n";
@@ -92,10 +109,10 @@ bool MMCi::Reset(void)
 	//no need to turn on open drain (OD), 8-bit mode (DW8), or CE-ATA
 
 	//set voltage (sdvs)
-	m_pBaseAddress[sm_hctl] |= (5 << 9);		//1.8v
+	m_pBaseAddress[sm_hctl] |= (6 << 9);		//3.0v
 
 	//set the data transfer width (dtw) to 4-bit
-	m_pBaseAddress[sm_hctl] |= 2;
+//	m_pBaseAddress[sm_hctl] |= 2;
 
 	//turn on bus power (sdbp)
 	m_pBaseAddress[sm_hctl] |= (1 << 8);
@@ -110,12 +127,7 @@ bool MMCi::Reset(void)
 	//turn on the internal clock; sysctl[0]
 	m_pBaseAddress[sm_sysctl] |= 1;
 
-	//set the clock to the slowest setting; sysctl[15:6]
-//	m_pBaseAddress[sm_sysctl] |= (0x3ff << 6);
-//	m_pBaseAddress[sm_sysctl] |= (1 << 6);		//bypass
-//	m_pBaseAddress[sm_sysctl] |= (2 << 6);		///2
-//	m_pBaseAddress[sm_sysctl] |= (3 << 6);		///3
-
+	//set the clock rate
 	m_pBaseAddress[sm_sysctl] |= ((sm_initSeqClock / 2) << 6);
 
 	p << "sysctl init " << m_pBaseAddress[sm_sysctl] << "\n";
@@ -132,6 +144,11 @@ bool MMCi::Reset(void)
 	m_pBaseAddress[sm_sysConfig] = (m_pBaseAddress[sm_sysConfig] & ~(3 << 3)) | (1 << 3);
 	//autoidle
 	m_pBaseAddress[sm_sysConfig] = m_pBaseAddress[sm_sysConfig] & ~1;
+
+	m_pBaseAddress[sm_ie] = 1 | (1 << 1) | (1 << 4) | (1 << 5)
+			| (1 << 16) | (1 << 17) | (1 << 18)
+			| (1 << 19) | (1 << 20) | (1 << 21)
+			| (1 << 22) | (1 << 28) | (1 << 29);
 
 	/* MMC/SD/SDIO CONTROLLER CARD IDENTIFICATION AND SELECTION 24.5.1.2.1.1 */
 
@@ -174,54 +191,82 @@ bool MMCi::Reset(void)
 			return false;
 		}
 	}
-//
-////	ClockFrequencyChange(CLOCK);
-//
-//	p << "going idle state\n";
-//	GoIdleState();
-//
-//	p << "sleep awake\n";
-//	Command(kSleepAwake, false, false);
-//
-//	timeout = 100000;
-//	while (1)
-//	{
-//		//check for SDIO
-//		if (m_pBaseAddress[sm_stat] & 1)
-//			p << "SDIO\n";
-//
-//		//check for timeout
-//		if (m_pBaseAddress[sm_stat] & (1 << 16))
-//		{
-//			timeout--;
-//			if (!timeout)
-//				return false;
-//		}
-//		else
-//			break;
-//	}
+
+	ClockFrequencyChange(sm_400kHzClock);
+
+	p << "going idle state\n";
+	GoIdleState();
+
+	p << "sleep awake\n";
+	Command(kSleepAwake, kNoResponse, false);
+
+	timeout = 100000;
+	while (1)
+	{
+		//check for SDIO
+		if (m_pBaseAddress[sm_stat] & 1)
+			p << "SDIO\n";
+
+		//check for timeout
+		if (m_pBaseAddress[sm_stat] & (1 << 16))
+		{
+			timeout--;
+			if (!timeout)
+				return false;
+		}
+		else
+			break;
+	}
+
+	p << "doing voltage check\n";
+	Command(kVoltageCheck, k48bResponse, false, 1 << 8);
+	unsigned int resp = Response();
+
+	p << "voltage check response is " << resp << "\n";
 
 	return true;
 }
 
 
-void MMCi::Command(SdCommand c, bool wait, bool stream)
+void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 {
 	PrinterUart<PL011> p;
 
-	p << "waiting for the line to stop\n";
+	unsigned int w = 0;
+	switch (wait)
+	{
+		case kNoResponse:
+			w = 0; break;
+		case k136bResponse:
+			w = 1; break;
+		case k48bResponse:
+			w = 3; break;
+		default:
+			ASSERT(0);
+	}
+
+//	p << "waiting for the line to stop\n";
 	//wait for the command line to stop being in use; pstate[0]=0
 	while (m_pBaseAddress[sm_pstate] & 1);
 //		p << "pstate is " << m_pBaseAddress[sm_pstate];
 
 	//set the stream command
-	m_pBaseAddress[sm_con] = (m_pBaseAddress[sm_con] & ~(1 << 3)) | ((unsigned int)stream << 3);
+	m_pBaseAddress[sm_con] = (m_pBaseAddress[sm_con] & ~(1 << 3)) | ((unsigned int)stream << 3) | (1 << 20);
 
 	//clear error
 	m_pBaseAddress[sm_csre] = 0;
 
+	//u-boot clear status
+	p << "stat was " << m_pBaseAddress[sm_stat] << "\n";
+	m_pBaseAddress[sm_stat] = 0xffffffff;
+
+	//write argument
+	p << "argument is " << a << "\n";
+	m_pBaseAddress[sm_arg] = a;
+
 	//send the command
-	unsigned int command = ((unsigned int)c << 24) | ((unsigned int)wait << 18);
+	//cmd_type[22]=0 for normal command
+	unsigned int command = ((unsigned int)c << 24) | ((unsigned int)w << 17);
 	m_pBaseAddress[sm_cmd] = command;
 
 	int count = 0;
@@ -235,13 +280,21 @@ void MMCi::Command(SdCommand c, bool wait, bool stream)
 
 		if (cto && ccrc)
 		{
-			p << "conflict on the line\n";
+//			p << "conflict on the line\n";
+			DelayMillisecond();
 			CommandLineReset();
+			count++;
+			if (count > 10)
+				while(1);
 		}
 		else if (cto && !ccrc)
 		{
-			p << "line reset\n";
+//			p << "line reset\n";
+			DelayMillisecond();
 			CommandLineReset();
+			count++;
+			if (count > 10)
+				while(1);
 		}
 		else if (cc)
 		{
@@ -249,20 +302,20 @@ void MMCi::Command(SdCommand c, bool wait, bool stream)
 		}
 		else
 		{
-			p << "let's go round again, stat is " << stat << "\n";
+			DelayMillisecond();
 			count++;
-			if (count > 20)
+			if (count > 10)
+			{
+				p << "let's go round again, stat is " << stat << "\n";
 				while(1);
+			}
 		}
 	}
 }
 
-void MMCi::CommandArgument(SdCommand c, unsigned int a, bool wait, bool stream)
+void MMCi::CommandArgument(SdCommand c, unsigned int a, ::Response wait, bool stream)
 {
-	m_pBaseAddress[sm_arg] = a;
-
-	unsigned int command = ((unsigned int)c << 24) | ((unsigned int)wait << 18) | (1 << 21);
-	m_pBaseAddress[sm_cmd] = command;
+	Command(c, wait, stream, a);
 }
 
 void MMCi::CommandLineReset(void)
@@ -309,11 +362,12 @@ void MMCi::ClockFrequencyChange(int divider)
 
 unsigned int MMCi::Response(unsigned int word)
 {
-	return m_pBaseAddress[5 + word];
+	return m_pBaseAddress[sm_rsp10 + word];
 }
 
 unsigned int MMCi::Status(void)
 {
+	ASSERT(0);
 	return m_pBaseAddress[13];
 }
 

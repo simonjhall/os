@@ -467,18 +467,21 @@ extern "C" void Setup(unsigned int entryPoint)
 		PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
 #endif
 
-
+		p << "go idle state\n";
 		sd.GoIdleState();
+		p << "go ready state\n";
 		if (!sd.GoReadyState())
 		{
 			p << "no card\n";
 			ASSERT(0);
 		}
+		p << "go identification state\n";
 		if (!sd.GoIdentificationState())
 		{
 			p << "definitely no card\n";
 			ASSERT(0);
 		}
+		p << "get card rca\n";
 		unsigned int rca;
 		bool ok = sd.GetCardRcaAndGoStandbyState(rca);
 		ASSERT(ok);

@@ -25,6 +25,7 @@ enum SdCommand
 	kSleepAwake = 5,
 	kSwitchFunction = 6,
 	kSelectDeselectCard = 7,
+	kVoltageCheck = 8,
 	kSendCsd = 9,
 	kSendCid = 10,
 	kReadDatUntilStop = 11,
@@ -34,6 +35,13 @@ enum SdCommand
 
 	kSdAppOpCond = 41,
 	kSdAppCmd = 55,
+};
+
+enum Response
+{
+	kNoResponse,
+	k48bResponse,
+	k136bResponse,
 };
 
 class SD : public BlockDevice
