@@ -34,34 +34,29 @@ public:
 
 		PrinterUart<PL011> p;
 
+		p << "doing voltage check\n";
+		Command(kVoltageCheck, k48bResponse, false, (1 << 8) | 0xaa);
+		unsigned int resp = Response();
+
+		/////if this times out then it's not SD 2.0 - and we shouldn't set bit 30
+		p << "voltage check response is " << resp << "\n";
+
 		const unsigned int acceptable_voltages = (1 << 21) | (1 << 20);
-//
-//		unsigned int ocr = acceptable_voltages;
-//		unsigned int true_ocr;
-//		int times = 0;
-//
-//		do
-//		{
-//			p << "about to send ocr of " << ocr << "\n";
-//			ocr = SendOcr(ocr & acceptable_voltages & 0xff8000);
-//			p << "ocr is " << ocr << "\n";
-//			true_ocr = m_pBaseAddress[sm_rsp10];
-//			p << "response is " << true_ocr << "\n";
-//			p << "stat is " << m_pBaseAddress[sm_stat] << "\n";
-//			DelaySecond();
-//
-//			times++;
-//			if (times == 3)
-//				while(1);
-//		}
-//		while (!(true_ocr >> 31));
+
+		int timeout = 1000;
+
+		//get the initial reading
 		unsigned int ocr = SendOcr(0);
-		p << "first ocr is " << ocr << "\n";
-		ocr = SendOcr(ocr);
-		p << "second ocr is " << ocr << "\n";
+		p << "first ocr is " << m_pBaseAddress[sm_rsp32] << m_pBaseAddress[sm_rsp10] << "\n";
+		do
+		{
+			ocr = SendOcr((ocr & acceptable_voltages) | (1 << 30));
+			timeout--;
 
-		while(1);
-
+			if (!timeout)
+				break;
+		} while (!(ocr & (1 << 31)));
+		p << "second ocr is " << m_pBaseAddress[sm_rsp32] << m_pBaseAddress[sm_rsp10] << "\n";
 
 		if (ocr & (1 << 31))
 		{
@@ -70,6 +65,7 @@ public:
 		}
 		else
 		{
+			p << "card failed to enable\n";
 			SetState(kInactiveState);
 			return false;
 		}
@@ -125,11 +121,15 @@ public:
 
 	virtual bool GetCardRcaAndGoStandbyState(unsigned int &rRca)
 	{
+		PrinterUart<PL011> p;
+
 		if (!kIdentificationState)
 			return false;
 
 		unsigned int rca_status = SendRelativeAddr();
 		SetState(kStandbyState);
+
+		p << "rca status is " << rca_status << "\n";
 
 		rRca = rca_status >> 16;
 		return true;
@@ -138,6 +138,11 @@ public:
 	virtual bool GoTransferState(unsigned int rca)
 	{
 		State current = GetState();
+
+		PrinterUart<PL011> p;
+		/*p << "deselecting card\n";
+		SelectDeselectCard(0);
+		p << "done\n";*/
 
 		if (current == kTransferState)
 		{
@@ -159,21 +164,40 @@ public:
 
 	virtual bool ReadDataFromLogicalAddress(unsigned int address, void *pDest, unsigned int byteCount)
 	{
+		ASSERT((address & 3) == 0);
 		if (GetState() != kTransferState)
 			return false;
 
+		PrinterUart<PL011> p;
+		p << "sd read from logical address " << address << " byte count " << byteCount << "\n";
+
 		//read the slack into a dummy buffer
+		unsigned int left_in_pump = 0;
 		if (address & 511)
 		{
 			char dummy[512];
 
+			p << "read until stop high\n";
+
 			ReadDataUntilStop(address & ~511);
-			ReadOutData(dummy, address & 511);
+
+			p << "read out data high\n";
+			left_in_pump = ReadOutData(dummy, address & 511, 0);
 		}
 		else
+		{
+			p << "read data until stop\n";
 			ReadDataUntilStop(address);
+		}
 
-		ReadOutData(pDest, byteCount);
+		p << "read out data\n";
+		ReadOutData(pDest, byteCount, left_in_pump);
+		p << "data read ok\n";
+
+		//reset the data lines
+		m_pBaseAddress[sm_sysctl] |= (1 << 26);
+		while (!(m_pBaseAddress[sm_sysctl] & (1 << 26)));
+		while (m_pBaseAddress[sm_sysctl] & (1 << 26));
 		StopTransmission();
 
 		return true;
@@ -185,15 +209,15 @@ protected:
 	virtual unsigned int SendOcr(int a)
 	{
 		PrinterUart<PL011> p;
-//		Command(kSendOpCmd, true, false);
+//		Command(kSendOpCmd, k48bResponse, false);
 //		unsigned int resp = Response();
 //		p << "response is " << resp << "\n";
 //		return resp;
-		p << "sending sd app cmd\n";
+//		p << "sending sd app cmd\n";
 		CommandArgument(kSdAppCmd, 0, k48bResponse, false);
 		unsigned int resp10 = Response(0);
 		unsigned int resp32 = Response(1);
-		p << "response is " << resp32 << resp10 << "\n";
+//		p << "response is " << resp32 << resp10 << "\n";
 		if (resp10 & (1 << 5))
 		{
 			DelayMillisecond();
@@ -222,57 +246,85 @@ protected:
 
 	virtual unsigned int SelectDeselectCard(unsigned int rca)
 	{
-		CommandArgument(kSelectDeselectCard, rca << 16, k48bResponse, false);
+		CommandArgument(kSelectDeselectCard, rca << 16, k48bResponseBusy, false);
 		return Response();
 	}
 
 	virtual void ReadDataUntilStop(unsigned int address)
 	{
 		ASSERT((address & 511) == 0);
-		CommandArgument(kReadDatUntilStop, address, kNoResponse, true);
+		CommandArgument(kReadMultipleBlock, address >> 9, kNoResponse, true);
 	}
 
 	virtual unsigned int StopTransmission(void)
 	{
-		Command(kStopTransmission, k48bResponse, false);
+		Command(kStopTransmission, k48bResponseBusy, false);
 		return Response();
 	}
 
-	virtual void ReadOutData(void *pDest, unsigned int byteCount)
+	virtual void PumpBlock(void)
 	{
-		unsigned int *pOutW = (unsigned int *)pDest;
-		while (byteCount >= 4)
+		unsigned int status;
+		int timeout = 1000000;
+		do
 		{
-			//data length
-			m_pBaseAddress[10] = 4;
-			//data timer
-			m_pBaseAddress[9] = 0xffffffff;
-			//data control
-			m_pBaseAddress[11] = 1 | (1 << 1);		//enable + read
+			status = 0;
+			//get status
+			while (!status)
+			{
+				status = m_pBaseAddress[sm_stat];
+				timeout--;
 
-			*pOutW++ = ((unsigned int *)m_pBaseAddress)[32];
-			byteCount -= 4;
+				if (!timeout)
+				{
+					PrinterUart<PL011> p;
+					p << "data read timeout\n";
+					while(1);
+				}
+			}
 
-			//qemu issue
-			Status();
-		}
+//				p << "status is " << status << "\n";
 
-		unsigned char *pOutB = (unsigned char *)pOutW;
+		} while ((!status & (1 << 5)));			//buffer read ready
+	}
+
+	virtual unsigned int ReadOutData(void *pDest, unsigned int byteCount, unsigned int bytesLeftInPump)
+	{
+		PrinterUart<PL011> p;
+
+		unsigned int outA = (unsigned int)pDest;
+		unsigned char *pBase = (unsigned char *)&m_pBaseAddress[sm_data];
+		unsigned int smallOffset = 0;
+
 		while (byteCount)
 		{
-			//data length
-			m_pBaseAddress[10] = 1;
-			//data timer
-			m_pBaseAddress[9] = 0xffffffff;
-			//data control
-			m_pBaseAddress[11] = 1 | (1 << 1);		//enable + read
+			if (!bytesLeftInPump)
+			{
+				PumpBlock();
+				bytesLeftInPump = 512;
+				m_pBaseAddress[sm_stat] |= (1 << 5);
+			}
 
-			*pOutB++ = ((unsigned char *)m_pBaseAddress)[0x80];
-			byteCount--;
 
-			//qemu issue
-			Status();
+			if (byteCount >= 4)
+			{
+				*(unsigned int *)outA = m_pBaseAddress[sm_data];
+				outA += 4;
+				byteCount -= 4;
+				bytesLeftInPump -= 4;
+			}
+			else
+			{
+				p << "small\n";
+				ASSERT(smallOffset < 4);
+				*(unsigned char *)outA = pBase[smallOffset];
+				smallOffset++;
+				outA++;
+				byteCount--;
+				bytesLeftInPump--;
+			}
 		}
+		return bytesLeftInPump;
 	}
 private:
 	void Command(SdCommand c, ::Response wait, bool stream, unsigned int a = 0);
@@ -293,12 +345,14 @@ private:
 	static const unsigned int sm_sysStatus = 0x114 >> 2;
 	static const unsigned int sm_csre = 0x124 >> 2;
 	static const unsigned int sm_con = 0x12c >> 2;
+	static const unsigned int sm_blk = 0x204 >> 2;
 	static const unsigned int sm_arg = 0x208 >> 2;
 	static const unsigned int sm_cmd = 0x20c >> 2;
 	static const unsigned int sm_rsp10 = 0x210 >> 2;
 	static const unsigned int sm_rsp32 = 0x214 >> 2;
 	static const unsigned int sm_rsp54 = 0x218 >> 2;
 	static const unsigned int sm_rsp76 = 0x21c >> 2;
+	static const unsigned int sm_data = 0x220 >> 2;
 	static const unsigned int sm_pstate = 0x224 >> 2;
 	static const unsigned int sm_hctl = 0x228 >> 2;
 	static const unsigned int sm_sysctl = 0x22c >> 2;

@@ -28,10 +28,11 @@ enum SdCommand
 	kVoltageCheck = 8,
 	kSendCsd = 9,
 	kSendCid = 10,
-	kReadDatUntilStop = 11,
+	kReadDatUntilStop = 11,				//unsure...mmc only?
 	kStopTransmission = 12,
 	kSendStatus = 13,
 	kGoInactiveState = 15,
+	kReadMultipleBlock = 18,
 
 	kSdAppOpCond = 41,
 	kSdAppCmd = 55,
@@ -41,6 +42,7 @@ enum Response
 {
 	kNoResponse,
 	k48bResponse,
+	k48bResponseBusy,
 	k136bResponse,
 };
 

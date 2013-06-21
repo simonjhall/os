@@ -218,11 +218,11 @@ bool MMCi::Reset(void)
 			break;
 	}
 
-	p << "doing voltage check\n";
-	Command(kVoltageCheck, k48bResponse, false, 1 << 8);
-	unsigned int resp = Response();
-
-	p << "voltage check response is " << resp << "\n";
+//	p << "doing voltage check\n";
+//	Command(kVoltageCheck, k48bResponse, false, (1 << 8) | 0xaa);
+//	unsigned int resp = Response();
+//
+//	p << "voltage check response is " << resp << "\n";
 
 	return true;
 }
@@ -240,33 +240,50 @@ void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 		case k136bResponse:
 			w = 1; break;
 		case k48bResponse:
+			w = 2; break;
+		case k48bResponseBusy:
 			w = 3; break;
 		default:
 			ASSERT(0);
 	}
 
-//	p << "waiting for the line to stop\n";
 	//wait for the command line to stop being in use; pstate[0]=0
 	while (m_pBaseAddress[sm_pstate] & 1);
+//	p << "waiting for the line to stop\n";
 //		p << "pstate is " << m_pBaseAddress[sm_pstate];
 
 	//set the stream command
-	m_pBaseAddress[sm_con] = (m_pBaseAddress[sm_con] & ~(1 << 3)) | ((unsigned int)stream << 3) | (1 << 20);
+//	m_pBaseAddress[sm_con] = (m_pBaseAddress[sm_con] & ~(1 << 3)) /*| ((unsigned int)stream << 3) */| (1 << 6);
 
 	//clear error
 	m_pBaseAddress[sm_csre] = 0;
 
 	//u-boot clear status
-	p << "stat was " << m_pBaseAddress[sm_stat] << "\n";
+//	p << "stat was " << m_pBaseAddress[sm_stat] << "\n";
 	m_pBaseAddress[sm_stat] = 0xffffffff;
 
 	//write argument
-	p << "argument is " << a << "\n";
+//	p << "argument is " << a << "\n";
 	m_pBaseAddress[sm_arg] = a;
 
 	//send the command
 	//cmd_type[22]=0 for normal command
-	unsigned int command = ((unsigned int)c << 24) | ((unsigned int)w << 17);
+	unsigned int command = ((unsigned int)c << 24) | ((unsigned int)w << 16);		//command and wait
+
+	if (c == kReadMultipleBlock)
+	{
+		command |= (1 << 5);			//multi-block, but leave block count enable=0
+		command |= (1 << 4);			//card to host, ddir
+		command |= (1 << 21);			//data present, dp
+
+		m_pBaseAddress[sm_blk] = 512;	//block size
+	}
+
+	if (c == kStopTransmission)
+	{
+		command |= (3 << 22);			//abort cmd12
+	}
+
 	m_pBaseAddress[sm_cmd] = command;
 
 	int count = 0;
@@ -280,21 +297,25 @@ void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 
 		if (cto && ccrc)
 		{
-//			p << "conflict on the line\n";
 			DelayMillisecond();
 			CommandLineReset();
 			count++;
 			if (count > 10)
+			{
+				p << "conflict on the line\n";
 				while(1);
+			}
 		}
 		else if (cto && !ccrc)
 		{
-//			p << "line reset\n";
 			DelayMillisecond();
 			CommandLineReset();
 			count++;
 			if (count > 10)
+			{
+				p << "line reset; timeout\n";
 				while(1);
+			}
 		}
 		else if (cc)
 		{
@@ -306,8 +327,8 @@ void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 			count++;
 			if (count > 10)
 			{
-				p << "let's go round again, stat is " << stat << "\n";
-				while(1);
+				p << "command " << c << " did not complete, stat is " << stat << "\n";
+				return;
 			}
 		}
 	}

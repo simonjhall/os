@@ -250,6 +250,7 @@ map_loop:
 	#get the current value
 	mrc p15, 0, r2, c1, c0, 0
 	orr r2, #1					/* enable */
+	bic r2, #2					/* disable alignment fault checking */
 	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
 
 	#good to go

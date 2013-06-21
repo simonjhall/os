@@ -8,6 +8,7 @@
 #include "WrappedFile.h"
 #include "Stdio.h"
 #include "TTY.h"
+#include "MBR.h"
 
 int main(int argc, const char **argv);
 
@@ -486,10 +487,27 @@ extern "C" void Setup(unsigned int entryPoint)
 		bool ok = sd.GetCardRcaAndGoStandbyState(rca);
 		ASSERT(ok);
 
+		p << "go transfer state with rca " << rca << "\n";
 		ok = sd.GoTransferState(rca);
 		ASSERT(ok);
 		p << "finished\n";
-		while(1);
+
+		MBR mbr(sd);
+
+		/*unsigned int *buffer = new unsigned int[32768/4];
+		ok = sd.ReadDataFromLogicalAddress(508, buffer, 0x5000);
+		ASSERT(ok);
+
+		for (int outer = 0; outer < 0x5000 / 64; outer++)
+		{
+			p << outer * 64 << ": ";
+			for (int inner = 0; inner < 16; inner++)
+				p << buffer[outer * 16 + inner] << " ";
+			p << "\n";
+		}
+
+		while(1);*/
+
 //
 ////				char buffer[100];
 ////				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
@@ -685,6 +703,7 @@ extern "C" void Setup(unsigned int entryPoint)
 //	asm volatile (".word 0xffffffff\n");
 //	InvokeSyscall(1234);
 
+	p << "creating VFS\n";
 	vfs = new VirtualFS();
 	//////
 	vfs->Mkdir("/", "Devices");
@@ -701,7 +720,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	vfs->Mkdir("/", "Volumes");
 	vfs->Mkdir("/Volumes", "sd");
 
-	FatFS fat(sd);
+	p << "creating FAT\n";
+
+	FatFS fat(*mbr.GetPartition(0));
+
+	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
 	pfsA = new ProcessFS("/Volumes/sd/minimal", "/");

@@ -61,7 +61,7 @@ public:
 		if (transmit_full)
 			return false;
 
-		for (volatile int count = 0; count < 5000; count++);
+		for (volatile int count = 0; count < 4000; count++);
 		p[sm_data] = b;
 		return true;
 	}
