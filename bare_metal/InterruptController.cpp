@@ -6,6 +6,7 @@
  */
 
 #include "InterruptController.h"
+#include "print_uart.h"
 
 InterruptController::InterruptController(void)
 {
@@ -57,17 +58,13 @@ bool InterruptController::DeRegisterInterrupt(InterruptSource& rSource)
 
 InterruptSource *InterruptController::WhatHasFired(void)
 {
-	unsigned int f = GetFiredMask();
+	PrinterUart<PL011> p;
 
-	unsigned int i = 0;
-	while (!(f & 1))
-	{
-		if (!f)
-			return 0;
+	int i = GetFiredId();
 
-		f >>= 1;
-		i++;
-	}
+	p << "firing id is " << i << "\n";
+	if (i == -1)
+		return 0;
 
 	//clear the interrupt in the controller
 	Clear(i);
@@ -88,4 +85,9 @@ InterruptSource *InterruptController::WhatHasFired(void)
 
 	//nothing found...software interrupt?
 	return 0;
+}
+
+bool InterruptController::SoftwareInterrupt(unsigned int i)
+{
+	return false;
 }

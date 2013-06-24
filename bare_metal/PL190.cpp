@@ -51,9 +51,15 @@ void PL190::Clear(unsigned int i)
 	//does not need clearing - clearing the peripheral does the trick
 }
 
-unsigned int PL190::GetFiredMask(void)
+int PL190::GetFiredId(void)
 {
-	return m_pBase[sm_irqStatus] | m_pBase[sm_fiqStatus];
+	unsigned int mask = m_pBase[sm_irqStatus] | m_pBase[sm_fiqStatus];
+
+	for (int count = 0; count < 32; count++)
+		if (mask & (1 << count))
+			return count;
+
+	return -1;
 }
 
 } /* namespace VersatilePb */

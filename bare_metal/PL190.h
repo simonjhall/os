@@ -22,7 +22,7 @@ public:
 protected:
 	virtual bool Enable(InterruptType, unsigned int, bool);
 	virtual void Clear(unsigned int);
-	virtual unsigned int GetFiredMask(void);
+	virtual int GetFiredId(void);
 
 private:
 	volatile unsigned int *m_pBase;

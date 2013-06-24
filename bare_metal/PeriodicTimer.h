@@ -13,7 +13,7 @@
 class PeriodicTimer : public InterruptSource
 {
 public:
-	PeriodicTimer(volatile unsigned *pBase)
+	PeriodicTimer(volatile unsigned int *pBase)
 	: InterruptSource(),
 	  m_pBase(pBase)
 	{

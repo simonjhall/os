@@ -19,12 +19,11 @@ public:
 	GenericInterruptController(volatile unsigned int *pProcBase, volatile unsigned int *pDistBase);
 	virtual	~GenericInterruptController();
 
-	void SoftwareInterrupt(unsigned int i);
+	virtual bool SoftwareInterrupt(unsigned int i);
 protected:
 	virtual bool Enable(InterruptType, unsigned int, bool);
 	virtual void Clear(unsigned int);
-	virtual unsigned int GetFiredMask(void);
-
+	virtual int GetFiredId(void);
 
 private:
 	void EnableForwarding(bool);
@@ -59,6 +58,7 @@ private:
 	static const unsigned int sm_icchpir = 0x18 >> 2;
 	static const unsigned int sm_iccabpr = 0x1c >> 2;
 
+	unsigned int m_maxInterrupt;
 	volatile unsigned int *m_pProcBase, *m_pDistBase;
 };
 

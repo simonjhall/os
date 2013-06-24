@@ -36,6 +36,7 @@ SP804::SP804(volatile unsigned *pBase, unsigned int whichTimer)
 
 SP804::~SP804()
 {
+	Enable(false);
 }
 
 void SP804::Enable(bool e)

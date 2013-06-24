@@ -12,6 +12,7 @@
 #include "SP804.h"
 #include "PL190.h"
 #include "GenericInterruptController.h"
+#include "GpTimer.h"
 
 int main(int argc, const char **argv);
 
@@ -120,8 +121,9 @@ extern "C" bool EnableIrqFiqForMode(Mode, bool, bool);
 
 VersatilePb::SP804 *pTimer0 = 0;
 VersatilePb::SP804 *pTimer2 = 0;
+OMAP4460::GpTimer *pGpTimer2 = 0, *pGpTimer10 = 0;
 
-VersatilePb::PL190 *pPic = 0;
+InterruptController *pPic = 0;
 extern unsigned int pMasterClockClear, masterClockClearValue, master_clock;
 
 //testing elf
@@ -208,6 +210,7 @@ extern "C" void Irq(void)
 	static unsigned int clock = 0;
 	PrinterUart<PL011> p;
 	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
+	p << "pic is " << pPic << "\n";
 
 	InterruptSource *pSource;
 
@@ -215,7 +218,9 @@ extern "C" void Irq(void)
 	{
 		//todo add to list
 		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
+		pSource->ClearInterrupt();
 	}
+	p << "returning from irq\n";
 }
 
 extern "C" void _Fiq(void);
@@ -286,7 +291,7 @@ static void MapKernel(unsigned int physEntryPoint)
 
     //IO sections
 #ifdef PBES
-    //sd
+    //L4 PER
     VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
     //private A9 memory
@@ -499,14 +504,40 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "memory pool initialised\n";
 
+
+
 	//enable interrupts
 	EnableIrq(true);
 	EnableFiq(true);
 
 #ifdef PBES
-	CortexA9MPCore::GenericInterruptController gic((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
+	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
+	p << "pic is " << pPic << "\n";
+	pGpTimer2 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef32000, 0, 2);
+	pGpTimer2->SetFrequencyInMicroseconds(1 * 1000 * 1000);
+	pGpTimer2->Enable(true);
 
-	gic.SoftwareInterrupt(0);
+	pGpTimer10 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef86000, 0, 10);
+	pGpTimer10->SetFrequencyInMicroseconds(1 * 1000 * 1000);
+	pGpTimer10->Enable(true);
+
+	p << "timer interrupt " << pGpTimer2->GetInterruptNumber() << "\n";
+	p << "timer interrupt " << pGpTimer10->GetInterruptNumber() << "\n";
+
+	pPic->RegisterInterrupt(*pGpTimer2, InterruptController::kIrq);
+	pPic->RegisterInterrupt(*pGpTimer10, InterruptController::kIrq);
+
+	/*while (1)
+	{
+		p << pGpTimer2->GetCurrentValue() << " fired " << pGpTimer2->HasInterruptFired() << "\n";
+	}*/
+
+	int swi = 0;
+
+	p << "go\n";
+
+//	while(1)
+//		pPic->SoftwareInterrupt((swi++) & 0xf);
 #else
 	pTimer0 = new VersatilePb::SP804((volatile unsigned int *)0xfeee2000, 0);
 	pTimer0->SetFrequencyInMicroseconds(10 * 1000);

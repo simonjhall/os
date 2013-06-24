@@ -31,10 +31,12 @@ public:
 	//auto clearing
 	virtual InterruptSource *WhatHasFired(void);
 
+	virtual bool SoftwareInterrupt(unsigned int i);
+
 protected:
 	virtual bool Enable(InterruptType, unsigned int, bool) = 0;
 	virtual void Clear(unsigned int) = 0;
-	virtual unsigned int GetFiredMask(void) = 0;
+	virtual int GetFiredId(void) = 0;
 
 	std::map<unsigned int, std::list<InterruptSource *> > m_sources;
 };
