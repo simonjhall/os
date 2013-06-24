@@ -143,6 +143,7 @@
 .endm
 
 #16kb aligned
+#pbes disable
 #.align 14
 entry_maybe_misaligned:
 master_tlb:

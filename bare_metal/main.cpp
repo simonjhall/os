@@ -9,6 +9,9 @@
 #include "Stdio.h"
 #include "TTY.h"
 #include "MBR.h"
+#include "SP804.h"
+#include "PL190.h"
+#include "GenericInterruptController.h"
 
 int main(int argc, const char **argv);
 
@@ -111,6 +114,16 @@ const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
 
+extern "C" void EnableIrq(bool);
+extern "C" void EnableFiq(bool);
+extern "C" bool EnableIrqFiqForMode(Mode, bool, bool);
+
+VersatilePb::SP804 *pTimer0 = 0;
+VersatilePb::SP804 *pTimer2 = 0;
+
+VersatilePb::PL190 *pPic = 0;
+extern unsigned int pMasterClockClear, masterClockClearValue, master_clock;
+
 //testing elf
 //extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start;
 //extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size;
@@ -139,13 +152,13 @@ extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * con
 {
 	PrinterUart<PL011> p;
 	p.PrintString("undefined instruction at ");
-	p.Print(addr);
+	p.PrintHex(addr);
 	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
-		p.Print(pRegisters[count]);
+		p.PrintHex(pRegisters[count]);
 		p.PrintString("\n");
 	}
 }
@@ -158,13 +171,13 @@ extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pReg
 {
 	PrinterUart<PL011> p;
 	p.PrintString("prefetch abort at ");
-	p.Print(addr);
+	p.PrintHex(addr);
 	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
-		p.Print(pRegisters[count]);
+		p.PrintHex(pRegisters[count]);
 		p.PrintString("\n");
 	}
 
@@ -176,23 +189,36 @@ extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegiste
 {
 	PrinterUart<PL011> p;
 	p.PrintString("data abort at ");
-	p.Print(addr);
+	p.PrintHex(addr);
 	p.PrintString("\n");
 
 	for (int count = 0; count < 7; count++)
 	{
 		p.PrintString("\t");
-		p.Print(pRegisters[count]);
+		p.PrintHex(pRegisters[count]);
 		p.PrintString("\n");
 	}
 
 	ASSERT(0);
 }
 
+extern "C" void _Irq(void);
 extern "C" void Irq(void)
 {
+	static unsigned int clock = 0;
+	PrinterUart<PL011> p;
+	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
+
+	InterruptSource *pSource;
+
+	while ((pSource = pPic->WhatHasFired()))
+	{
+		//todo add to list
+		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
+	}
 }
 
+extern "C" void _Fiq(void);
 extern "C" void Fiq(void)
 {
 }
@@ -260,15 +286,25 @@ static void MapKernel(unsigned int physEntryPoint)
 
     //IO sections
 #ifdef PBES
+    //sd
     VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    //private A9 memory
+    VirtMem::MapPhysToVirt((void *)(0x482U * 1048576), (void *)(0xfeeU * 1048576), 1048576,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    //UART
     VirtMem::MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
 #else
+    //sd
     VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    //uart
     VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    //timer and primary interrupt controller
+    VirtMem::MapPhysToVirt((void *)(0x101U * 1048576), (void *)(0xfeeU * 1048576), 1048576,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
 #endif
 
     //map the trampoline vector one page up from exception vector
@@ -308,9 +344,9 @@ void DumpMem(T *pVirtual, unsigned int len)
 	PrinterUart<PL011> p;
 	for (unsigned int count = 0; count < len; count++)
 	{
-		p.Print((unsigned int)pVirtual);
+		p.PrintHex((unsigned int)pVirtual);
 		p.PrintString(": ");
-		p.Print(*pVirtual);
+		p.PrintHex(*pVirtual);
 		p.PrintString("\n");
 		pVirtual++;
 	}
@@ -333,15 +369,15 @@ char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_m
 		vaddr += voffset;
 
 		p.PrintString("Header ");
-		p.Print(count);
+		p.PrintHex(count);
 		p.PrintString(" file data ");
-		p.Print((unsigned int)pData);
+		p.PrintHex((unsigned int)pData);
 		p.PrintString(" virtual address ");
-		p.Print(vaddr);
+		p.PrintHex(vaddr);
 		p.PrintString(" memory size ");
-		p.Print(memSize);
+		p.PrintHex(memSize);
 		p.PrintString(" file size ");
-		p.Print(fileSize);
+		p.PrintHex(fileSize);
 		p.PrintString("\n");
 
 		if (p_type == PT_TLS)
@@ -438,13 +474,20 @@ extern "C" void Setup(unsigned int entryPoint)
 	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
 	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
 	__DataAbort_addr = (unsigned int)&_DataAbort;
+	__Irq_addr = (unsigned int)&_Irq;
+	__Fiq_addr = (unsigned int)&_Fiq;
 
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
 
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf000b000);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf000b000);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf000b000);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf000b000);
+	//static const unsigned int qemu_offset = 0x0000c000;
+	static const unsigned int qemu_offset = 0;
+
+	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__Irq, VectorTable::kIrq, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__Fiq, VectorTable::kFiq, 0xf000b000 + qemu_offset);
 	p << "exception table inserted\n";
 
 	EnableFpu(true);
@@ -456,6 +499,33 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "memory pool initialised\n";
 
+	//enable interrupts
+	EnableIrq(true);
+	EnableFiq(true);
+
+#ifdef PBES
+	CortexA9MPCore::GenericInterruptController gic((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
+
+	gic.SoftwareInterrupt(0);
+#else
+	pTimer0 = new VersatilePb::SP804((volatile unsigned int *)0xfeee2000, 0);
+	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
+	pTimer0->Enable(true);
+
+	pTimer2 = new VersatilePb::SP804((volatile unsigned int *)0xfeee3000, 1);
+	pTimer2->SetFrequencyInMicroseconds(1 * 1000 * 1000);
+	pTimer2->Enable(true);
+
+	pMasterClockClear = (unsigned int)pTimer0->GetFiqClearAddress();
+	ASSERT(pMasterClockClear);
+	masterClockClearValue = pTimer0->GetFiqClearValue();
+
+	pPic = new VersatilePb::PL190((volatile unsigned int *)0xfee40000);
+	pPic->RegisterInterrupt(*pTimer0, InterruptController::kFiq);
+	pPic->RegisterInterrupt(*pTimer2, InterruptController::kIrq);
+#endif
+
+	while(1);
 
 //	{
 #ifdef PBES
@@ -465,7 +535,7 @@ extern "C" void Setup(unsigned int entryPoint)
 		if (!sd.Reset())
 			p << "reset failed\n";
 #else
-		PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
+		VersatilePb::PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
 #endif
 
 		p << "go idle state\n";
@@ -722,7 +792,11 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "creating FAT\n";
 
+#ifdef PBES
 	FatFS fat(*mbr.GetPartition(0));
+#else
+	FatFS fat(sd);
+#endif
 
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
@@ -790,8 +864,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	memset(&rfe.m_cpsr, 0, 4);
 	rfe.m_cpsr.m_mode = kUser;
 	rfe.m_cpsr.m_a = 1;
-	rfe.m_cpsr.m_i = 1;
-	rfe.m_cpsr.m_f = 1;
+	rfe.m_cpsr.m_i = 0;
+	rfe.m_cpsr.m_f = 0;
 
 	if ((unsigned int)rfe.m_pPc & 1)		//thumb
 		rfe.m_cpsr.m_t = 1;

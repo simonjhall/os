@@ -376,7 +376,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 						continue;
 
 					p.PrintString("\t");
-					p.Print(count * 1048576 + inner * 4096);
+					p.PrintHex(count * 1048576 + inner * 4096);
 					p.PrintString(": ");
 					p << *(unsigned int *)&pL2Virt[inner] << " ";
 					pL2Virt[inner].Print(p);

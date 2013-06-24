@@ -42,6 +42,26 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 	}
 }
 
+void Printer::PrintDec(unsigned int i, bool leading)
+{
+	bool has_printed = leading;
+	for (int count = 9; count >= 0; count--)
+	{
+		unsigned int divide_by = 1;
+		for (unsigned int inner = 0; inner < count; inner++)
+			divide_by *= 10;
+
+		unsigned int div = i / divide_by;
+		i = i % divide_by;
+
+		if (div || has_printed)
+		{
+			has_printed = true;
+			PrintChar(div + '0');
+		}
+	}
+}
+
 char *Printer::NibbleToHexString(char *pIn, unsigned int a)
 {
 	if (a < 10)
@@ -52,7 +72,7 @@ char *Printer::NibbleToHexString(char *pIn, unsigned int a)
 	return pIn + 1;
 }
 
-void Printer::Print(unsigned int i)
+void Printer::PrintHex(unsigned int i)
 {
 	char temp[9];
 

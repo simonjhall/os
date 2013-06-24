@@ -713,13 +713,13 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			p.PrintString("UNKNOWN");
 		p.PrintString("\n");
 		p.PrintString("supervisor call ");
-		p.Print(r7);
+		p.PrintHex(r7);
 		p.PrintString("\n");
 
 		for (int count = 0; count < 7; count++)
 		{
 			p.PrintString("\t");
-			p.Print(pRegisters[count]);
+			p.PrintHex(pRegisters[count]);
 			p.PrintString("\n");
 		}
 		return (unsigned int)-4095;

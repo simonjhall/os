@@ -7,6 +7,9 @@
 
 #include "PL181.h"
 
+namespace VersatilePb
+{
+
 PL181::PL181(volatile void *pBaseAddress)
 : SD(),
   m_pBaseAddress ((unsigned int *)pBaseAddress)
@@ -39,4 +42,6 @@ unsigned int PL181::Response(unsigned int word)
 unsigned int PL181::Status(void)
 {
 	return m_pBaseAddress[13];
+}
+
 }

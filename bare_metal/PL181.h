@@ -12,6 +12,9 @@
 #include "common.h"
 #include "SD.h"
 
+namespace VersatilePb
+{
+
 class PL181 : public SD
 {
 public:
@@ -250,5 +253,7 @@ private:
 		kRxDataAvailable = 21,
 	};
 };
+
+}
 
 #endif /* PL181_H_ */
