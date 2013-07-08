@@ -11,6 +11,9 @@
 #include "common.h"
 #include "WrappedFile.h"
 #include "VirtualFS.h"
+#include "phys_memory.h"
+#include "virt_memory.h"
+#include "translation_table.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -156,7 +159,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 					if (pPhys == (void *)-1)
 						break;
 
-					if (!VirtMem::MapPhysToVirt(pPhys, (void *)current, 4096, TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+					if (!VirtMem::MapPhysToVirt(pPhys, (void *)current, 4096, false,
+							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
 					{
 						PhysPages::ReleasePage((unsigned int)pPhys >> 12);
 						break;

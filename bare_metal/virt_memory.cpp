@@ -6,9 +6,10 @@
  */
 
 #include "virt_memory.h"
+#include "phys_memory.h"
+
 
 #include <functional>
-
 
 extern unsigned int master_tlb;
 
@@ -16,8 +17,9 @@ namespace VirtMem
 {
 
 //master kernel L1 tables
-static TranslationTable::TableEntryL1 *g_pPageTableL1Virt;
-static TranslationTable::TableEntryL1 *g_pPageTableL1Phys;
+//todo needs to be per-cpu
+static TranslationTable::TableEntryL1 *g_pPageTableL1PhysLo, *g_pPageTableL1PhysHi;
+static TranslationTable::TableEntryL1 *g_pPageTableL1VirtLo, *g_pPageTableL1VirtHi;
 
 //allocators for tables, in the virtual address space
 FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
@@ -26,29 +28,33 @@ bool g_allocatorsInited = false;
 
 bool AllocL1Table(unsigned int entryPoint)
 {
-	g_pPageTableL1Virt = (TranslationTable::TableEntryL1 *)&master_tlb;
-	g_pPageTableL1Phys = (TranslationTable::TableEntryL1 *)entryPoint;
+	g_pPageTableL1VirtLo = (TranslationTable::TableEntryL1 *)&master_tlb;
+	g_pPageTableL1PhysLo = (TranslationTable::TableEntryL1 *)entryPoint;
+
+	g_pPageTableL1VirtHi = g_pPageTableL1VirtLo;
+	g_pPageTableL1PhysHi = g_pPageTableL1PhysLo;
 
 	//master tlb may be misaligned virtually, so re-align it
 	//but the physical address must definitely be aligned (else we wouldn't be able to get this far)
 
-	ASSERT(((unsigned int)g_pPageTableL1Phys & 16383) == 0);
-	g_pPageTableL1Virt = (TranslationTable::TableEntryL1 *)((unsigned int)g_pPageTableL1Virt & ~16383);
+	ASSERT(((unsigned int)g_pPageTableL1PhysLo & 16383) == 0);
+	g_pPageTableL1VirtLo = (TranslationTable::TableEntryL1 *)((unsigned int)g_pPageTableL1VirtLo & ~16383);
+	g_pPageTableL1VirtHi = g_pPageTableL1VirtLo;
 
-	if (g_pPageTableL1Virt == (TranslationTable::TableEntryL1 *)-1)
+	if (g_pPageTableL1VirtLo == (TranslationTable::TableEntryL1 *)-1)
 		return false;
 	else
 		return true;
 }
 
-TranslationTable::TableEntryL1 *GetL1TableVirt(void)
+TranslationTable::TableEntryL1 *GetL1TableVirt(bool hi)
 {
-	return g_pPageTableL1Virt;
+	return hi ? g_pPageTableL1VirtHi : g_pPageTableL1VirtLo;
 }
 
-TranslationTable::TableEntryL1 *GetL1TablePhys(void)
+TranslationTable::TableEntryL1 *GetL1TablePhys(bool hi)
 {
-	return g_pPageTableL1Phys;
+	return hi ? g_pPageTableL1PhysHi : g_pPageTableL1PhysLo;
 }
 
 bool InitL1L2Allocators(void)
@@ -61,10 +67,12 @@ bool InitL1L2Allocators(void)
 		return false;
 
 	//map them virtually
-	if (!MapPhysToVirt(pL1Phys, (void *)0xfe000000, 1048576, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+	if (!MapPhysToVirt(pL1Phys, (void *)0xfe000000, 1048576, true,
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
 		return false;
 
-	if (!MapPhysToVirt(pL2Phys, (void *)(0xfe000000 + 1048576), 1048576, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+	if (!MapPhysToVirt(pL2Phys, (void *)(0xfe000000 + 1048576), 1048576, true,
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
 		return false;
 
 	g_masterTables.Init((TranslationTable::L1Table *)0xfe000000);
@@ -75,10 +83,10 @@ bool InitL1L2Allocators(void)
 	return true;
 }
 
-bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
+bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
 {
-	auto mapper = [pPhys, pVirt, length, perm, xn, type, domain](bool commit)
+	auto mapper = [pPhys, pVirt, length, perm, xn, type, domain, hi](bool commit)
 		{
 			unsigned int virtStart = (unsigned int)pVirt;
 			unsigned int physStart = (unsigned int)pPhys;
@@ -126,7 +134,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 
 				//get the l1 entry
 				unsigned int megabyte = (unsigned int)virtStart >> 20;
-				TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt();
+				TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt(hi);
 
 				//find out what's there
 				bool current_fault, current_pagetable, current_section;
@@ -148,7 +156,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 						//release a page table if mapped
 						//fault and section do not matter
 						if (current_pagetable)
-							RemovePageTable((void *)virtStart);
+							RemovePageTable((void *)virtStart, hi);
 
 						pMainTableVirt[megabyte].section.Init((void *)physStart, perm, xn, type, domain);
 					}
@@ -161,7 +169,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 						if (commit)
 						{
 							TranslationTable::TableEntryL2 *pNewVirt;
-							bool ok = AddPageTable((void *)virtStart, domain, &pNewVirt);
+							bool ok = AddPageTable((void *)virtStart, domain, &pNewVirt, hi);
 
 							if (!ok)
 								return false;
@@ -198,7 +206,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 							TranslationTable::AccessPerm existing_perm = (TranslationTable::AccessPerm)(existing.m_ap | (existing.m_ap2 << 2));
 
 							TranslationTable::TableEntryL2 *pNewVirt;
-							bool ok = AddPageTable((void *)virtStart, domain, &pNewVirt);
+							bool ok = AddPageTable((void *)virtStart, domain, &pNewVirt, hi);
 
 							if (!ok)
 								return false;
@@ -258,6 +266,11 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
 			return true;
 		};
 
+	if (hi && pVirt < (void *)(0x80000000))
+		return false;
+	else if (!hi && pVirt >= (void *)(0x80000000))
+		return false;
+
 	if (mapper(false))
 	{
 		bool ok = mapper(true);
@@ -275,7 +288,8 @@ bool UnmapVirt(void *pVirt, unsigned int length)
 	return false;
 }
 
-bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTableVirt)
+bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTableVirt,
+		bool hi)
 {
 	if (!g_allocatorsInited)
 		return false;
@@ -300,7 +314,7 @@ bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEn
 
 	//add the new entry into the table
 	unsigned int megabyte = (unsigned int)pVirtual >> 20;
-	TranslationTable::TableEntryL1 *pMainTable = GetL1TableVirt();
+	TranslationTable::TableEntryL1 *pMainTable = GetL1TableVirt(hi);
 	pMainTable[megabyte].pageTable.Init((TranslationTable::TableEntryL2 *)pNewPhys, domain);
 
 	*ppNewTableVirt = (TranslationTable::TableEntryL2 *)pNewVirt;
@@ -308,13 +322,13 @@ bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEn
 	return true;
 }
 
-bool RemovePageTable(void *pVirtual)
+bool RemovePageTable(void *pVirtual, bool hi)
 {
 	ASSERT(g_allocatorsInited);
 
 	//find the entry
 	unsigned int megabyte = (unsigned int)pVirtual >> 20;
-	TranslationTable::TableEntryL1 *pMainTable = GetL1TableVirt();
+	TranslationTable::TableEntryL1 *pMainTable = GetL1TableVirt(hi);
 
 	//check there is something there
 	if (!pMainTable[megabyte].IsPageTable())
@@ -340,11 +354,11 @@ bool RemovePageTable(void *pVirtual)
 	return true;
 }
 
-void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
+void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault, bool hi)
 {
 	PrinterUart<PL011> p;
-	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt();
-	TranslationTable::TableEntryL1 *pL1Phys = VirtMem::GetL1TablePhys();
+	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt(hi);
+	TranslationTable::TableEntryL1 *pL1Phys = VirtMem::GetL1TablePhys(hi);
 	TranslationTable::TableEntryL1 *pActualPhys = 0;
 
 	VirtToPhys(pL1Virt, &pActualPhys);
@@ -389,7 +403,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault)
 	p << "done\n";
 }
 
-bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,
+bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
 {
 	unsigned char *pMap = (unsigned char *)pBase;
@@ -400,7 +414,7 @@ bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,
 		if (pPhys == (void *)-1)
 			return false;											//needs to catch errors properly
 
-		bool ok = VirtMem::MapPhysToVirt(pPhys, pMap, 4096,
+		bool ok = VirtMem::MapPhysToVirt(pPhys, pMap, 4096, hi,
 				perm, xn, type,
 				domain);
 		if (!ok)

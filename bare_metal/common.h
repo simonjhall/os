@@ -22,10 +22,6 @@ static inline void assert_func(void)
 
 #define ASSERT(x) { if (!(x)) {PrinterUart<PL011> p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.PrintHex(__LINE__);assert_func();} }
 
-#include "phys_memory.h"
-#include "virt_memory.h"
-#include "translation_table.h"
-
 bool InitMempool(void *pBase, unsigned int numPages);
 
 void *internal_mmap(void *addr, size_t length, int prot, int flags,

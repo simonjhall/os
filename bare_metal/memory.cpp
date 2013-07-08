@@ -14,19 +14,10 @@
 
 #include "print_uart.h"
 #include "common.h"
+#include "virt_memory.h"
+#include "translation_table.h"
 
 #include <string.h>
-
-void *g_brk;
-void *GetHighBrk(void)
-{
-	return g_brk;
-}
-
-void SetHighBrk(void *p)
-{
-	g_brk = p;
-}
 
 
 
@@ -54,7 +45,7 @@ void *internal_mmap(void *addr, size_t length, int prot, int flags,
 	if (!isPriv && addr >= (void *)0x80000000)
 		ASSERT(0);
 
-	if (VirtMem::AllocAndMapVirtContig(addr, length_pages,
+	if (VirtMem::AllocAndMapVirtContig(addr, length_pages, isPriv,
 			isPriv ? TranslationTable::kRwRo : TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
 	{
 		memset(addr, 0, length_pages << 12);

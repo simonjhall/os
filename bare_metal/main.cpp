@@ -13,6 +13,9 @@
 #include "PL190.h"
 #include "GenericInterruptController.h"
 #include "GpTimer.h"
+#include "Process.h"
+#include "virt_memory.h"
+#include "phys_memory.h"
 
 int main(int argc, const char **argv);
 
@@ -21,54 +24,6 @@ int main(int argc, const char **argv);
 #include <link.h>
 #include <elf.h>
 #include <fcntl.h>
-
-struct VectorTable
-{
-	enum ExceptionType
-	{
-		kReset = 0,					//the initial supervisor stack
-		kUndefinedInstruction = 1,
-		kSupervisorCall = 2,
-		kPrefetchAbort = 3,
-		kDataAbort = 4,
-		kIrq = 6,
-		kFiq = 7,
-	};
-	typedef void(*ExceptionVector)(void);
-
-	static void EncodeAndWriteBranch(ExceptionVector v, ExceptionType e, unsigned int subtract = 0)
-	{
-		unsigned int *pBase = GetTableAddress();
-
-		unsigned int target = (unsigned int)v - subtract;
-		unsigned int source = (unsigned int)pBase + (unsigned int)e * 4;
-		unsigned int diff = target - source - 8;
-
-		ASSERT(((diff >> 2) & ~0xffffff) == 0);
-
-		unsigned int b = (0xe << 28) | (10 << 24) | (((unsigned int)diff >> 2) & 0xffffff);
-		pBase[(unsigned int)e] = b;
-	}
-
-	static void SetTableAddress(unsigned int *pAddress)
-	{
-#ifdef PBES
-		asm("mcr p15, 0, %0, c12, c0, 0" : : "r" (pAddress) : "memory");
-#endif
-	}
-
-	static unsigned int *GetTableAddress(void)
-	{
-#ifdef PBES
-		unsigned int existing;
-		asm("mrc p15, 0, %0, c12, c0, 0" : "=r" (existing) : : "cc");
-
-		return (unsigned int *)existing;
-#else
-		return 0;
-#endif
-	}
-};
 
 enum Mode
 {
@@ -79,26 +34,6 @@ enum Mode
 	kAbort = 23,
 	kUndefined = 27,
 	kSystem = 31,
-};
-
-struct Cpsr
-{
-	unsigned int m_mode:5;
-	unsigned int m_t:1;
-	unsigned int m_f:1;
-	unsigned int m_i:1;
-	unsigned int m_a:1;
-	unsigned int m_e:1;
-	unsigned int m_it2:6;
-	unsigned int m_ge:4;
-	unsigned int m_raz:4;
-	unsigned int m_j:1;
-	unsigned int m_it:2;
-	unsigned int m_q:1;
-	unsigned int m_v:1;
-	unsigned int m_c:1;
-	unsigned int m_z:1;
-	unsigned int m_n:1;
 };
 
 struct RfeData
@@ -145,10 +80,39 @@ struct FixedStack
 extern "C" unsigned int *GetStackHigh(VectorTable::ExceptionType e)
 {
 	ASSERT((unsigned int)e < 8);
-	return g_stacks[(unsigned int)e].m_stack + FixedStack::sm_size - 1;
+	return g_stacks[(unsigned int)e].m_stack + FixedStack::sm_size - 2;
+}
+
+/////////////////////////////////////////////////
+extern "C" void _Und(void);
+extern "C" void _Svc(void);
+extern "C" void _Prf(void);
+extern "C" void _Dat(void);
+extern "C" void _Irq(void);
+
+extern "C" void _Irq(void);
+extern "C" void Irq(void)
+{
+	static unsigned int clock = 0;
+	PrinterUart<PL011> p;
+	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
+	p << "pic is " << pPic << "\n";
+
+	InterruptSource *pSource;
+
+	while ((pSource = pPic->WhatHasFired()))
+	{
+		//todo add to list
+		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
+		pSource->ClearInterrupt();
+	}
+	p << "returning from irq\n";
 }
 
 
+/////////////////////////////////////////////////
+
+#if 0
 extern "C" void _UndefinedInstruction(void);
 extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * const pRegisters)
 {
@@ -203,25 +167,7 @@ extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegiste
 
 	ASSERT(0);
 }
-
-extern "C" void _Irq(void);
-extern "C" void Irq(void)
-{
-	static unsigned int clock = 0;
-	PrinterUart<PL011> p;
-	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
-	p << "pic is " << pPic << "\n";
-
-	InterruptSource *pSource;
-
-	while ((pSource = pPic->WhatHasFired()))
-	{
-		//todo add to list
-		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
-		pSource->ClearInterrupt();
-	}
-	p << "returning from irq\n";
-}
+#endif
 
 extern "C" void _Fiq(void);
 extern "C" void Fiq(void)
@@ -260,6 +206,10 @@ extern "C" void __Fiq(void);
 
 extern "C" void EnableFpu(bool);
 
+//unsigned int __attribute__((aligned(0x4000))) TTB[4096];
+unsigned int *TTB_virt;
+unsigned int *TTB_phys;
+
 static void MapKernel(unsigned int physEntryPoint)
 {
 	//entry may be pushed up a little bit
@@ -276,57 +226,73 @@ static void MapKernel(unsigned int physEntryPoint)
     PhysPages::ReservePages(physEntryPoint >> 12, image_length_section_align >> 12);
 
     VirtMem::AllocL1Table(physEntryPoint);
-    TranslationTable::TableEntryL1 *pEntries = VirtMem::GetL1TableVirt();
 
     if (!VirtMem::InitL1L2Allocators())
     	ASSERT(0);
 
     //clear any misalignment
     for (unsigned int i = 0; i < ((unsigned int)&entry_maybe_misaligned & 16383) >> 2; i++)
-    	pEntries[i].fault.Init();
+    	VirtMem::GetL1TableVirt(false)[i].fault.Init();
 
     //disable the existing phys map
     for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
-    	pEntries[i].fault.Init();
+    	VirtMem::GetL1TableVirt(false)[i].fault.Init();
 
     //IO sections
 #ifdef PBES
     //L4 PER
-    VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
     //private A9 memory
-    VirtMem::MapPhysToVirt((void *)(0x482U * 1048576), (void *)(0xfeeU * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(0x482U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
-    //UART
-    VirtMem::MapPhysToVirt((void *)(1152 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
+    //UART - DUP!
+    VirtMem::MapPhysToVirt((void *)(0x480 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+
+    //display
+    for (int count = 0; count < 16; count++)
+		VirtMem::MapPhysToVirt((void *)((0x580 + count) * 1048576), (void *)((0xfc0U + count) * 1048576), 1048576, true,
+				TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+/*
+    VirtMem::MapPhysToVirt((void *)(0x4a0 * 1048576), (void *)(0x4a0U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    VirtMem::MapPhysToVirt((void *)(0x4a3 * 1048576), (void *)(0x4a3U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    VirtMem::MapPhysToVirt((void *)(0x550 * 1048576), (void *)(0x550U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+
+    TTB_phys = (unsigned int *)PhysPages::FindMultiplePages(256, 8);
+    TTB_virt = (unsigned int *)0x10100000;
+    if (!VirtMem::MapPhysToVirt(TTB_phys, TTB_virt, 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0))
+    	ASSERT(0);*/
 #else
     //sd
-    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
     //uart
-    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
     //timer and primary interrupt controller
-    VirtMem::MapPhysToVirt((void *)(0x101U * 1048576), (void *)(0xfeeU * 1048576), 1048576,
+    VirtMem::MapPhysToVirt((void *)(0x101U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
 #endif
 
-    //map the trampoline vector one page up from exception vector
-    VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096,
+    //exception vector, plus the executable high secton
+    VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, true,
     		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
-    VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096,
-    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+//    unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
+//    VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096,
+//    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
     //executable top section
-    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
-    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+//    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
+//    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
-    pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
+  /*  pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
-    VirtMem::FlushTlb();
     memset((void *)(4094U * 1048576), 0, 1048576);
 
 
@@ -336,26 +302,14 @@ static void MapKernel(unsigned int physEntryPoint)
 
     for (unsigned int count = 0; count < (unsigned int)&TlsHigh - (unsigned int)&TlsLow; count++)
     	pHighCode[count] = pHighSource[count];
-
+*/
     //set the emulation value
     *(unsigned int *)(0xffff0fe0 - 4) = 0;
     //set the register value
     asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (0) : "cc");
+    VirtMem::FlushTlb();
 }
 
-template <class T>
-void DumpMem(T *pVirtual, unsigned int len)
-{
-	PrinterUart<PL011> p;
-	for (unsigned int count = 0; count < len; count++)
-	{
-		p.PrintHex((unsigned int)pVirtual);
-		p.PrintString(": ");
-		p.PrintHex(*pVirtual);
-		p.PrintString("\n");
-		pVirtual++;
-	}
-}
 
 char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
 {
@@ -412,7 +366,7 @@ char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_m
 				void *pPhys = PhysPages::FindPage();
 				ASSERT(pPhys != (void *)-1);
 
-				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096,
+				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096, false,
 						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 				ASSERT(ok);
 
@@ -463,9 +417,11 @@ ProcessFS *pfsA;
 ProcessFS *pfsB;
 VirtualFS *vfs;
 
+extern "C" void m3_entry(void);
+
 extern "C" void Setup(unsigned int entryPoint)
 {
-	VectorTable::SetTableAddress(0);
+//	VectorTable::SetTableAddress(0);
 
 	MapKernel(entryPoint);
 
@@ -475,24 +431,33 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "mmu and uart enabled\n";
 
-	__UndefinedInstruction_addr = (unsigned int)&_UndefinedInstruction;
-	__SupervisorCall_addr = (unsigned int)&_SupervisorCall;
-	__PrefetchAbort_addr = (unsigned int)&_PrefetchAbort;
-	__DataAbort_addr = (unsigned int)&_DataAbort;
+	__UndefinedInstruction_addr = (unsigned int)&_Und;
+	__SupervisorCall_addr = (unsigned int)&_Svc;
+	__PrefetchAbort_addr = (unsigned int)&_Prf;
+	__DataAbort_addr = (unsigned int)&_Dat;
 	__Irq_addr = (unsigned int)&_Irq;
 	__Fiq_addr = (unsigned int)&_Fiq;
 
-	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true);
+	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, false);
+	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, true);
 
-	//static const unsigned int qemu_offset = 0x0000c000;
-	static const unsigned int qemu_offset = 0;
+	/*static const unsigned int qemu_offset = 0x0000c000;
+	//static const unsigned int qemu_offset = 0;
 
 	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf000b000 + qemu_offset);
 	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf000b000 + qemu_offset);
 	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf000b000 + qemu_offset);
 	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf000b000 + qemu_offset);
 	VectorTable::EncodeAndWriteBranch(&__Irq, VectorTable::kIrq, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__Fiq, VectorTable::kFiq, 0xf000b000 + qemu_offset);
+	VectorTable::EncodeAndWriteBranch(&__Fiq, VectorTable::kFiq, 0xf000b000 + qemu_offset);*/
+
+	VectorTable::EncodeAndWriteLiteralLoad(&_Und, VectorTable::kUndefinedInstruction);
+	VectorTable::EncodeAndWriteLiteralLoad(&_Svc, VectorTable::kSupervisorCall);
+	VectorTable::EncodeAndWriteLiteralLoad(&_Prf, VectorTable::kPrefetchAbort);
+	VectorTable::EncodeAndWriteLiteralLoad(&_Dat, VectorTable::kDataAbort);
+	VectorTable::EncodeAndWriteLiteralLoad(&_Irq, VectorTable::kIrq);
+	VectorTable::EncodeAndWriteLiteralLoad(&_Fiq, VectorTable::kFiq);
+
 	p << "exception table inserted\n";
 
 	EnableFpu(true);
@@ -504,6 +469,142 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "memory pool initialised\n";
 
+	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
+	*(volatile unsigned int *)0xfc0013ac = 0xffffff;
+	//DISPC_CONTROL2[12] overlay optimisation, 2689
+	*(volatile unsigned int *)0xfc001238 &= ~(1 << 12);
+	//DISPC_CONFIG2[18] alpha blender, 2731
+//	*(volatile unsigned int *)0xfc001620 |= (1 << 18);
+	//transparency colour key selection DISPC_CONFIG2[11]
+	*(volatile unsigned int *)0xfc001620 &= ~(1 << 11);
+	//set transparency colour value, DISPC_TRANS_COLOR2 2706
+	*(volatile unsigned int *)0xfc0013b0 = 0;
+	//transparency colour key disabled DISPC_CONFIG2[10]
+	*(volatile unsigned int *)0xfc001620 &= ~(1 << 10);
+
+
+	//DISPC_POL_FREQ2, 2713
+	*(volatile unsigned int *)0xfc001408 = (1 << 14) | (1 << 13) | (1 << 12);
+
+	*(volatile unsigned int *)0xfc001620 |= 1;
+
+
+	while(1);
+
+#if 0
+	extern unsigned int m3_magic;
+	p << "magic " << m3_magic << "\n";
+
+//	m3_entry();
+
+	volatile unsigned int *CM_MPU_M3_CLKSTCTRL = (volatile unsigned int *)0x4a008900;		//930
+	volatile unsigned int *CM_MPU_M3_MPU_M3_CLKCTRL = (volatile unsigned int *)0x4a008920;	//933
+	volatile unsigned int *RM_MPU_M3_RSTCTRL = (volatile unsigned int *)0x4a306910;		//630
+	volatile unsigned int *MMU_CNTL = (volatile unsigned int *)0x55082044;		//4464
+	volatile unsigned int *MMU_TTB = (volatile unsigned int *)0x5508204c;		//4465
+
+	void *phys_entry = PhysPages::FindMultiplePages(256, 8);
+	if (!VirtMem::MapPhysToVirt(phys_entry, (void *)0x10000000, 1048576,
+    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kStronglyOrdered, 0))
+		ASSERT(0);
+
+	p << " phys entry " << (unsigned int)phys_entry << "\n";
+
+	memcpy((void *)0x10000000, (const void *)((unsigned int)&m3_entry & ~1), 4096);
+
+	p << "filling table\n";
+	union
+	{
+		TranslationTable::Section s;
+		unsigned int i;
+	} combined;
+
+	combined.s.Init(phys_entry, TranslationTable::kRwRw, TranslationTable::kExec,
+			TranslationTable::kStronglyOrdered, 0);
+
+	for (int count = 0; count < 4096; count++)
+		TTB_virt[count] = combined.i;
+
+	combined.s.Init((void *)(0x480 * 1048576),
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+	TTB_virt[0x480] = combined.i;
+
+	asm volatile ("dsb");
+
+	//sequence 375
+//	p << __LINE__ << " " << *CM_MPU_M3_MPU_M3_CLKCTRL << "\n";
+	*CM_MPU_M3_MPU_M3_CLKCTRL = 1;
+//	p << __LINE__ << " " << *CM_MPU_M3_MPU_M3_CLKCTRL << "\n";
+
+	asm volatile ("dsb");
+
+//	p << __LINE__ << " " << *CM_MPU_M3_CLKSTCTRL << "\n";
+	*CM_MPU_M3_CLKSTCTRL = 2;
+//	p << __LINE__ << " " << *CM_MPU_M3_CLKSTCTRL << "\n";
+
+	asm volatile ("dsb");
+
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+	*RM_MPU_M3_RSTCTRL = 0;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+	*RM_MPU_M3_RSTCTRL = 2;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+	*RM_MPU_M3_RSTCTRL = 7;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+	*RM_MPU_M3_RSTCTRL = 3;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+
+//	p << __LINE__ << " " << *MMU_TTB << "\n";
+	*MMU_TTB = (unsigned int)TTB_phys;
+//	p << __LINE__ << " " << *MMU_TTB << "\n";
+
+	asm volatile ("dsb");
+
+//	p << __LINE__ << " " << *MMU_CNTL << "\n";
+	*MMU_CNTL = 6;
+//	p << __LINE__ << " " << *MMU_CNTL << "\n";
+
+	asm volatile ("dsb");
+	*RM_MPU_M3_RSTCTRL = 2;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+//	*RM_MPU_M3_RSTCTRL = 0;
+//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
+
+	asm volatile ("dsb");
+
+//	*CM_MPU_M3_MPU_M3_CLKCTRL = 0x01;
+//	*CM_MPU_M3_CLKSTCTRL = 0x02;
+//	*RM_MPU_M3_RSTCTRL &= ~0x4;
+//	*MMU_TTB = (unsigned int)TTB_phys;
+//	*MMU_CNTL = 0x6;
+//	*RM_MPU_M3_RSTCTRL &= ~1;
+
+	DelaySecond();
+
+	for (int count = 0; count < 10; count++)
+		p << count << " " << *(volatile unsigned int *)(0x10000000 + count * 4) << "\n";
+
+	/*for (int count = 0; count < 10; count++)
+	{
+		for (int inner = 0; inner < 100; inner++)
+			DelayMillisecond();
+		p << "magic " << *(volatile unsigned int *)0x1000000c << "\n";
+	}*/
+
+	while(1);
+#endif
 
 
 	//enable interrupts

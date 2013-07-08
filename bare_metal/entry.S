@@ -142,30 +142,42 @@
 	PRINT_NEWLINE
 .endm
 
+.set PBES,1
+
 #16kb aligned
 #pbes disable
-#.align 14
+.if PBES==0
+.align 14
+.endif
+
 entry_maybe_misaligned:
 master_tlb:
 	bl phys_entry
 	#fill it with fault entries
-	#.fill 4095, 4, 0xfffffff0
+	.if PBES==1
 	#pbes
 	.fill 4079, 4, 0xfffffff0
+	.else
+	.fill 4095, 4, 0xfffffff0
+	.endif
 
 .func phys_entry
 phys_entry:
 	#we almost have our phys load point
 	sub lr, #4
+	.if PBES==1
 	#pbes
 	sub lr, #64
+	.endif
 	#clear the first entry
 	mov r0, #0xfffffff0
 	str r0, [lr]
 
 	ldr r0, =entry_maybe_misaligned
+	.if PBES==1
 	#pbes
 	sub r0, #64
+	.endif
 	ldr r1, =__end__
 
 	#round the end up to the megabyte
@@ -217,6 +229,7 @@ map_loop:
 	subs r1, #1
 	bne map_loop
 
+.if 0
 	#add the uart for debugging
 	mov r2, #0x480
 	lsl r2, #20
@@ -227,10 +240,11 @@ map_loop:
 	str r2, [lr, r2, lsr #18]
 	mov r2, #0x480
 	ldr r2, [lr, r2, lsl #2]
+.endif
 
 	#insert the page table into ttbr0
 	mcr p15, 0, lr, c2, c0, 0
-	#mcr p15, 0, lr, c2, c0, 1		/* and ttbr1 */
+	mcr p15, 0, lr, c2, c0, 1		/* and ttbr1 */
 
 	#change the domain to client
 	mov r2, #1
@@ -244,14 +258,15 @@ map_loop:
 
 	#set ttbr0 and ttbr1 to have an even 2GB split
 	mrc p15, 0, r2, c2, c0, 2
-	/*orr r2, #1
-	mcr p15, 0, r2, c2, c0, 2*/
+	orr r2, #1
+	mcr p15, 0, r2, c2, c0, 2
 
 	#turn on the mmu
 	#get the current value
 	mrc p15, 0, r2, c1, c0, 0
 	orr r2, #1					/* enable */
 	bic r2, #2					/* disable alignment fault checking */
+	orr r2, #(1 << 13)			/* remap high exception vector */
 	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
 
 	#good to go

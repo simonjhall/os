@@ -10,6 +10,8 @@
 
 #include "common.h"
 #include "malloc.h"
+#include "virt_memory.h"
+#include "Process.h"
 
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
@@ -1906,7 +1908,7 @@ static mspace s_pool;
 
 bool InitMempool(void *pBase, unsigned int numPages)
 {
-	if (VirtMem::AllocAndMapVirtContig(pBase, numPages,
+	if (VirtMem::AllocAndMapVirtContig(pBase, numPages, true,
 			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
 	{
 		s_pool = create_mspace_with_base(pBase, numPages << 12, 0);

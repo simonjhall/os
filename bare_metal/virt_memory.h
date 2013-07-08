@@ -16,20 +16,20 @@ namespace VirtMem
 {
 
 //insertion and deletion of page tables
-bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTableVirt);
-bool RemovePageTable(void *pVirtual);
+bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTableVirt, bool hi);
+bool RemovePageTable(void *pVirtual, bool hi);
 
 //mapping and unmapping memory
-bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length,
+bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain);
 bool UnmapVirt(void *pVirt, unsigned int length);
 
-bool AllocAndMapVirtContig(void *pBase, unsigned int numPages,
+bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
 		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain);
 
 //master kernel L1 table
 bool AllocL1Table(unsigned int entryPoint);
-TranslationTable::TableEntryL1 *GetL1TableVirt(void);
+TranslationTable::TableEntryL1 *GetL1TableVirt(bool hi);
 
 //the L1 and L2 table allocators
 bool InitL1L2Allocators(void);
@@ -38,7 +38,7 @@ bool InitL1L2Allocators(void);
 extern "C" void FlushTlb(void);
 
 //debug
-void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault);
+void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault, bool hi);
 
 template <class T>
 bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned int numMb = 4096, int depth = 0);
@@ -47,8 +47,10 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 template <class T>
 bool VirtToPhys(T *pVirtual, T **ppPhysical)
 {
+	bool hi = pVirtual >= (T *)0x80000000;
+
 	unsigned int megabyte = (unsigned int)pVirtual >> 20;
-	TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt();
+	TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt(hi);
 
 	if (pMainTableVirt[megabyte].IsFault())
 		return false;
@@ -104,8 +106,6 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 	if (depth == 10)
 		return false;
 
-	TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt();
-
 //	unsigned int phys_whole = (unsigned int)pPhysical;
 
 	unsigned int phys_mb = (unsigned int)pPhysical & ~1048575;
@@ -116,6 +116,8 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 
 	for (unsigned int outer = startMb; outer < startMb + numMb; outer++)
 	{
+		TranslationTable::TableEntryL1 *pMainTableVirt = GetL1TableVirt(outer >= 2048);
+
 		if (pMainTableVirt[outer].IsSection())
 		{
 			if ((unsigned int)(pMainTableVirt[outer].section.m_sectionBase << 20) == phys_mb)
@@ -148,6 +150,21 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 	}
 
 	return false;
+}
+
+
+template <class T>
+void DumpMem(T *pVirtual, unsigned int len)
+{
+	PrinterUart<PL011> p;
+	for (unsigned int count = 0; count < len; count++)
+	{
+		p.PrintHex((unsigned int)pVirtual);
+		p.PrintString(": ");
+		p.PrintHex(*pVirtual);
+		p.PrintString("\n");
+		pVirtual++;
+	}
 }
 
 }
