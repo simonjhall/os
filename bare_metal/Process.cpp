@@ -47,3 +47,45 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv)
 	m_pausedState.m_newPc = entryPoint;
 	m_pausedState.m_spsr.m_t = entryPoint & 1;
 }
+
+Thread::State Thread::GetState(void)
+{
+	return m_state;
+}
+
+bool Thread::SetState(State target)
+{
+	switch (m_state)
+	{
+	case kRunning:
+		if (target == kBlocked || target == kRunnable || target == kDead)
+		{
+			m_state = target;
+			return true;
+		}
+		else
+			return false;
+
+	case kDead:				//not going anywhere
+	case kBlocked:
+		return false;		//needs an unblock
+
+	case kRunnable:
+		if (target == kRunning)
+		{
+			m_state = target;
+			return true;
+		}
+		else
+			return false;
+
+	default:
+		ASSERT(0);
+		return false;
+	}
+}
+
+void Thread::Unblock(void)
+{
+	m_state = kRunnable;
+}

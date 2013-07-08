@@ -180,6 +180,14 @@ EnableIrqFiqForMode:
 .endfunc
 .size EnableIrqFiqForMode, .-EnableIrqFiqForMode
 
+.global InsertPageTableLoAndFlush
+.func InsertPageTableLoAndFlush
+InsertPageTableLoAndFlush:
+	mcr p15, 0, r0, c2, c0, 0
+	b FlushTlb
+.endfunc
+.size InsertPageTableLoAndFlush, .-InsertPageTableLoAndFlush
+
 
 /***************************************/
 

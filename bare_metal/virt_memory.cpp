@@ -16,10 +16,13 @@ extern unsigned int master_tlb;
 namespace VirtMem
 {
 
-//master kernel L1 tables
+//currently loaded L1 tables; hi will never change
 //todo needs to be per-cpu
 static TranslationTable::TableEntryL1 *g_pPageTableL1PhysLo, *g_pPageTableL1PhysHi;
 static TranslationTable::TableEntryL1 *g_pPageTableL1VirtLo, *g_pPageTableL1VirtHi;
+
+//the master 'zero' ones for lo
+static TranslationTable::L1Table *g_pPageTableMasterL1PhysLo, *g_pPageTableMasterL1VirtLo;
 
 //allocators for tables, in the virtual address space
 FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
@@ -57,6 +60,37 @@ TranslationTable::TableEntryL1 *GetL1TablePhys(bool hi)
 	return hi ? g_pPageTableL1PhysHi : g_pPageTableL1PhysLo;
 }
 
+bool SetL1TableLo(TranslationTable::TableEntryL1 *pVirt)
+{
+	if (pVirt)
+	{
+		//get phys
+		TranslationTable::TableEntryL1 *pPhys;
+		//needs to be mapped
+		if (!VirtToPhys(pVirt, &pPhys))
+			return false;
+
+		//needs to be physically aligned
+		if ((unsigned int)pPhys & 16383)
+			return false;
+
+		g_pPageTableL1PhysLo = pPhys;
+		g_pPageTableL1VirtLo = pVirt;
+	}
+	else
+	{
+		//load the zero kernel lo
+		ASSERT(g_pPageTableMasterL1VirtLo);
+
+		g_pPageTableL1PhysLo = (TranslationTable::TableEntryL1 *)g_pPageTableMasterL1PhysLo;
+		g_pPageTableL1VirtLo = (TranslationTable::TableEntryL1 *)g_pPageTableMasterL1VirtLo;
+	}
+
+	InsertPageTableLoAndFlush(g_pPageTableL1PhysLo);
+
+	return true;
+}
+
 bool InitL1L2Allocators(void)
 {
 	//find a MB for each
@@ -79,6 +113,13 @@ bool InitL1L2Allocators(void)
 	g_subTables.Init((TranslationTable::L2Table *)(0xfe000000 + 1048576));
 
 	g_allocatorsInited = true;
+
+	//allocate a 'zero' L1 lo table
+	if (!g_masterTables.Allocate(&g_pPageTableMasterL1VirtLo))
+		ASSERT(0);
+
+	if (!VirtToPhys(g_pPageTableMasterL1VirtLo, &g_pPageTableMasterL1PhysLo))
+		ASSERT(0);
 
 	return true;
 }

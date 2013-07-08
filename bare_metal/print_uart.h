@@ -57,11 +57,14 @@ public:
 	{
 		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
 
+#ifdef PBES
+		while (p[0x44 >> 2] & 1);
+#else
 		unsigned int transmit_full = (p[sm_flag] >> 5) & 1;
 		if (transmit_full)
 			return false;
+#endif
 
-		for (volatile int count = 0; count < 4000; count++);
 		p[sm_data] = b;
 		return true;
 	}

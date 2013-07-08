@@ -61,14 +61,6 @@ OMAP4460::GpTimer *pGpTimer2 = 0, *pGpTimer10 = 0;
 InterruptController *pPic = 0;
 extern unsigned int pMasterClockClear, masterClockClearValue, master_clock;
 
-//testing elf
-//extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_start;
-//extern unsigned int _binary_C__Users_Simon_workspace_tester_Debug_tester_strip_size;
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_start;
-extern unsigned int _binary__home_simon_workspace_tester_Debug_tester_strip_size;
-
-extern unsigned int _binary_ld_stripped_so_start;
-extern unsigned int _binary_ld_stripped_so_size;
 /////////
 
 struct FixedStack
@@ -112,67 +104,7 @@ extern "C" void Irq(void)
 
 /////////////////////////////////////////////////
 
-#if 0
-extern "C" void _UndefinedInstruction(void);
-extern "C" void UndefinedInstruction(unsigned int addr, const unsigned int * const pRegisters)
-{
-	PrinterUart<PL011> p;
-	p.PrintString("undefined instruction at ");
-	p.PrintHex(addr);
-	p.PrintString("\n");
-
-	for (int count = 0; count < 7; count++)
-	{
-		p.PrintString("\t");
-		p.PrintHex(pRegisters[count]);
-		p.PrintString("\n");
-	}
-}
-
-extern "C" void _SupervisorCall(void);
-extern "C" unsigned int SupervisorCall(unsigned int r7);
-
-extern "C" void _PrefetchAbort(void);
-extern "C" void PrefetchAbort(unsigned int addr, const unsigned int * const pRegisters)
-{
-	PrinterUart<PL011> p;
-	p.PrintString("prefetch abort at ");
-	p.PrintHex(addr);
-	p.PrintString("\n");
-
-	for (int count = 0; count < 7; count++)
-	{
-		p.PrintString("\t");
-		p.PrintHex(pRegisters[count]);
-		p.PrintString("\n");
-	}
-
-	ASSERT(0);
-}
-
-extern "C" void _DataAbort(void);
-extern "C" void DataAbort(unsigned int addr, const unsigned int * const pRegisters)
-{
-	PrinterUart<PL011> p;
-	p.PrintString("data abort at ");
-	p.PrintHex(addr);
-	p.PrintString("\n");
-
-	for (int count = 0; count < 7; count++)
-	{
-		p.PrintString("\t");
-		p.PrintHex(pRegisters[count]);
-		p.PrintString("\n");
-	}
-
-	ASSERT(0);
-}
-#endif
-
 extern "C" void _Fiq(void);
-extern "C" void Fiq(void)
-{
-}
 
 extern "C" void InvokeSyscall(unsigned int r7);
 extern "C" void ChangeModeAndJump(unsigned int r0, unsigned int r1, unsigned int r2, RfeData *);
@@ -189,20 +121,6 @@ extern unsigned int __end__;
 
 extern unsigned int __trampoline_start__;
 extern unsigned int __trampoline_end__;
-
-extern unsigned int __UndefinedInstruction_addr;
-extern unsigned int __SupervisorCall_addr;
-extern unsigned int __PrefetchAbort_addr;
-extern unsigned int __DataAbort_addr;
-extern unsigned int __Irq_addr;
-extern unsigned int __Fiq_addr;
-
-extern "C" void __UndefinedInstruction(void);
-extern "C" void __SupervisorCall(void);
-extern "C" void __PrefetchAbort(void);
-extern "C" void __DataAbort(void);
-extern "C" void __Irq(void);
-extern "C" void __Fiq(void);
 
 extern "C" void EnableFpu(bool);
 
@@ -237,6 +155,9 @@ static void MapKernel(unsigned int physEntryPoint)
     //disable the existing phys map
     for (unsigned int i = physEntryPoint >> 20; i < (physEntryPoint + image_length_section_align) >> 20; i++)
     	VirtMem::GetL1TableVirt(false)[i].fault.Init();
+
+    //use the zero lo
+    VirtMem::SetL1TableLo(0);
 
     //IO sections
 #ifdef PBES
@@ -421,8 +342,6 @@ extern "C" void m3_entry(void);
 
 extern "C" void Setup(unsigned int entryPoint)
 {
-//	VectorTable::SetTableAddress(0);
-
 	MapKernel(entryPoint);
 
 	PrinterUart<PL011> p;
@@ -431,25 +350,8 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "mmu and uart enabled\n";
 
-	__UndefinedInstruction_addr = (unsigned int)&_Und;
-	__SupervisorCall_addr = (unsigned int)&_Svc;
-	__PrefetchAbort_addr = (unsigned int)&_Prf;
-	__DataAbort_addr = (unsigned int)&_Dat;
-	__Irq_addr = (unsigned int)&_Irq;
-	__Fiq_addr = (unsigned int)&_Fiq;
-
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, false);
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, true);
-
-	/*static const unsigned int qemu_offset = 0x0000c000;
-	//static const unsigned int qemu_offset = 0;
-
-	VectorTable::EncodeAndWriteBranch(&__UndefinedInstruction, VectorTable::kUndefinedInstruction, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__SupervisorCall, VectorTable::kSupervisorCall, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__PrefetchAbort, VectorTable::kPrefetchAbort, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__DataAbort, VectorTable::kDataAbort, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__Irq, VectorTable::kIrq, 0xf000b000 + qemu_offset);
-	VectorTable::EncodeAndWriteBranch(&__Fiq, VectorTable::kFiq, 0xf000b000 + qemu_offset);*/
 
 	VectorTable::EncodeAndWriteLiteralLoad(&_Und, VectorTable::kUndefinedInstruction);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Svc, VectorTable::kSupervisorCall);
@@ -469,6 +371,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "memory pool initialised\n";
 
+#if 0
 	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
 	*(volatile unsigned int *)0xfc0013ac = 0xffffff;
 	//DISPC_CONTROL2[12] overlay optimisation, 2689
@@ -490,6 +393,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 
 	while(1);
+#endif
 
 #if 0
 	extern unsigned int m3_magic;

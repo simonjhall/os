@@ -17,49 +17,49 @@ GenericInterruptController::GenericInterruptController(
 : InterruptController(),
   m_pProcBase(pProcBase), m_pDistBase(pDistBase)
 {
-	PrinterUart<PL011> p;
+//	PrinterUart<PL011> p;
 	//see which interrupts work
 
 	//disable forwarding of interrupts to CPU interfaces
-	p << "disabling forwarding\n";
+//	p << "disabling forwarding\n";
 	EnableForwarding(false);
 
 	//find the max number of interrupts the the GIC supports
 	unsigned int max = ((m_pDistBase[sm_icdictr] & 31) + 1) * 32;
-	p << "supports max " << max << " lines\n";
+//	p << "supports max " << max << " lines\n";
 	m_maxInterrupt = max;
 
 	//test which interrupts can be enabled
-	p << "what goes high\n";
+//	p << "what goes high\n";
 	for (unsigned int count = 0; count < (max >> 5); count++)
 	{
-		p << "ICDISER " << count;
+//		p << "ICDISER " << count;
 		m_pDistBase[sm_icdiserBase + count] = 0xffffffff;
-		p << " working " << m_pDistBase[sm_icdiserBase + count] << "\n";
+//		p << " working " << m_pDistBase[sm_icdiserBase + count] << "\n";
 	}
 	//test which interrupts are always enabled
-	p << "what goes low\n";
+//	p << "what goes low\n";
 	for (unsigned int count = 0; count < (max >> 5); count++)
 	{
-		p << "ICDICER " << count;
+//		p << "ICDICER " << count;
 		m_pDistBase[sm_icdicerBase + count] = 0xffffffff;
-		p << " working " << m_pDistBase[sm_icdicerBase + count] << "\n";
+//		p << " working " << m_pDistBase[sm_icdicerBase + count] << "\n";
 	}
 
 	//set all CPUs receive interrupts
-	p << "CPU targets\n";
+//	p << "CPU targets\n";
 	for (unsigned int count = 0; count < (max >> 2); count++)
 	{
-		p << "ICDIPTR " << count << " " ;
+//		p << "ICDIPTR " << count << " " ;
 		m_pDistBase[sm_icdiptrBase + count] = 0;
-		p << m_pDistBase[sm_icdiptrBase + count] << " ";
+//		p << m_pDistBase[sm_icdiptrBase + count] << " ";
 		m_pDistBase[sm_icdiptrBase + count] = 0xffffffff;
-		p << m_pDistBase[sm_icdiptrBase + count] << "\n";
+//		p << m_pDistBase[sm_icdiptrBase + count] << "\n";
 	}
 
-	p << "enabling forwarding\n";
+//	p << "enabling forwarding\n";
 	EnableForwarding(true);
-	p << "enable receiving\n";
+//	p << "enable receiving\n";
 	EnableReceiving(true);
 	//may not be ready to handle interrupts yet!
 }
@@ -75,15 +75,10 @@ bool GenericInterruptController::Enable(InterruptType interruptType,
 	if (i >= m_maxInterrupt)
 		return false;
 
-//	PrinterUart<PL011> p;
-//	p << "enabling interrupt " << i << "\n";
-
 	//find which word it is in
 	unsigned int w = i >> 5;
 	//find which interrupt within a word it is
 	unsigned int b = i - (w << 5);
-
-//	p << "word " << w << " bit " << b << "\n";
 
 	//enable it with icdiser
 	if (e)
@@ -96,7 +91,6 @@ bool GenericInterruptController::Enable(InterruptType interruptType,
 	else
 		m_pDistBase[sm_icdicerBase + w] |= (1 << b);
 
-//	p << "success\n";
 	return true;
 }
 
@@ -118,7 +112,11 @@ bool GenericInterruptController::SoftwareInterrupt(unsigned int i)
 
 int GenericInterruptController::GetFiredId(void)
 {
-	return m_pProcBase[sm_icciar] & 1023;			//todo return CPU id too
+	unsigned int fireId = m_pProcBase[sm_icciar] & 1023;			//todo return CPU id too
+	if (fireId == 1023)
+		return -1;				//spurious interrupt
+	else
+		return fireId;
 }
 
 void GenericInterruptController::EnableForwarding(bool e)

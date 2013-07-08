@@ -57,11 +57,26 @@ class Process;
 class Thread
 {
 public:
+	enum State
+	{
+		kRunnable,
+		kRunning,
+		kBlocked,
+		kDead,
+	};
+
 	Thread(unsigned int entryPoint, Process *pParent, bool priv);
+
+	State GetState(void);
+	bool SetState(State s);
+
+	void Unblock(void);
+
 protected:
 	Process *m_pParent;
 	bool m_isPriv;
 	ExceptionState m_pausedState;
+	State m_state;
 };
 
 class Process

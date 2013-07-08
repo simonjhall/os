@@ -58,16 +58,10 @@ bool InterruptController::DeRegisterInterrupt(InterruptSource& rSource)
 
 InterruptSource *InterruptController::WhatHasFired(void)
 {
-	PrinterUart<PL011> p;
-
 	int i = GetFiredId();
 
-	p << "firing id is " << i << "\n";
 	if (i == -1)
 		return 0;
-
-	//clear the interrupt in the controller
-	Clear(i);
 
 	//now find what caused it
 	std::map<unsigned int, std::list<InterruptSource *> >::iterator mit = m_sources.find(i);
@@ -79,10 +73,15 @@ InterruptSource *InterruptController::WhatHasFired(void)
 			if ((*it)->HasInterruptFired())
 			{
 				(*it)->ClearInterrupt();
+
+				//clear the interrupt in the controller
+				Clear(i);
 				return *it;
 			}
 	}
 
+	//clear the interrupt in the controller
+	Clear(i);
 	//nothing found...software interrupt?
 	return 0;
 }
