@@ -7,6 +7,8 @@
 
 #include "Scheduler.h"
 
+Scheduler * Scheduler::s_pMasterScheduler = 0;
+
 Scheduler::Scheduler()
 : m_pRunningThread(0)
 {
@@ -68,7 +70,7 @@ Thread* RoundRobin::PickNext(void)
 		ASSERT(success);		//else all threads blocked
 
 		//tell the old one is it not running
-		if (WhatIsRunning())	//but it may have done that itself already (kBlocked)
+		if (WhatIsRunning() && WhatIsRunning() != pNext)	//but it may have done that itself already (kBlocked)
 			WhatIsRunning()->SetState(Thread::kRunnable);
 
 		//set next to be running

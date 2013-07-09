@@ -12,6 +12,17 @@
 #include "translation_table.h"
 #include <list>
 
+enum Mode
+{
+	kUser = 16,
+	kFiq = 17,
+	kIrq = 18,
+	kSupervisor = 19,
+	kAbort = 23,
+	kUndefined = 27,
+	kSystem = 31,
+};
+
 struct Cpsr
 {
 	unsigned int m_mode:5;
@@ -71,6 +82,9 @@ public:
 	bool SetState(State s);
 
 	void Unblock(void);
+
+	void HaveSavedState(ExceptionState);
+	bool Run(void);
 
 protected:
 	Process *m_pParent;

@@ -16,6 +16,7 @@
 #include "Process.h"
 #include "virt_memory.h"
 #include "phys_memory.h"
+#include "Scheduler.h"
 
 int main(int argc, const char **argv);
 
@@ -24,17 +25,6 @@ int main(int argc, const char **argv);
 #include <link.h>
 #include <elf.h>
 #include <fcntl.h>
-
-enum Mode
-{
-	kUser = 16,
-	kFiq = 17,
-	kIrq = 18,
-	kSupervisor = 19,
-	kAbort = 23,
-	kUndefined = 27,
-	kSystem = 31,
-};
 
 struct RfeData
 {
@@ -54,9 +44,8 @@ extern "C" void EnableIrq(bool);
 extern "C" void EnableFiq(bool);
 extern "C" bool EnableIrqFiqForMode(Mode, bool, bool);
 
-VersatilePb::SP804 *pTimer0 = 0;
-VersatilePb::SP804 *pTimer2 = 0;
-OMAP4460::GpTimer *pGpTimer2 = 0, *pGpTimer10 = 0;
+PeriodicTimer *pTimer0 = 0;
+PeriodicTimer *pTimer1 = 0;
 
 InterruptController *pPic = 0;
 extern unsigned int pMasterClockClear, masterClockClearValue, master_clock;
@@ -96,7 +85,7 @@ extern "C" void Irq(void)
 	{
 		//todo add to list
 		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
-		pSource->ClearInterrupt();
+		pSource->HandleInterrupt();
 	}
 	p << "returning from irq\n";
 }
@@ -340,6 +329,38 @@ VirtualFS *vfs;
 
 extern "C" void m3_entry(void);
 
+void ThreadFuncA(void)
+{
+	PrinterUart<PL011> p;
+
+	while (1)
+	{
+		p << "in thread A\n";
+		for (int count = 0; count < 100; count++)
+			DelayMillisecond();
+	}
+}
+
+void ThreadFuncB(void)
+{
+	PrinterUart<PL011> p;
+
+	while (1)
+	{
+		p << "in thread B\n";
+		for (int count = 0; count < 100; count++)
+			DelayMillisecond();
+	}
+}
+
+void IdleThread(void)
+{
+	while (1)
+	{
+		asm volatile ("wfe");
+	}
+}
+
 extern "C" void Setup(unsigned int entryPoint)
 {
 	MapKernel(entryPoint);
@@ -515,6 +536,15 @@ extern "C" void Setup(unsigned int entryPoint)
 	EnableIrq(true);
 	EnableFiq(true);
 
+	Scheduler::SetMasterScheduler(*new RoundRobin);
+
+	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncA, 0, true));
+	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncB, 0, true));
+	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&IdleThread, 0, true));
+
+	Thread *pThread = Scheduler::GetMasterScheduler().PickNext();
+	ASSERT(pThread);
+
 #ifdef PBES
 	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
 	p << "pic is " << pPic << "\n";
@@ -546,11 +576,9 @@ extern "C" void Setup(unsigned int entryPoint)
 #else
 	pTimer0 = new VersatilePb::SP804((volatile unsigned int *)0xfeee2000, 0);
 	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
-	pTimer0->Enable(true);
 
-	pTimer2 = new VersatilePb::SP804((volatile unsigned int *)0xfeee3000, 1);
-	pTimer2->SetFrequencyInMicroseconds(1 * 1000 * 1000);
-	pTimer2->Enable(true);
+	pTimer1 = new VersatilePb::SP804((volatile unsigned int *)0xfeee3000, 1);
+	pTimer1->SetFrequencyInMicroseconds(1 * 1000 * 1000);
 
 	pMasterClockClear = (unsigned int)pTimer0->GetFiqClearAddress();
 	ASSERT(pMasterClockClear);
@@ -558,8 +586,13 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	pPic = new VersatilePb::PL190((volatile unsigned int *)0xfee40000);
 	pPic->RegisterInterrupt(*pTimer0, InterruptController::kFiq);
-	pPic->RegisterInterrupt(*pTimer2, InterruptController::kIrq);
+	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
+
+	pTimer0->Enable(true);
+	pTimer1->Enable(true);
 #endif
+
+	pThread->Run();
 
 	while(1);
 

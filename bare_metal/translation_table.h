@@ -308,6 +308,11 @@ namespace TranslationTable
 	{
 		TableEntryL2 e[256];
 	} __attribute__ ((aligned (1024)));
+
+	struct SmallPageActual
+	{
+		unsigned char e[4096];
+	} __attribute__ ((aligned (4096)));
 }
 
 

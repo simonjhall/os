@@ -7,11 +7,15 @@
 
 #include "common.h"
 #include "Process.h"
+#include "Scheduler.h"
 
 extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 {
 	PrinterUart<PL011> p;
 	bool thumb = pState->m_spsr.m_t;
+
+	Thread *pThread = Scheduler::GetMasterScheduler().WhatIsRunning();
+	ASSERT(pThread);
 
 	switch (m)
 	{
@@ -22,7 +26,9 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
+
 			ASSERT(0);
+			pThread->SetState(Thread::kDead);
 			break;
 
 		case VectorTable::kUndefinedInstruction:
@@ -39,6 +45,8 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
+
+			pThread->SetState(Thread::kBlocked);
 			break;
 
 		case VectorTable::kSupervisorCall:
@@ -52,6 +60,8 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 				pState->m_returnAddress -= 4;
 
 			p << "system call at at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
+
+			pThread->SetState(Thread::kBlocked);
 			break;
 
 		case VectorTable::kPrefetchAbort:
@@ -65,6 +75,8 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
+
+			pThread->SetState(Thread::kBlocked);
 			break;
 
 		case VectorTable::kDataAbort:
@@ -78,6 +90,8 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
+
+			pThread->SetState(Thread::kBlocked);
 			break;
 
 		case VectorTable::kIrq:
@@ -97,19 +111,25 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			//and we'll come right back here
 			Irq();
 
-			//do not change what is returned to
-			Resume(pState);
-
-			//never gonna happen
-			ASSERT(0);
+			pThread->SetState(Thread::kRunnable);
 			break;
 	}
 
+	//should have been changed by now
+	ASSERT(pThread->GetState() != Thread::kRunning);
+
 	//everything else goes to the system handler
 	pState->m_mode = m;
-//	g_pSynchronousExceptions->push_back(*pState);
 
+	//store the corrected state
+	pThread->HaveSavedState(*pState);
 
+	//find what we're to run next
+	pThread = Scheduler::GetMasterScheduler().PickNext();
+	ASSERT(pThread);
+
+	//and run it
+	pThread->Run();
 }
 
 

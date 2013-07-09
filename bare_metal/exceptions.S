@@ -34,7 +34,11 @@ Resume:
 
 	#reload all the registers and pc, switch in cpsr
 	add r0, #8
-	ldm r0, {r0-r15}^
+	#ldm r0, {r0-r15}^
+	mov sp, r0
+	ldm sp, {r0-r14}^
+	add sp, #(15 * 4)
+	ldm sp, {r15}^
 .endfunc
 .size Resume, .-Resume
 

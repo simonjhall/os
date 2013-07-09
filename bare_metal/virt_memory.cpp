@@ -28,6 +28,8 @@ static TranslationTable::L1Table *g_pPageTableMasterL1PhysLo, *g_pPageTableMaste
 FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
 FixedSizeAllocator<TranslationTable::L2Table, 1048576 / sizeof(TranslationTable::L2Table)> g_subTables;
 bool g_allocatorsInited = false;
+//allocators for system thread stacks
+FixedSizeAllocator<TranslationTable::SmallPageActual, 1048576 / sizeof(TranslationTable::SmallPageActual)> g_sysThreadStacks;
 
 bool AllocL1Table(unsigned int entryPoint)
 {
@@ -96,8 +98,9 @@ bool InitL1L2Allocators(void)
 	//find a MB for each
 	void *pL1Phys = PhysPages::FindMultiplePages(256, 8);
 	void *pL2Phys = PhysPages::FindMultiplePages(256, 8);
+	void *pStacks = PhysPages::FindMultiplePages(256, 8);
 
-	if (pL1Phys == (void *)-1 || pL2Phys == (void *)-1)
+	if (pL1Phys == (void *)-1 || pL2Phys == (void *)-1 || pStacks == (void *)-1)
 		return false;
 
 	//map them virtually
@@ -109,8 +112,13 @@ bool InitL1L2Allocators(void)
 			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
 		return false;
 
+	if (!MapPhysToVirt(pStacks, (void *)(0xfe000000 + 1048576 * 2), 1048576, true,
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+		return false;
+
 	g_masterTables.Init((TranslationTable::L1Table *)0xfe000000);
-	g_subTables.Init((TranslationTable::L2Table *)(0xfe000000 + 1048576));
+	g_subTables.Init((TranslationTable::L2Table *)(0xfe000000 + 1048576 * 1));
+	g_sysThreadStacks.Init((TranslationTable::SmallPageActual *)(0xfe000000 + 1048576 * 2));
 
 	g_allocatorsInited = true;
 

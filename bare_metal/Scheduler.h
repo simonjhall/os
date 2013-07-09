@@ -19,6 +19,16 @@ public:
 
 	virtual void AddThread(Thread &);
 
+	static Scheduler &GetMasterScheduler(void)
+	{
+		return *s_pMasterScheduler;
+	}
+
+	static void SetMasterScheduler(Scheduler &rSched)
+	{
+		s_pMasterScheduler = &rSched;
+	}
+
 protected:
 	Scheduler();
 	virtual ~Scheduler();
@@ -28,6 +38,8 @@ protected:
 
 	std::list<Thread *> m_allThreads;
 	Thread *m_pRunningThread;
+
+	static Scheduler *s_pMasterScheduler;
 };
 
 class RoundRobin : public Scheduler
