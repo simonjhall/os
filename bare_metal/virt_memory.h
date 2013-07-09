@@ -30,7 +30,7 @@ bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
 //master kernel L1 table
 bool AllocL1Table(unsigned int entryPoint);
 TranslationTable::TableEntryL1 *GetL1TableVirt(bool hi);
-bool SetL1TableLo(TranslationTable::TableEntryL1 *);
+bool SetL1TableLo(TranslationTable::TableEntryL1 *pVirt);
 
 //the L1 and L2 table allocators
 bool InitL1L2Allocators(void);

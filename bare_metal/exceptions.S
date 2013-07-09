@@ -374,4 +374,14 @@ _Fiq:
 .endfunc
 .size _Fiq, .-_Fiq
 
-
+.global HandlerYield
+.func HandlerYield
+ HandlerYield:
+ 	push {r7}
+ 	mov r7, #158
+	swi #0
+	mov r0, r1
+	pop {r7}
+	bx lr
+.endfunc
+.size  HandlerYield, .- HandlerYield

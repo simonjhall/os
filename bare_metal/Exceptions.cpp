@@ -47,6 +47,7 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
 			pThread->SetState(Thread::kBlocked);
+			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
 
 		case VectorTable::kSupervisorCall:
@@ -61,7 +62,17 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 
 			p << "system call at at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
 
-			pThread->SetState(Thread::kBlocked);
+			if (pState->m_regs[7] == 158)	//yield
+			{
+				pThread->SetState(Thread::kRunnable);
+				pState->m_regs[0] = 0;			//no error
+			}
+			else
+			{
+				pThread->SetState(Thread::kBlocked);
+				Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
+			}
+
 			break;
 
 		case VectorTable::kPrefetchAbort:
@@ -77,6 +88,7 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
 			pThread->SetState(Thread::kBlocked);
+			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
 
 		case VectorTable::kDataAbort:
@@ -92,6 +104,7 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
 			pThread->SetState(Thread::kBlocked);
+			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
 
 		case VectorTable::kIrq:
@@ -125,12 +138,45 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 	pThread->HaveSavedState(*pState);
 
 	//find what we're to run next
-	pThread = Scheduler::GetMasterScheduler().PickNext();
+	Thread *pBlocked;
+	pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
 	ASSERT(pThread);
 
 	//and run it
-	pThread->Run();
+	if (!pBlocked)
+		pThread->Run();
+	else
+		pThread->RunAsHandler(*pBlocked);
+
+	//shouldn't reach here
+	ASSERT(0);
 }
 
+extern "C" Thread *HandlerYield(void);
 
+void Handler(unsigned int arg0, unsigned int arg1)
+{
+	PrinterUart<PL011> p;
+
+	Thread *pBlocked = (Thread *)arg1;
+
+	while (1)
+	{
+		ASSERT(pBlocked);
+		p << "in handler for thread " << pBlocked << "\n";
+
+		pBlocked->Unblock();
+		Scheduler::GetMasterScheduler().OnThreadUnblock(*pBlocked);
+
+		pBlocked = HandlerYield();
+	}
+}
+
+void IdleThread(void)
+{
+	while (1)
+	{
+		asm volatile ("wfe");
+	}
+}
 

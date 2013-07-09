@@ -26,16 +26,6 @@ int main(int argc, const char **argv);
 #include <elf.h>
 #include <fcntl.h>
 
-struct RfeData
-{
-	union {
-		void(*m_pPc)(void);
-		void *func;
-	};
-	Cpsr m_cpsr;
-	unsigned int *m_pSp;
-};
-
 const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end;
@@ -220,84 +210,6 @@ static void MapKernel(unsigned int physEntryPoint)
     VirtMem::FlushTlb();
 }
 
-
-char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
-{
-	PrinterUart<PL011> p;
-	has_tls = false;
-	char *pInterp = 0;
-
-	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
-	{
-		void *pData;
-		unsigned int vaddr;
-		unsigned int memSize, fileSize;
-
-		int p_type = elf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
-
-		vaddr += voffset;
-
-		p.PrintString("Header ");
-		p.PrintHex(count);
-		p.PrintString(" file data ");
-		p.PrintHex((unsigned int)pData);
-		p.PrintString(" virtual address ");
-		p.PrintHex(vaddr);
-		p.PrintString(" memory size ");
-		p.PrintHex(memSize);
-		p.PrintString(" file size ");
-		p.PrintHex(fileSize);
-		p.PrintString("\n");
-
-		if (p_type == PT_TLS)
-		{
-			tls_memsize = memSize;
-			tls_filesize = fileSize;
-			tls_vaddr = vaddr;
-			has_tls = true;
-		}
-
-		if (p_type == PT_INTERP)
-		{
-			p.PrintString("interpreter :");
-			p.PrintString((char *)pData);
-			p.PrintString("\n");
-			pInterp = (char *)pData;
-		}
-
-		if (p_type == PT_LOAD)
-		{
-			unsigned int beginVirt = vaddr & ~4095;
-			unsigned int endVirt = ((vaddr + memSize) + 4095) & ~4095;
-			unsigned int pagesNeeded = (endVirt - beginVirt) >> 12;
-
-			for (unsigned int i = 0; i < pagesNeeded; i++)
-			{
-				void *pPhys = PhysPages::FindPage();
-				ASSERT(pPhys != (void *)-1);
-
-				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096, false,
-						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-				ASSERT(ok);
-
-				//clear the page
-				memset((void *)beginVirt, 0, 4096);
-
-				//next page
-				beginVirt += 4096;
-			}
-
-			//copy in the file data
-			for (unsigned int c = 0; c < fileSize; c++)
-			{
-				((unsigned char *)vaddr)[c] = ((unsigned char *)pData)[c];
-			}
-		}
-	}
-
-	return pInterp;
-}
-
 unsigned int FillPHdr(Elf &elf, ElfW(Phdr) *pHdr, unsigned int voffset)
 {
 	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
@@ -338,26 +250,8 @@ void ThreadFuncA(void)
 		p << "in thread A\n";
 		for (int count = 0; count < 100; count++)
 			DelayMillisecond();
-	}
-}
 
-void ThreadFuncB(void)
-{
-	PrinterUart<PL011> p;
-
-	while (1)
-	{
-		p << "in thread B\n";
-		for (int count = 0; count < 100; count++)
-			DelayMillisecond();
-	}
-}
-
-void IdleThread(void)
-{
-	while (1)
-	{
-		asm volatile ("wfe");
+		InvokeSyscall(0);
 	}
 }
 
@@ -537,13 +431,15 @@ extern "C" void Setup(unsigned int entryPoint)
 	EnableFiq(true);
 
 	Scheduler::SetMasterScheduler(*new RoundRobin);
+	Scheduler::GetMasterScheduler().AddSpecialThread(*new Thread((unsigned int)&Handler, 0, true, 1, 0), Scheduler::kHandlerThread);
 
-	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncA, 0, true));
-	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncB, 0, true));
-	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&IdleThread, 0, true));
+//	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncA, 0, true, 1, 0));
+	Scheduler::GetMasterScheduler().AddSpecialThread(*new Thread((unsigned int)&IdleThread, 0, true, 1, 0), Scheduler::kIdleThread);
 
-	Thread *pThread = Scheduler::GetMasterScheduler().PickNext();
-	ASSERT(pThread);
+//	Thread *pBlocked;
+//	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
+//	ASSERT(!pBlocked);
+//	ASSERT(pThread);
 
 #ifdef PBES
 	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
@@ -588,13 +484,13 @@ extern "C" void Setup(unsigned int entryPoint)
 	pPic->RegisterInterrupt(*pTimer0, InterruptController::kFiq);
 	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
 
-	pTimer0->Enable(true);
-	pTimer1->Enable(true);
+//	pTimer0->Enable(true);
+//	pTimer1->Enable(true);
 #endif
 
-	pThread->Run();
-
-	while(1);
+//	pThread->Run();
+//
+//	while(1);
 
 //	{
 #ifdef PBES
@@ -632,123 +528,6 @@ extern "C" void Setup(unsigned int entryPoint)
 		p << "finished\n";
 
 		MBR mbr(sd);
-
-		/*unsigned int *buffer = new unsigned int[32768/4];
-		ok = sd.ReadDataFromLogicalAddress(508, buffer, 0x5000);
-		ASSERT(ok);
-
-		for (int outer = 0; outer < 0x5000 / 64; outer++)
-		{
-			p << outer * 64 << ": ";
-			for (int inner = 0; inner < 16; inner++)
-				p << buffer[outer * 16 + inner] << " ";
-			p << "\n";
-		}
-
-		while(1);*/
-
-//
-////				char buffer[100];
-////				ok = sd.ReadDataFromLogicalAddress(1, buffer, 100);
-////				ASSERT(ok);
-//
-//				fat.ReadBpb();
-//				fat.ReadEbr();
-//
-//				unsigned int fat_size = fat.FatSize();
-//				fat_size = (fat_size + 4095) & ~4095;
-//				unsigned int fat_pages = fat_size >> 12;
-//
-//				for (unsigned int count = 0; count < fat_pages; count++)
-//				{
-//					void *pPhysPage = PhysPages::FindPage();
-//					ASSERT(pPhysPage != (void *)-1);
-//
-//					ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0x90000000 + count * 4096),
-//							4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
-//							TranslationTable::kOuterInnerWbWa, 0);
-//					ASSERT(ok);
-//				}
-//
-//				fat.HaveFatMemory((void *)0x90000000);
-//				fat.LoadFat();
-//
-//
-////				void *pDir = __builtin_alloca(fat.ClusterSizeInBytes() * fat.CountClusters(fat.RootDirectoryRelCluster()));
-////				fat.ReadClusterChain(pDir, fat.RootDirectoryRelCluster());
-////
-////				unsigned int slot = 0;
-////				FatFS::DirEnt dirent;
-//
-//				fat.ListDirectory(p, fat.RootDirectoryRelCluster());
-
-//				do
-//				{
-//					ok = fat.IterateDirectory(pDir, slot, dirent);
-//					if (ok)
-//					{
-//						p.PrintString("file "); p.PrintString(dirent.m_name);
-//						p.PrintString(" rel cluster "); p.Print(dirent.m_cluster);
-//						p.PrintString(" abs cluster "); p.Print(fat.RelativeToAbsoluteCluster(dirent.m_cluster));
-//						p.PrintString(" size "); p.Print(dirent.m_size);
-//						p.PrintString(" attr "); p.Print(dirent.m_type);
-//						p.PrintString("\n");
-//					}
-//
-////					if (strcmp(dirent.m_name, "ld-2.15.so") == 0)
-////					{
-////						unsigned int file_size = dirent.m_size;
-////						unsigned page_file_size = (file_size + 4095) & ~4095;
-////						unsigned int file_pages = page_file_size >> 12;
-////
-////						for (unsigned int count = 0; count < file_pages; count++)
-////						{
-////							void *pPhysPage = PhysPages::FindPage();
-////							ASSERT(pPhysPage != (void *)-1);
-////
-////							ok = VirtMem::MapPhysToVirt(pPhysPage, (void *)(0xa0000000 + count * 4096),
-////									4096, TranslationTable::kRwNa, TranslationTable::kNoExec,
-////									TranslationTable::kOuterInnerWbWa, 0);
-////							ASSERT(ok);
-////						}
-////
-////						unsigned int to_read = file_size;
-////						unsigned char *pReadInto = (unsigned char *)0xa0000000;
-////						unsigned int cluster = dirent.m_cluster;
-////						while (to_read > 0)
-////						{
-////							bool full_read;
-////							unsigned int reading;
-////
-////							if (fat.ClusterSizeInBytes() > to_read)		//not enough data left
-////							{
-////								full_read = false;
-////								reading = to_read;
-////							}
-////							else
-////							{
-////								full_read = true;
-////								reading = fat.ClusterSizeInBytes();
-////							}
-////
-////							fat.ReadCluster(pReadInto, fat.RelativeToAbsoluteCluster(cluster), reading);
-////							to_read -= reading;
-////							pReadInto += reading;
-////
-////							if (full_read)
-////							{
-////								ok = fat.NextCluster(cluster, cluster);
-////								ASSERT(ok);
-////							}
-////							else
-////								ASSERT(to_read == 0);
-////				ReadEbr		}
-////					}
-//				} while (ok);
-
-//				p << "\n";
-//			}
-//		}
 
 //		VirtualFS vfs;
 //		vfs.Mkdir("/", "Volumes");
@@ -870,6 +649,15 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
+	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+	ASSERT(pLoader);
+	ASSERT(pLoader->IsDirectory() == false);
+
+	Process busybox(*new ProcessFS("/Volumes/sd/minimal", "/"),
+			"/bin/busybox", *vfs, *(File *)pLoader);
+
+#if 0
+
 	pfsA = new ProcessFS("/Volumes/sd/minimal", "/");
 	char string[500];
 
@@ -877,10 +665,14 @@ extern "C" void Setup(unsigned int entryPoint)
 	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdout", O_RDONLY)) == 1);
 	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stderr", O_RDONLY)) == 2);
 
-	int exe = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
-			O_RDONLY));
-	int ld = pfsA->Open(*vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-linux.so.3", string, 500),
-			O_RDONLY));
+	BaseDirent *busybox = vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
+			O_RDONLY);
+	ASSERT(busybox);
+	int exe = pfsA->Open(*busybox);
+	BaseDirent *ld_minimal = vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-minimal.so", string, 500),
+			O_RDONLY);
+	ASSERT(ld_minimal);
+	int ld = pfsA->Open(*ld_minimal);
 
 	pfsB = new ProcessFS("/Volumes/sd", "/");
 
@@ -1013,5 +805,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	rfe.m_pSp[5] = e;
 	rfe.m_pSp[6] = 0;
 
+	pTimer0->Enable(true);
+	pTimer1->Enable(true);
+
 	ChangeModeAndJump(0, 0, 0, &rfe);
+#endif
 }

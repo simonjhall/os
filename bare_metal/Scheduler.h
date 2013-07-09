@@ -14,10 +14,23 @@
 class Scheduler
 {
 public:
-	virtual Thread *PickNext(void) = 0;
+	enum SpecialType
+	{
+		kNormal,
+		kIdleThread,
+		kHandlerThread,
+	};
+
+	virtual Thread *PickNext(Thread **ppBlocked) = 0;
 	virtual Thread *WhatIsRunning(void);
 
 	virtual void AddThread(Thread &);
+	virtual bool AddSpecialThread(Thread &, SpecialType);
+
+	virtual void RemoveThread(Thread &, SpecialType);
+
+	virtual void OnThreadBlock(Thread &);
+	virtual void OnThreadUnblock(Thread &);
 
 	static Scheduler &GetMasterScheduler(void)
 	{
@@ -33,10 +46,13 @@ protected:
 	Scheduler();
 	virtual ~Scheduler();
 
-	virtual void OnThreadAdd(Thread &);
+	virtual void OnThreadAdd(Thread &, SpecialType);
+	virtual void OnThreadRemove(Thread &, SpecialType);
 	virtual void SetRunning(Thread *);
 
-	std::list<Thread *> m_allThreads;
+	std::list<Thread *> m_allNormalThreads;
+	Thread *m_pIdleThread, *m_pHandlerThread;
+
 	Thread *m_pRunningThread;
 
 	static Scheduler *s_pMasterScheduler;
@@ -48,12 +64,19 @@ public:
 	RoundRobin();
 	virtual ~RoundRobin();
 
-	virtual Thread *PickNext(void);
+	virtual Thread *PickNext(Thread **ppBlocked);
+	virtual void OnThreadBlock(Thread &);
+	virtual void OnThreadUnblock(Thread &);
 
 protected:
-	virtual void OnThreadAdd(Thread &);
+	virtual void OnThreadAdd(Thread &, SpecialType);
+	virtual void OnThreadRemove(Thread &, SpecialType);
 
 	std::list<Thread *> m_threadQueue;
+	std::list<Thread *> m_blockedQueue;
 };
+
+void Handler(unsigned int arg0, unsigned int arg1);
+void IdleThread(void);
 
 #endif /* SCHEDULER_H_ */

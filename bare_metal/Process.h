@@ -10,6 +10,9 @@
 
 #include "VectorTable.h"
 #include "translation_table.h"
+#include "WrappedFile.h"
+#include "elf.h"
+
 #include <list>
 
 enum Mode
@@ -41,6 +44,16 @@ struct Cpsr
 	unsigned int m_c:1;
 	unsigned int m_z:1;
 	unsigned int m_n:1;
+};
+
+struct RfeData
+{
+	union {
+		void(*m_pPc)(void);
+		void *func;
+	};
+	Cpsr m_cpsr;
+	unsigned int *m_pSp;
 };
 
 struct ExceptionState
@@ -76,7 +89,8 @@ public:
 		kDead,
 	};
 
-	Thread(unsigned int entryPoint, Process *pParent, bool priv);
+	Thread(unsigned int entryPoint, Process *pParent, bool priv,
+			unsigned int stackSizePages, int priority);
 
 	State GetState(void);
 	bool SetState(State s);
@@ -85,29 +99,64 @@ public:
 
 	void HaveSavedState(ExceptionState);
 	bool Run(void);
+	bool RunAsHandler(Thread &rBlocked);
 
 protected:
+	//process attached to
 	Process *m_pParent;
+	//whether it's a system thread or not
 	bool m_isPriv;
+	//register etc state
 	ExceptionState m_pausedState;
+	//thread state
 	State m_state;
+	//thread priority
+	int m_priority;
 };
 
 class Process
 {
 public:
-	Process(unsigned int entryPoint);
+	enum State
+	{
+		kRunnable,
+		kStopped,
+		kDead,
+	};
+
+	Process(ProcessFS &, const char *, BaseFS &rVfs, File &rLoader);
 	void MapProcess(void);
 
 	void *GetBrk(void);
 	void SetBrk(void *);
 protected:
+	//list of all the attached threads in the process
 	std::list<Thread> m_threads;
+	//program run state
+	State m_state;
 
-	TranslationTable::L1Table *pPhysTable;
-	TranslationTable::L1Table *pVirtTable;
+	//lo table
+	TranslationTable::L1Table *m_pPhysTable;
+	TranslationTable::L1Table *m_pVirtTable;
 
+	//brk position
 	void *m_pBrk;
+
+	//all file handles
+	ProcessFS &m_rPfs;
+	//and loaded through this
+	BaseFS &m_rVfs;
+
+	//the file handle for the executable
+	File *m_pExeFile;
+	//ld-linux
+	File &m_rLoader;
+
+	//file handles
+	int m_exeFd, m_ldFd;
+
+private:
+	static char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr);
 };
 
 extern "C" void Resume(ExceptionState *);

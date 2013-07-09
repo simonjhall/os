@@ -147,7 +147,7 @@ BaseDirent *VirtualFS::Locate(const char *pFilename, Directory *pParent)
 	if (slash)
 		ASSERT(local->IsDirectory());
 
-	if (!local->IsDirectory())
+	if (!local->IsDirectory() || !slash)
 		return local;
 
 	//check attach points

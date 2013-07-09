@@ -134,7 +134,7 @@ BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
 	if (slash)
 		ASSERT(local->IsDirectory());
 
-	if (!local->IsDirectory())
+	if (!local->IsDirectory() || !slash)
 		return local;
 
 	//check attach points
@@ -395,7 +395,8 @@ void FatFS::ListDirectory(FatDirectory &rDir)
 		{
 			if (dirent.m_cluster == cluster)
 				continue;			//'.'
-			if (dirent.m_cluster == ((FatDirectory *)rDir.GetParent())->GetStartCluster())
+			if (rDir.GetParent() &&			//may be root
+					dirent.m_cluster == ((FatDirectory *)rDir.GetParent())->GetStartCluster())
 				continue;			//'..'
 			if (dirent.m_cluster == 0)
 				continue;			//'..' one level in

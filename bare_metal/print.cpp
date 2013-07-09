@@ -21,7 +21,7 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 			char c = p[count];
 			if (c == '\n')
 			{
-				PrintChar('\r');
+//				PrintChar('\r');
 				PrintChar('\n');
 			}
 			else
@@ -34,7 +34,7 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 			char c = *p++;
 			if (c == '\n')
 			{
-				PrintChar('\r');
+//				PrintChar('\r');
 				PrintChar('\n');
 			}
 			else

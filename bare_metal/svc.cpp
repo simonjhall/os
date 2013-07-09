@@ -138,7 +138,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 45:		//sys_brk
 	{
-		unsigned int current = (unsigned int)GetHighBrk();
+		ASSERT(0);
+		unsigned int current = /*(unsigned int)GetHighBrk();*/0;
 
 		if (pRegisters[0] != 0)		//move it
 		{
@@ -172,7 +173,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 					current += 4096;
 				}
 
-				SetHighBrk((void *)current);
+//				SetHighBrk((void *)current);
+				ASSERT(0);
 //				EnableMmu(true);
 			}
 		}
@@ -198,7 +200,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 				char c = pBuf[count];
 				if (c == '\n')
 				{
-					p.PrintChar('\r');
+//					p.PrintChar('\r');
 					p.PrintChar('\n');
 				}
 				else
