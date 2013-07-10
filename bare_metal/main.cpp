@@ -649,7 +649,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
-	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+	//BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 

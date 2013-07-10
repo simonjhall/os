@@ -14,6 +14,8 @@
 #include "elf.h"
 
 #include <list>
+#include <elf.h>
+#include <link.h>
 
 enum Mode
 {
@@ -119,19 +121,31 @@ class Process
 public:
 	enum State
 	{
+		kInitialising,
 		kRunnable,
 		kStopped,
 		kDead,
 	};
 
 	Process(ProcessFS &, const char *, BaseFS &rVfs, File &rLoader);
+	~Process();
+
+	void SetDefaultStdio(void);
+	void SetStdio(File &rStdio, File &rStdout, File &rStderr);
+
+	void AddArgument(const char *);
+	void SetEnvironment(const char *);
+
+	void MakeRunnable(void);
+
 	void MapProcess(void);
 
 	void *GetBrk(void);
 	void SetBrk(void *);
 protected:
 	//list of all the attached threads in the process
-	std::list<Thread> m_threads;
+	std::list<Thread *> m_threads;
+	Thread *m_pMainThread;
 	//program run state
 	State m_state;
 
@@ -152,11 +166,15 @@ protected:
 	//ld-linux
 	File &m_rLoader;
 
-	//file handles
-	int m_exeFd, m_ldFd;
+	//aux vector
+	static const int sm_auxSize = 6;
+	ElfW(auxv_t) m_auxVec[sm_auxSize];
 
 private:
 	static char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr);
+
+	std::list<char *> m_arguments;
+	char *m_pEnvironment;
 };
 
 extern "C" void Resume(ExceptionState *);

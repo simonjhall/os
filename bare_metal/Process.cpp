@@ -8,7 +8,7 @@
 #include "Process.h"
 #include "common.h"
 #include "virt_memory.h"
-#include "phys_memory.h"#
+#include "phys_memory.h"
 
 #include <fcntl.h>
 #include <string.h>
@@ -20,12 +20,14 @@ namespace VirtMem
 }
 
 Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLoader)
-: m_rPfs(rPfs),
+: m_pMainThread(0),
+  m_rPfs(rPfs),
   m_rVfs(rVfs),
   m_pExeFile(0),
-  m_rLoader(rLoader)
+  m_rLoader(rLoader),
+  m_pEnvironment(0)
 {
-	static const int length = 500;
+	const int length = 500;
 	char string[length];
 
 	//build the file name
@@ -44,39 +46,64 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 	}
 	m_pExeFile = (File *)pTemp;
 
-	//open stdio
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdin", O_RDONLY)) == 0);
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdout", O_RDONLY)) == 1);
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stderr", O_RDONLY)) == 2);
-
-	m_exeFd = m_rPfs.Open(*m_pExeFile);
-	m_ldFd = m_rPfs.Open(rLoader);
-
 	//get their sizes
 	stat64 exe_stat, ld_stat;
-	m_rPfs.GetFile(m_exeFd)->Fstat(exe_stat);
-	m_rPfs.GetFile(m_ldFd)->Fstat(ld_stat);
+	m_pExeFile->Fstat(exe_stat);
+	rLoader.Fstat(ld_stat);
 
 	//allocate some memory for loading (in the kernel)
 	unsigned char *pProgramData, *pInterpData;
 	pProgramData = new unsigned char[exe_stat.st_size];
-	ASSERT(pProgramData);
+	if (!pProgramData)
+	{
+		m_rVfs.Close(*pTemp);
+
+		m_state = kDead;
+		return;
+	}
+
 	pInterpData = new unsigned char[ld_stat.st_size];
-	ASSERT(pInterpData);
+	if (!pInterpData)
+	{
+		delete[] pProgramData;
+
+		m_rVfs.Close(*pTemp);
+
+		m_state = kDead;
+		return;
+	}
 
 	//allocate the lo page table
 	if (!VirtMem::g_masterTables.Allocate(&m_pVirtTable))
-		ASSERT(0);
+	{
+		delete[] pProgramData;
+		delete[] pInterpData;
+
+		m_rVfs.Close(*pTemp);
+
+		m_state = kDead;
+		return;
+	}
 
 	if (!VirtMem::VirtToPhys(m_pVirtTable, &m_pPhysTable))
-		ASSERT(0);
+	{
+		VirtMem::g_masterTables.Free(m_pVirtTable);
+
+		delete[] pProgramData;
+		delete[] pInterpData;
+
+		m_rVfs.Close(*pTemp);
+
+		m_state = kDead;
+		return;
+	}
 
 	//install the table
 	MapProcess();
 
 	//load the files
-	m_rPfs.GetFile(m_exeFd)->Read(pProgramData, exe_stat.st_size);
-	m_rPfs.GetFile(m_ldFd)->Read(pInterpData, ld_stat.st_size);
+	m_pExeFile->ReadFrom(pProgramData, exe_stat.st_size, 0);
+	rLoader.ReadFrom(pInterpData, ld_stat.st_size, 0);
 
 	//parse the files
 	Elf startingElf, interpElf;
@@ -87,12 +114,59 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 	bool has_tls = false;
 	unsigned int tls_memsize, tls_filesize, tls_vaddr;
 
+	//prepare the memory map
 	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	ASSERT(has_tls == false);
 	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	SetBrk((void *)0x10000000);
 
-//	m_threads.push_back(*new Thread(entryPoint, this, false, 1, 0));
+	//allocate a stack
+	if (!VirtMem::AllocAndMapVirtContig((void *)(0x80000000 - 4096), 1, false,
+			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+		ASSERT(0);
+
+	//prepare the aux vector
+	m_auxVec[0].a_type = AT_PHDR;
+	m_auxVec[0].a_un.a_val = 0x8000 + 52;
+
+	m_auxVec[1].a_type = AT_PHNUM;
+	m_auxVec[1].a_un.a_val = startingElf.GetNumProgramHeaders();
+
+	m_auxVec[2].a_type = AT_ENTRY;
+	m_auxVec[2].a_un.a_val = (unsigned int)startingElf.GetEntryPoint();;
+
+	m_auxVec[3].a_type = AT_BASE;
+	m_auxVec[3].a_un.a_val = 0x70000000;
+
+	m_auxVec[4].a_type = AT_PAGESZ;
+	m_auxVec[4].a_un.a_val = 4096;
+
+	m_auxVec[5].a_type = AT_NULL;
+	m_auxVec[5].a_un.a_val = 0;
+
+	//push arg 0
+	AddArgument(pFilename);
+
+	//free the temp loading memory
+	delete[] pProgramData;
+	delete[] pInterpData;
+
+	m_state = kInitialising;
+
+	//construct the thread
+	if (pInterpName)
+		m_pMainThread = new Thread((unsigned int)interpElf.GetEntryPoint() + 0x70000000,
+				this, false, 1, 0);
+	else
+		m_pMainThread = new Thread((unsigned int)(unsigned int)startingElf.GetEntryPoint(),
+				this, false, 1, 0);
+
+	ASSERT(m_pMainThread);
+	m_threads.push_back(m_pMainThread);
+}
+
+Process::~Process()
+{
 }
 
 void Process::MapProcess(void)
@@ -108,6 +182,80 @@ void* Process::GetBrk(void)
 void Process::SetBrk(void *p)
 {
 	m_pBrk = p;
+}
+
+void Process::SetDefaultStdio(void)
+{
+	//open stdio
+	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdin", O_RDONLY)) == 0);
+	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdout", O_RDONLY)) == 1);
+	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stderr", O_RDONLY)) == 2);
+}
+
+void Process::SetStdio(File& rStdio, File& rStdout, File& rStderr)
+{
+	ASSERT(m_rPfs.Open(rStdio) == 0);
+	ASSERT(m_rPfs.Open(rStdout) == 1);
+	ASSERT(m_rPfs.Open(rStderr) == 2);
+}
+
+void Process::AddArgument(const char *p)
+{
+	ASSERT(p);
+	char *pBuffer = new char[strlen(p) + 1];
+	ASSERT(pBuffer);
+
+	strcpy(pBuffer, p);
+
+	m_arguments.push_back(pBuffer);
+}
+
+void Process::SetEnvironment(const char *p)
+{
+	ASSERT(p);
+	char *pBuffer = new char[strlen(p) + 1];
+	ASSERT(pBuffer);
+
+	strcpy(pBuffer, p);
+
+	m_pEnvironment = pBuffer;
+}
+
+void Process::MakeRunnable(void)
+{
+	ASSERT(m_state == kInitialising);
+
+	//get number of arguments
+	unsigned int numArgs = m_arguments.size();
+	ASSERT(numArgs);
+
+	//check there's an environment
+	ASSERT(m_pEnvironment);
+
+	//compute word offset from sp of pAuxVec
+	unsigned int wordOffset = numArgs + 1	//for zero
+								+ 1			//for enviroment
+								+ 1			//for another zero
+								+ 1;		//for the stack pointer itself
+
+	//size of the aux vector
+	const unsigned int auxSize = sizeof(m_auxVec);
+
+	//size of all the text
+	unsigned int textSize = strlen(m_pEnvironment) + 1;
+
+	for (auto it = m_arguments.begin(); it != m_arguments.end(); it++)
+		textSize += strlen(*it) + 1;
+
+	//compute the stack position, and round it down to be 8b aligned
+	unsigned int sp = 0x80000000 - 8;
+	sp = sp - textSize - auxSize - wordOffset * sizeof(int);
+	sp = sp & ~7;
+
+	unsigned char *pSp = (unsigned char *)sp;
+
+	//copy in aux vector
+	memcpy(pSp + wordOffset * sizeof(int), &m_auxVec, auxSize);
 }
 
 char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
@@ -194,6 +342,8 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
   m_priority(priority)
 {
 	ASSERT(stackSizePages == 1);
+
+	memset(&m_pausedState, 0, sizeof(m_pausedState));
 
 	m_pausedState.m_newPc = entryPoint;
 	m_pausedState.m_spsr.m_t = entryPoint & 1;
