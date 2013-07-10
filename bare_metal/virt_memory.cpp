@@ -429,8 +429,8 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault, bool hi
 			TranslationTable::TableEntryL2 *pL2Phys = pL1Virt[count].pageTable.GetPhysPageTable();
 			TranslationTable::TableEntryL2 *pL2Virt;
 
-			if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt))
-				p << "\tNO PHYS->VIRT MAPPING FOR PAGE TABLE\n";
+			if (!VirtMem::PhysToVirt(pL2Phys, &pL2Virt, g_subTables.GetVirtBaseInMb(), g_subTables.GetLengthMb()))
+				p << "\tNO PHYS->VIRT MAPPING FOR PAGE TABLE IN NORMAL POOL\n";
 			else
 			{
 				for (unsigned int inner = 0; inner < 256; inner++)

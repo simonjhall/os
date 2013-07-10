@@ -79,6 +79,7 @@ struct ExceptionState
 };
 
 class Process;
+class Scheduler;
 
 class Thread
 {
@@ -92,7 +93,7 @@ public:
 	};
 
 	Thread(unsigned int entryPoint, Process *pParent, bool priv,
-			unsigned int stackSizePages, int priority);
+			unsigned int stackSizePages, int priority, unsigned int userStack = 0);
 
 	State GetState(void);
 	bool SetState(State s);
@@ -102,6 +103,8 @@ public:
 	void HaveSavedState(ExceptionState);
 	bool Run(void);
 	bool RunAsHandler(Thread &rBlocked);
+
+	friend void Handler(unsigned int arg0, unsigned int arg1);
 
 protected:
 	//process attached to
@@ -140,6 +143,9 @@ public:
 
 	void MapProcess(void);
 
+	void Schedule(Scheduler &rSched);
+	void Deschedule(Scheduler &rSched);
+
 	void *GetBrk(void);
 	void SetBrk(void *);
 protected:
@@ -175,6 +181,7 @@ private:
 
 	std::list<char *> m_arguments;
 	char *m_pEnvironment;
+	unsigned int m_entryPoint;
 };
 
 extern "C" void Resume(ExceptionState *);

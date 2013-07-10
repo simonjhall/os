@@ -27,7 +27,7 @@ public:
 	virtual void AddThread(Thread &);
 	virtual bool AddSpecialThread(Thread &, SpecialType);
 
-	virtual void RemoveThread(Thread &, SpecialType);
+	virtual void RemoveThread(Thread &, SpecialType = kNormal);
 
 	virtual void OnThreadBlock(Thread &);
 	virtual void OnThreadUnblock(Thread &);

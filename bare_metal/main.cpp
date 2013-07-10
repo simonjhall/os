@@ -649,13 +649,30 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
-	//BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
-	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
+	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
-	Process busybox(*new ProcessFS("/Volumes/sd/minimal", "/"),
+	Process *pBusybox = new Process(*new ProcessFS("/Volumes/sd/minimal", "/"),
 			"/bin/busybox", *vfs, *(File *)pLoader);
+	pBusybox->SetDefaultStdio();
+	pBusybox->SetEnvironment("LD_DEBUG=all");
+	pBusybox->AddArgument("ls");
+	pBusybox->AddArgument("-1");
+
+	pBusybox->MakeRunnable();
+
+	pBusybox->Schedule(Scheduler::GetMasterScheduler());
+
+	Thread *pBlocked;
+	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
+	ASSERT(!pBlocked);
+	ASSERT(pThread);
+
+	pThread->Run();
+
+	while(1);
 
 #if 0
 
@@ -666,10 +683,10 @@ extern "C" void Setup(unsigned int entryPoint)
 	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdout", O_RDONLY)) == 1);
 	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stderr", O_RDONLY)) == 2);
 
-	BaseDirent *busybox = vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
+	BaseDirent *pBusybox = vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
 			O_RDONLY);
-	ASSERT(busybox);
-	int exe = pfsA->Open(*busybox);
+	ASSERT(pBusybox);
+	int exe = pfsA->Open(*pBusybox);
 	BaseDirent *ld_minimal = vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-minimal.so", string, 500),
 			O_RDONLY);
 	ASSERT(ld_minimal);

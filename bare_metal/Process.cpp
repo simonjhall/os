@@ -6,6 +6,7 @@
  */
 
 #include "Process.h"
+#include "Scheduler.h"
 #include "common.h"
 #include "virt_memory.h"
 #include "phys_memory.h"
@@ -98,6 +99,10 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 		return;
 	}
 
+	//clear the table
+	for (unsigned int count = 0; count < 2048; count++)
+		m_pVirtTable->e[count].fault.Init();
+
 	//install the table
 	MapProcess();
 
@@ -155,14 +160,11 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 
 	//construct the thread
 	if (pInterpName)
-		m_pMainThread = new Thread((unsigned int)interpElf.GetEntryPoint() + 0x70000000,
-				this, false, 1, 0);
+		m_entryPoint = (unsigned int)interpElf.GetEntryPoint() + 0x70000000;
 	else
-		m_pMainThread = new Thread((unsigned int)(unsigned int)startingElf.GetEntryPoint(),
-				this, false, 1, 0);
+		m_entryPoint = (unsigned int)startingElf.GetEntryPoint();
 
-	ASSERT(m_pMainThread);
-	m_threads.push_back(m_pMainThread);
+	VirtMem::DumpVirtToPhys(0, (void *)0x7fffffff, true, true, false);
 }
 
 Process::~Process()
@@ -252,10 +254,66 @@ void Process::MakeRunnable(void)
 	sp = sp - textSize - auxSize - wordOffset * sizeof(int);
 	sp = sp & ~7;
 
-	unsigned char *pSp = (unsigned char *)sp;
+	char *pSp = (char *)sp;
+	pSp += wordOffset * sizeof(int);
 
 	//copy in aux vector
-	memcpy(pSp + wordOffset * sizeof(int), &m_auxVec, auxSize);
+	memcpy(pSp, &m_auxVec, auxSize);
+	pSp += auxSize;
+
+	//now fill in some text
+	strcpy(pSp, m_pEnvironment);
+	char *envPos = pSp;
+	pSp += strlen(m_pEnvironment) + 1;
+
+	unsigned int slot = 0;
+	//number of arguments
+	*(unsigned int *)(sp + slot++ * sizeof(int)) = m_arguments.size();
+
+	for (auto it = m_arguments.begin(); it != m_arguments.end(); it++)
+	{
+		strcpy(pSp, *it);
+		*(unsigned int *)(sp + slot++ * sizeof(int)) = (unsigned int)pSp;
+		pSp += strlen(*it) + 1;
+	}
+
+	//a zero once we're out of args
+	*(unsigned int *)(sp + slot++ * sizeof(int)) = 0;
+
+	//env slot
+	*(unsigned int *)(sp + slot++ * sizeof(int)) = (unsigned int)envPos;
+
+	//a zero after the env
+	*(unsigned int *)(sp + slot++ * sizeof(int)) = 0;
+
+	//construct the thread
+	m_pMainThread = new Thread(m_entryPoint,
+		this, false, 1, 0, sp);
+
+	ASSERT(m_pMainThread);
+	m_threads.push_back(m_pMainThread);
+
+	m_state = kStopped;
+}
+
+void Process::Schedule(Scheduler& rSched)
+{
+	ASSERT(m_state == kStopped);
+
+	for (auto it = m_threads.begin(); it != m_threads.end(); it++)
+		rSched.AddThread(**it);
+
+	m_state = kRunnable;
+}
+
+void Process::Deschedule(Scheduler& rSched)
+{
+	ASSERT(m_state == kRunnable);
+
+	for (auto it = m_threads.begin(); it != m_threads.end(); it++)
+		rSched.RemoveThread(**it);
+
+	m_state = kStopped;
 }
 
 char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
@@ -336,7 +394,7 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 }
 
 Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
-		unsigned int stackSizePages, int priority)
+		unsigned int stackSizePages, int priority, unsigned int userStack)
 : m_pParent(pParent),
   m_isPriv(priv),
   m_priority(priority)
@@ -360,6 +418,11 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 
 		m_pausedState.m_regs[13] = (unsigned int)sp;
 		m_pausedState.m_spsr.m_mode = kSystem;
+	}
+	else
+	{
+		m_pausedState.m_regs[13] = userStack;
+		m_pausedState.m_spsr.m_mode = kUser;
 	}
 }
 

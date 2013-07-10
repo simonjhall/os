@@ -165,6 +165,14 @@ void Handler(unsigned int arg0, unsigned int arg1)
 		ASSERT(pBlocked);
 		p << "in handler for thread " << pBlocked << "\n";
 
+		switch (pBlocked->m_pausedState.m_mode)
+		{
+		case VectorTable::kSupervisorCall:
+
+		default:
+			ASSERT(0);
+		}
+
 		pBlocked->Unblock();
 		Scheduler::GetMasterScheduler().OnThreadUnblock(*pBlocked);
 
