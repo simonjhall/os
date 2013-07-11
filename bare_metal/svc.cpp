@@ -14,6 +14,8 @@
 #include "phys_memory.h"
 #include "virt_memory.h"
 #include "translation_table.h"
+#include "Process.h"
+#include "Scheduler.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,24 +28,24 @@
 #include <poll.h>
 #include <errno.h>
 
-extern unsigned int stored_state;
+//extern unsigned int stored_state;
 
 //extern unsigned int _binary_libgcc_s_so_1_start;
 //extern unsigned int _binary_libgcc_s_so_1_size;
-unsigned int libgcc_offset = 0;
+//unsigned int libgcc_offset = 0;
 
 //extern unsigned int _binary_libc_2_17_so_start;
 //extern unsigned int _binary_libc_2_17_so_size;
-unsigned int libc_offset = 0;
+//unsigned int libc_offset = 0;
 
-extern ProcessFS *pfsA;
-extern ProcessFS *pfsB;
-extern VirtualFS *vfs;
+//extern ProcessFS *pfsA;
+//extern ProcessFS *pfsB;
+//extern VirtualFS *vfs;
 
 uid_t g_uid = 0;
 gid_t g_gid = 0;
 
-extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * const pRegisters)
+int SupervisorCall(Thread &rBlocked, Process *pParent)
 {
 	PrinterUart<PL011> p;
 	bool known = false;
@@ -55,7 +57,9 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	p.Print(r7);
 	p.PrintString("\n");*/
 
-	switch (r7)
+	unsigned int *pRegisters = rBlocked.m_pausedState.m_regs;
+
+	switch (pRegisters[7])
 	{
 	case 122:	//sys_newuname
 	{
@@ -81,6 +85,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 5:			//compat_sys_open
 	{
+		ASSERT(pParent);
+
 		const char *pFilename = (char *)pRegisters[0];
 		int flags = (int)pRegisters[1];
 		mode_t mode = (mode_t)pRegisters[2];
@@ -92,14 +98,14 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
 		BaseDirent *f;
-//		f = vfs->OpenByName(pfsB->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+//		f = pParent->m_rVfs.OpenByName(pfsB->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 //		if (f)
 //			return pfsB->Open(*f);
 
-		f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 		if (f)
 		{
-			int fd = pfsA->Open(*f);
+			int fd = pParent->m_rPfs.Open(*f);
 //			p << "fd = " << fd << "\n";
 			return fd;
 		}
@@ -138,8 +144,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 45:		//sys_brk
 	{
-		ASSERT(0);
-		unsigned int current = /*(unsigned int)GetHighBrk();*/0;
+		ASSERT(pParent);
+		unsigned int current = (unsigned int)pParent->GetBrk();
 
 		if (pRegisters[0] != 0)		//move it
 		{
@@ -173,8 +179,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 					current += 4096;
 				}
 
+				pParent->SetBrk((void *)current);
 //				SetHighBrk((void *)current);
-				ASSERT(0);
 //				EnableMmu(true);
 			}
 		}
@@ -215,6 +221,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 3:			//read
 	{
+		ASSERT(pParent);
+
 		unsigned int fd = pRegisters[0];
 		unsigned char *pBuf = (unsigned char *)pRegisters[1];
 		unsigned int len = pRegisters[2];
@@ -258,7 +266,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 //		else
 //			p.PrintString("UNIMPLEMENTED READ\n");
 
-		WrappedFile *f = pfsA->GetFile(fd);
+		WrappedFile *f = pParent->m_rPfs.GetFile(fd);
 		if (f)
 			return f->Read(pBuf, len);
 
@@ -397,8 +405,10 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 //			p.PrintString("UNIMPLEMENTED mmap\n");
 		else
 		{
+			ASSERT(pParent);
+
 			//do it via the file handle instead
-			WrappedFile *f = pfsA->GetFile(file);
+			WrappedFile *f = pParent->m_rPfs.GetFile(file);
 			if (f)
 			{
 				void *mmap_result = f->Mmap2(pDest, length_unrounded, prot, flags, off_pg, false);
@@ -441,6 +451,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 195:		//stat64
 	case 196:		//lstat64
 	{
+		ASSERT(pParent);
+
 		char *pFilename = (char *)pRegisters[0];
 		struct stat64 *pBuf = (struct stat64 *)pRegisters[1];
 
@@ -468,12 +480,12 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
 			bool ok = f->Fstat(*pBuf);
-			vfs->Close(*f);
+			pParent->m_rVfs.Close(*f);
 
 			if (ok)
 				return 0;
@@ -485,6 +497,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 197:		//fstat64
 	{
+		ASSERT(pParent);
+
 		int handle = (int)pRegisters[0];
 		struct stat64 *pBuf = (struct stat64 *)pRegisters[1];
 
@@ -510,7 +524,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 //		else
 //			p.PrintString("UNIMPLEMENTED FSTAT\n");
 
-		WrappedFile *f = pfsA->GetFile(handle);
+		WrappedFile *f = pParent->m_rPfs.GetFile(handle);
 
 		if (f)
 		{
@@ -526,6 +540,8 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 6:			//close
 	{
+		ASSERT(pParent);
+
 		int fd = pRegisters[0];
 //		p.PrintString("UNIMPLEMENTED CLOSE\n");
 //		if (fd == 3)
@@ -539,18 +555,20 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 //			return 0;
 //		}
 
-		if (pfsA->Close(fd))
+		if (pParent->m_rPfs.Close(fd))
 			return 0;
 
 		return -1;
 	}
 	case 217:		//getdents64
 	{
+		ASSERT(pParent);
+
 		int handle = (int)pRegisters[0];
 		linux_dirent64 *pDir = (linux_dirent64 *)pRegisters[1];
 		unsigned int len = pRegisters[2];
 
-		WrappedFile *f = pfsA->GetFile(handle);
+		WrappedFile *f = pParent->m_rPfs.GetFile(handle);
 
 		if (f)
 			return f->Getdents64(pDir, len);
@@ -591,24 +609,26 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 12:		//chdir
 	{
+		ASSERT(pParent);
+
 		char *pBuf = (char *)pRegisters[0];
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pBuf, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pBuf, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
 			if (f->IsDirectory())
 			{
-				vfs->Close(*f);
+				pParent->m_rVfs.Close(*f);
 
-				pfsA->Chdir(pBuf);
+				pParent->m_rPfs.Chdir(pBuf);
 				return 0;
 			}
 			else
 			{
-				vfs->Close(*f);
+				pParent->m_rVfs.Close(*f);
 				return -ENOTDIR;
 			}
 		}
@@ -617,26 +637,30 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	}
 	case 183:		//getcwd
 	{
+		ASSERT(pParent);
+
 		char *pBuf = (char *)pRegisters[0];
 		size_t size = (size_t)pRegisters[1];
 
-		if (pfsA->Getcwd(pBuf, size))
+		if (pParent->m_rPfs.Getcwd(pBuf, size))
 			return (unsigned int)size;			//I disagree...should be ptr
 		else
 			return -ENAMETOOLONG;
 	}
 	case 33:		//access
 	{
+		ASSERT(pParent);
+
 		char *pFilename = (char*)pRegisters[0];
 		int mode = (int)pRegisters[1];
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = vfs->OpenByName(pfsA->BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
-			vfs->Close(*f);
+			pParent->m_rVfs.Close(*f);
 			return 0;
 			//todo check mode
 		}
@@ -668,8 +692,61 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 		return 0;
 	}
 	case 322:		//openat
-		if (!pName)
-			pName = "openat";
+	{
+		ASSERT(pParent);
+
+		int dirfd = pRegisters[0];
+		const char *pFilename = (const char *)pRegisters[1];
+		int flags = pRegisters[2];
+		mode_t mode = (mode_t)pRegisters[3];
+
+		if (dirfd != AT_FDCWD)
+		{
+			p << "openat used with non-special dirfd, " << dirfd << "\n";
+			return -1;
+		}
+
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		BaseDirent *f;
+
+		f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		if (f)
+		{
+			int fd = pParent->m_rPfs.Open(*f);
+			return fd;
+		}
+
+		return -1;
+	}
+	case 248:		//sys_exit_group
+	{
+		if (pParent)
+		{
+			//kill all threads
+			for (auto it = pParent->m_threads.begin(); it != pParent->m_threads.end(); it++)
+				if (!(*it)->SetState(Thread::kDead))
+				{
+					ASSERT(0);
+				}
+				else
+					Scheduler::GetMasterScheduler().RemoveThread(**it);
+
+			delete pParent;
+			pParent = 0;
+
+			//do not use
+			rBlocked.m_pParent = 0;
+		}
+		else
+		{
+			if (!rBlocked.SetState(Thread::kDead))
+				ASSERT(0);
+			Scheduler::GetMasterScheduler().RemoveThread(rBlocked);
+		}
+
+		return 0;
+	}
 	case 120:		//clone
 		if (!pName)
 			pName = "clone";
@@ -700,9 +777,6 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 	case 202:		//getegid32
 		if (!pName)
 			pName = "getegid32";
-	case 248:		//sys_exit_group
-		if (!pName)
-			pName = "sys_exit_group";
 	case 268:		//sys_tgkill
 		if (!pName)
 			pName = "sys_tgkill";
@@ -719,7 +793,7 @@ extern "C" unsigned int SupervisorCall(unsigned int r7, const unsigned int * con
 			p.PrintString("UNKNOWN");
 		p.PrintString("\n");
 		p.PrintString("supervisor call ");
-		p.PrintHex(r7);
+		p.PrintHex(pRegisters[7]);
 		p.PrintString("\n");
 
 		for (int count = 0; count < 7; count++)

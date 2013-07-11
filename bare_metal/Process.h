@@ -98,13 +98,14 @@ public:
 	State GetState(void);
 	bool SetState(State s);
 
-	void Unblock(void);
+	bool Unblock(void);
 
 	void HaveSavedState(ExceptionState);
 	bool Run(void);
 	bool RunAsHandler(Thread &rBlocked);
 
 	friend void Handler(unsigned int arg0, unsigned int arg1);
+	friend int SupervisorCall(Thread &rBlocked, Process *pParent);
 
 protected:
 	//process attached to
@@ -148,6 +149,8 @@ public:
 
 	void *GetBrk(void);
 	void SetBrk(void *);
+
+	friend int SupervisorCall(Thread &rBlocked, Process *pParent);
 protected:
 	//list of all the attached threads in the process
 	std::list<Thread *> m_threads;
@@ -173,7 +176,7 @@ protected:
 	File &m_rLoader;
 
 	//aux vector
-	static const int sm_auxSize = 6;
+	static const int sm_auxSize = 7;
 	ElfW(auxv_t) m_auxVec[sm_auxSize];
 
 private:

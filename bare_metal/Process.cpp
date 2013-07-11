@@ -146,8 +146,11 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 	m_auxVec[4].a_type = AT_PAGESZ;
 	m_auxVec[4].a_un.a_val = 4096;
 
-	m_auxVec[5].a_type = AT_NULL;
-	m_auxVec[5].a_un.a_val = 0;
+	m_auxVec[5].a_type = AT_RANDOM;
+	m_auxVec[5].a_un.a_val = (unsigned int)&m_auxVec[5].a_un.a_val;			//why not
+
+	m_auxVec[sm_auxSize - 1].a_type = AT_NULL;
+	m_auxVec[sm_auxSize - 1].a_un.a_val = 0;
 
 	//push arg 0
 	AddArgument(pFilename);
@@ -445,11 +448,20 @@ bool Thread::SetState(State target)
 			return false;
 
 	case kDead:				//not going anywhere
+		if (target == kDead)
+			return true;
+		return false;
+
 	case kBlocked:
+		if (target == kDead)
+		{
+			m_state = target;
+			return true;
+		}
 		return false;		//needs an unblock
 
 	case kRunnable:
-		if (target == kRunning)
+		if (target == kRunning || target == kDead)
 		{
 			m_state = target;
 			return true;
@@ -463,9 +475,15 @@ bool Thread::SetState(State target)
 	}
 }
 
-void Thread::Unblock(void)
+bool Thread::Unblock(void)
 {
-	m_state = kRunnable;
+	if (m_state == kBlocked)
+	{
+		m_state = kRunnable;
+		return true;
+	}
+	else
+		return false;
 }
 
 void Thread::HaveSavedState(ExceptionState exceptionState)

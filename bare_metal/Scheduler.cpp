@@ -30,13 +30,13 @@ void Scheduler::RemoveThread(Thread &rThread, SpecialType t)
 	{
 	case kNormal:
 		m_allNormalThreads.remove(&rThread);
-		return;
+		break;
 	case kIdleThread:
 		m_pIdleThread = 0;
-		return;
+		break;
 	case kHandlerThread:
 		m_pHandlerThread = 0;
-		return;
+		break;
 	}
 
 	OnThreadRemove(rThread, t);
@@ -186,6 +186,27 @@ Thread* RoundRobin::PickNext(Thread **ppBlocked)
 		//set next to be running
 		SetRunning(pNext);
 
+		return pNext;
+	}
+	else if (m_pIdleThread)		//not really going to come back from here though...
+	{
+		static bool message = false;
+
+		if (!message)
+		{
+			PrinterUart<PL011> p;
+			p << "no threads to run, scheduling idle thread\n";
+			message = true;
+		}
+
+		Thread *pNext = m_pIdleThread;
+		if (!pNext->SetState(Thread::kRunning))
+			ASSERT(0);			//idle thread blocked or dead??
+
+		if (WhatIsRunning() && WhatIsRunning() != pNext)	//but it may have done that itself already (kBlocked)
+			WhatIsRunning()->SetState(Thread::kRunnable);
+
+		SetRunning(pNext);
 		return pNext;
 	}
 	else

@@ -188,21 +188,21 @@ static void MapKernel(unsigned int physEntryPoint)
 //    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
     //executable top section
-//    pEntries[4095].section.Init(PhysPages::FindMultiplePages(256, 8),
-//    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    VirtMem::MapPhysToVirt(PhysPages::FindPage(), (void *)0xffff0000, 4096, true,
+    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
   /*  pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     memset((void *)(4094U * 1048576), 0, 1048576);
 
-
+*/
     //copy in the high code
     unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
     unsigned char *pHighSource = (unsigned char *)&TlsLow;
 
     for (unsigned int count = 0; count < (unsigned int)&TlsHigh - (unsigned int)&TlsLow; count++)
     	pHighCode[count] = pHighSource[count];
-*/
+
     //set the emulation value
     *(unsigned int *)(0xffff0fe0 - 4) = 0;
     //set the register value
@@ -649,8 +649,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
-	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
-//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
+//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
@@ -658,8 +658,9 @@ extern "C" void Setup(unsigned int entryPoint)
 			"/bin/busybox", *vfs, *(File *)pLoader);
 	pBusybox->SetDefaultStdio();
 	pBusybox->SetEnvironment("LD_DEBUG=all");
-	pBusybox->AddArgument("ls");
-	pBusybox->AddArgument("-1");
+	pBusybox->AddArgument("find");
+//	pBusybox->AddArgument("-l");
+//	pBusybox->AddArgument("/");
 
 	pBusybox->MakeRunnable();
 

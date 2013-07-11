@@ -60,9 +60,15 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			else
 				pState->m_returnAddress -= 4;
 
-			p << "system call at at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
+//			p << "system call at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
+//			p << "call is "; p.PrintDec(pState->m_regs[7], false); p << "\n";
 
 			if (pState->m_regs[7] == 158)	//yield
+			{
+				pThread->SetState(Thread::kRunnable);
+				pState->m_regs[0] = 0;			//no error
+			}
+			else if (pState->m_regs[7] == 1)
 			{
 				pThread->SetState(Thread::kRunnable);
 				pState->m_regs[0] = 0;			//no error
@@ -163,18 +169,19 @@ void Handler(unsigned int arg0, unsigned int arg1)
 	while (1)
 	{
 		ASSERT(pBlocked);
-		p << "in handler for thread " << pBlocked << "\n";
+//		p << "in handler for thread " << pBlocked << "\n";
 
 		switch (pBlocked->m_pausedState.m_mode)
 		{
 		case VectorTable::kSupervisorCall:
-
+			pBlocked->m_pausedState.m_regs[0] = SupervisorCall(*pBlocked, pBlocked->m_pParent);
+			break;
 		default:
 			ASSERT(0);
 		}
 
-		pBlocked->Unblock();
-		Scheduler::GetMasterScheduler().OnThreadUnblock(*pBlocked);
+		if (pBlocked->Unblock())	//may be dead
+			Scheduler::GetMasterScheduler().OnThreadUnblock(*pBlocked);
 
 		pBlocked = HandlerYield();
 	}
