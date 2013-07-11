@@ -129,6 +129,9 @@ bool InitL1L2Allocators(void)
 	if (!VirtToPhys(g_pPageTableMasterL1VirtLo, &g_pPageTableMasterL1PhysLo))
 		ASSERT(0);
 
+	for (unsigned int count = 0; count < 4096; count++)
+		g_pPageTableMasterL1VirtLo->e[count].fault.Init();
+
 	return true;
 }
 

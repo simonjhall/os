@@ -15,7 +15,8 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 	bool thumb = pState->m_spsr.m_t;
 
 	Thread *pThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThread);
+
+	bool uninterruptable = Scheduler::GetMasterScheduler().IsUninterruptableRunning();
 
 	switch (m)
 	{
@@ -46,6 +47,9 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
+			ASSERT(!uninterruptable);
+
+			ASSERT(pThread);
 			pThread->SetState(Thread::kBlocked);
 			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
@@ -63,18 +67,21 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 //			p << "system call at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
 //			p << "call is "; p.PrintDec(pState->m_regs[7], false); p << "\n";
 
+			ASSERT(pThread);
+
 			if (pState->m_regs[7] == 158)	//yield
 			{
 				pThread->SetState(Thread::kRunnable);
 				pState->m_regs[0] = 0;			//no error
 			}
-			else if (pState->m_regs[7] == 1)
+			else if (pState->m_regs[7] == 1)	//exit
 			{
 				pThread->SetState(Thread::kRunnable);
 				pState->m_regs[0] = 0;			//no error
 			}
 			else
 			{
+				ASSERT(!uninterruptable);
 				pThread->SetState(Thread::kBlocked);
 				Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			}
@@ -93,6 +100,9 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
+			ASSERT(!uninterruptable);
+			ASSERT(pThread);
+
 			pThread->SetState(Thread::kBlocked);
 			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
@@ -109,6 +119,9 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
 
+			ASSERT(!uninterruptable);
+			ASSERT(pThread);
+
 			pThread->SetState(Thread::kBlocked);
 			Scheduler::GetMasterScheduler().OnThreadBlock(*pThread);
 			break;
@@ -120,15 +133,20 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			//return to the unfinished instruction
 			pState->m_newPc = pState->m_returnAddress;
 
-			p << "irq at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
+		/*	p << "irq at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
-
+*/
 			//run all the interrupt handlers, and clear recorded interrupts
 			//we can't enqueue them all in a list and run them elsewhere as interrupts will be turned on
 			//and we'll come right back here
 			Irq();
+
+			if (uninterruptable || !pThread)
+				Resume(pState);
+
+			ASSERT(pThread);
 
 			pThread->SetState(Thread::kRunnable);
 			break;

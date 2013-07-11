@@ -40,10 +40,19 @@ void *internal_mmap(void *addr, size_t length, int prot, int flags,
 	unsigned int length_rounded = (length + 4095) & ~4095;
 	unsigned int length_pages = length_rounded >> 12;
 
-	if (isPriv && addr < (void *)0x80000000)
+	if ((isPriv && addr < (void *)0x80000000) || (!isPriv && addr >= (void *)0x80000000))
+	{
+		PrinterUart<PL011> p;
+		p << "illegal mmap\n";
+		p << addr << "\n";
+		p << length << "\n";
+		p << prot << "\n";
+		p << flags << "\n";
+		p << f << "\n";
+//		p << offset << "\n";
+		p << isPriv << "\n";
 		ASSERT(0);
-	if (!isPriv && addr >= (void *)0x80000000)
-		ASSERT(0);
+	}
 
 	if (VirtMem::AllocAndMapVirtContig(addr, length_pages, isPriv,
 			isPriv ? TranslationTable::kRwRo : TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))

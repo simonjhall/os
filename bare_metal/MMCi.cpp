@@ -192,7 +192,7 @@ bool MMCi::Reset(void)
 		}
 	}
 
-	ClockFrequencyChange(sm_400kHzClock);
+	ClockFrequencyChange(/*sm_400kHzClock*/25);
 
 	p << "going idle state\n";
 	GoIdleState();
@@ -323,13 +323,13 @@ void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 		}
 		else
 		{
-			DelayMillisecond();
+			/*DelayMillisecond();
 			count++;
 			if (count > 10)
 			{
 				p << "command " << c << " did not complete, stat is " << stat << "\n";
 				return;
-			}
+			}*/
 		}
 	}
 }

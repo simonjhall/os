@@ -104,6 +104,8 @@ public:
 	bool Run(void);
 	bool RunAsHandler(Thread &rBlocked);
 
+	void SetName(const char *);
+
 	friend void Handler(unsigned int arg0, unsigned int arg1);
 	friend int SupervisorCall(Thread &rBlocked, Process *pParent);
 
@@ -118,6 +120,9 @@ protected:
 	State m_state;
 	//thread priority
 	int m_priority;
+
+	static const int sm_nameLength = 15;
+	char m_name[sm_nameLength];
 };
 
 class Process

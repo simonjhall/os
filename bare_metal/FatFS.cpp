@@ -17,17 +17,33 @@ FatFS::FatFS(BlockDevice &rDevice)
 	ReadBpb();
 	ReadEbr();
 
+	PrinterUart<PL011> p;
+	p << "bpb and ebr read\n";
+
+	p << "BPB\n";
+	p << "\t" << m_biosParameterBlock.m_oemIdentifier << "\n";
+	p << "\tbytes per sector " << m_biosParameterBlock.m_bytesPerSector << "\n";
+	p << "\tsectors per cluster " << m_biosParameterBlock.m_sectorsPerCluster << "\n";
+	p << "\treserved sectors " << m_biosParameterBlock.m_reservedSectors << "\n";
+	p << "\tnum fats " << m_biosParameterBlock.m_numFats << "\n";
+
 	unsigned int fatSize = FatSize();
+	p << "fat size is " << fatSize << "\n";
+
 	void *pFat = (void *)new char[fatSize];
 	ASSERT(pFat);
 
 	HaveFatMemory(pFat);
 	LoadFat();
 
+	p << "fat loaded\n";
+
 	//insert the root directory
 	m_pRoot = new FatDirectory("", 0, *this, RootDirectoryRelCluster());
 
 	BuildDirectoryStructure();
+
+	p << "directory structure built\n";
 }
 
 FatFS::~FatFS()
@@ -237,9 +253,15 @@ bool FatDirectory::Fstat(struct stat64 &rBuf)
 
 int FatDirectory::FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t &rChild)
 {
+	PrinterUart<PL011> p;
+
 	int written = 0;
 	int base_size = sizeof(linux_dirent64);
 	bool no_more_children = false;
+
+	ASSERT(pOut);
+
+	linux_dirent64 out;
 
 	while (len)
 	{
@@ -253,21 +275,26 @@ int FatDirectory::FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t 
 			break;
 		}
 
-		pOut->d_ino = (unsigned long long)pChild;
-		pOut->d_ino = pOut->d_ino & 0xffffffff;
-		pOut->d_off = rChild;
-		pOut->d_type = pChild->IsDirectory() ? DT_DIR : DT_REG;
+		out.d_ino = (unsigned long long)pChild;
+		out.d_ino = out.d_ino & 0xffffffff;
+		out.d_off = rChild;
+		out.d_type = pChild->IsDirectory() ? DT_DIR : DT_REG;
 
 		size_t name_len = strlen(pChild->GetName()) + 1;
+
 		if (base_size + name_len > len)
 			break;
 
-		strcpy(pOut->d_name, pChild->GetName());
 		len -= base_size;
 		len -= name_len;
 
-		pOut->d_reclen = base_size + name_len;
-		written += pOut->d_reclen;
+		out.d_reclen = base_size + name_len;
+		written += out.d_reclen;
+
+		//copy in to avoid alignment faults, this is really bad
+		memcpy(pOut, &out, sizeof(linux_dirent64));
+		strcpy(pOut->d_name, pChild->GetName());
+
 		pOut = (linux_dirent64 *)((char *)pOut + pOut->d_reclen);
 		rChild++;
 	}
@@ -376,40 +403,48 @@ void FatFS::BuildDirectoryStructure(void)
 
 void FatFS::ListDirectory(FatDirectory &rDir)
 {
+	PrinterUart<PL011> p;
+
 	unsigned int cluster = rDir.GetStartCluster();
 
-	void *pDir = __builtin_alloca(ClusterSizeInBytes() * CountClusters(cluster));
+	void *pDir = new char[ClusterSizeInBytes() * CountClusters(cluster)];
+	ASSERT(pDir);
+
 	ReadClusterChain(pDir, cluster);
 
 	unsigned int slot = 0;
 	unsigned int max_slot = ClusterSizeInBytes() * CountClusters(cluster) / 32;
 
-	FATDirEnt dirent;
+	//todo not necessary, could just be passed down for reuse
+	FATDirEnt *pDirent = new FATDirEnt;
+	ASSERT(pDirent);
 
 	bool ok;
 
 	do
 	{
-		ok = IterateDirectory(pDir, slot, dirent);
+		ok = IterateDirectory(pDir, slot, *pDirent);
 		if (ok)
 		{
-			if (dirent.m_cluster == cluster)
+			if (pDirent->m_cluster == cluster)
 				continue;			//'.'
 			if (rDir.GetParent() &&			//may be root
-					dirent.m_cluster == ((FatDirectory *)rDir.GetParent())->GetStartCluster())
+					pDirent->m_cluster == ((FatDirectory *)rDir.GetParent())->GetStartCluster())
 				continue;			//'..'
-			if (dirent.m_cluster == 0)
+			if (pDirent->m_cluster == 0)
 				continue;			//'..' one level in
 
-			BaseDirent *pFile;
+//			BaseDirent *pFile;
 
-			if (dirent.m_type == FATDirEnt::kDirectory)
+			p << "making dirent name " << pDirent->m_name << "\n";
+
+			if (pDirent->m_type == FATDirEnt::kDirectory)
 			{
-				FatDirectory *pFile = new FatDirectory(dirent.m_name, &rDir, *this, dirent.m_cluster);
+				FatDirectory *pFile = new FatDirectory(pDirent->m_name, &rDir, *this, pDirent->m_cluster);
 				ListDirectory(*pFile);
 			}
 			else
-				FatFile *pFile = new FatFile(dirent.m_name, &rDir, *this, dirent.m_cluster, dirent.m_size);
+				/*FatFile *pFile = */new FatFile(pDirent->m_name, &rDir, *this, pDirent->m_cluster, pDirent->m_size);
 
 //			p << "file " << dirent.m_name;
 //			p << " rel cluster " << dirent.m_cluster;
@@ -419,6 +454,9 @@ void FatFS::ListDirectory(FatDirectory &rDir)
 //			p << "\n";
 		}
 	} while (slot < max_slot);
+
+	delete pDirent;
+	delete[] (char *)pDir;
 }
 
 bool FatFS::IterateDirectory(void *pCluster, unsigned int &rEntry, FATDirEnt &rOut, bool reentry)

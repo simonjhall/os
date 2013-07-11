@@ -191,6 +191,8 @@ static void MapKernel(unsigned int physEntryPoint)
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), (void *)0xffff0000, 4096, true,
     			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
+    memset((void *)0xffff0000, 0, 4096);
+
   /*  pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
     			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
     memset((void *)(4094U * 1048576), 0, 1048576);
@@ -431,10 +433,16 @@ extern "C" void Setup(unsigned int entryPoint)
 	EnableFiq(true);
 
 	Scheduler::SetMasterScheduler(*new RoundRobin);
-	Scheduler::GetMasterScheduler().AddSpecialThread(*new Thread((unsigned int)&Handler, 0, true, 1, 0), Scheduler::kHandlerThread);
 
-//	Scheduler::GetMasterScheduler().AddThread(*new Thread((unsigned int)&ThreadFuncA, 0, true, 1, 0));
-	Scheduler::GetMasterScheduler().AddSpecialThread(*new Thread((unsigned int)&IdleThread, 0, true, 1, 0), Scheduler::kIdleThread);
+	Thread *pHandler = new Thread((unsigned int)&Handler, 0, true, 1, 0);
+	ASSERT(pHandler);
+	pHandler->SetName("handler");
+	Scheduler::GetMasterScheduler().AddSpecialThread(*pHandler, Scheduler::kHandlerThread);
+
+	Thread *pIdle = new Thread((unsigned int)&IdleThread, 0, true, 1, 0);
+	ASSERT(pIdle);
+	pIdle->SetName("idle");
+	Scheduler::GetMasterScheduler().AddSpecialThread(*pIdle, Scheduler::kIdleThread);
 
 //	Thread *pBlocked;
 //	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
@@ -444,19 +452,21 @@ extern "C" void Setup(unsigned int entryPoint)
 #ifdef PBES
 	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
 	p << "pic is " << pPic << "\n";
-	pGpTimer2 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef32000, 0, 2);
-	pGpTimer2->SetFrequencyInMicroseconds(1 * 1000 * 1000);
-	pGpTimer2->Enable(true);
+	pTimer1 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef32000, 0, 2);
+	ASSERT(pTimer1);
+	p << "pTimer1 is " << pTimer1 << "\n";
+	pTimer1->SetFrequencyInMicroseconds(1 * 1000 * 1000);
+//	pTimer1->Enable(true);
 
-	pGpTimer10 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef86000, 0, 10);
-	pGpTimer10->SetFrequencyInMicroseconds(1 * 1000 * 1000);
-	pGpTimer10->Enable(true);
+//	pTimer10 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef86000, 0, 10);
+//	pTimer10->SetFrequencyInMicroseconds(1 * 1000 * 1000);
+//	pTimer10->Enable(true);
 
-	p << "timer interrupt " << pGpTimer2->GetInterruptNumber() << "\n";
-	p << "timer interrupt " << pGpTimer10->GetInterruptNumber() << "\n";
+	p << "timer interrupt " << pTimer1->GetInterruptNumber() << "\n";
+//	p << "timer interrupt " << pTimer10->GetInterruptNumber() << "\n";
 
-	pPic->RegisterInterrupt(*pGpTimer2, InterruptController::kIrq);
-	pPic->RegisterInterrupt(*pGpTimer10, InterruptController::kIrq);
+	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
+//	pPic->RegisterInterrupt(*pTimer10, InterruptController::kIrq);
 
 	/*while (1)
 	{
@@ -527,7 +537,19 @@ extern "C" void Setup(unsigned int entryPoint)
 		ASSERT(ok);
 		p << "finished\n";
 
+/*		unsigned int buffer[512];
+		sd.ReadDataFromLogicalAddress(0, buffer, 512);
+
+		for (unsigned int count = 0; count < 512 / 4; count++)
+		{
+			p << buffer[count] << " ";
+			if ((count % 8) == 0)
+				p << "\n";
+		}*/
+
+
 		MBR mbr(sd);
+//		while(1);
 
 //		VirtualFS vfs;
 //		vfs.Mkdir("/", "Volumes");
@@ -649,15 +671,15 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "attaching FAT\n";
 	vfs->Attach(fat, "/Volumes/sd");
 
-//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
-	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
+	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
+//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
 	Process *pBusybox = new Process(*new ProcessFS("/Volumes/sd/minimal", "/"),
 			"/bin/busybox", *vfs, *(File *)pLoader);
 	pBusybox->SetDefaultStdio();
-	pBusybox->SetEnvironment("LD_DEBUG=all");
+	pBusybox->SetEnvironment("LAD_DEBUG=all");
 	pBusybox->AddArgument("find");
 //	pBusybox->AddArgument("-l");
 //	pBusybox->AddArgument("/");
@@ -670,6 +692,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
 	ASSERT(!pBlocked);
 	ASSERT(pThread);
+
+	p << "pTimer1 is " << pTimer1 << "\n";
+
+//	pTimer0->Enable(true);
+	pTimer1->Enable(true);
 
 	pThread->Run();
 

@@ -23,6 +23,7 @@ public:
 
 	virtual Thread *PickNext(Thread **ppBlocked) = 0;
 	virtual Thread *WhatIsRunning(void);
+	virtual bool IsUninterruptableRunning(void);
 
 	virtual void AddThread(Thread &);
 	virtual bool AddSpecialThread(Thread &, SpecialType);

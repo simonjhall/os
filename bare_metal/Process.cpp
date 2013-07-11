@@ -427,6 +427,8 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 		m_pausedState.m_regs[13] = userStack;
 		m_pausedState.m_spsr.m_mode = kUser;
 	}
+
+	memset(m_name, 0, sm_nameLength);
 }
 
 Thread::State Thread::GetState(void)
@@ -521,11 +523,18 @@ bool Thread::RunAsHandler(Thread& rBlocked)
 	else
 		VirtMem::SetL1TableLo(0);
 
-	//run without interrupts
-	m_pausedState.m_spsr.m_i = 1;
-	//and set r1 to be &rBlocked
+	//set r1 to be &rBlocked
 	m_pausedState.m_regs[1] = (unsigned int)&rBlocked;
+	//interrupts are on
 
 	Resume(&m_pausedState);
 	return true;
+}
+
+void Thread::SetName(const char *pName)
+{
+	if (!pName)
+		return;
+
+	strncpy(m_name, pName, sm_nameLength - 1);		//for the null char
 }

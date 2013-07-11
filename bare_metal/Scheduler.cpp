@@ -95,6 +95,14 @@ void Scheduler::OnThreadUnblock(Thread&)
 {
 }
 
+bool Scheduler::IsUninterruptableRunning(void)
+{
+	if (m_pHandlerThread && WhatIsRunning() == m_pHandlerThread)
+		return true;
+	else
+		return false;
+}
+
 void Scheduler::SetRunning(Thread *pThread)
 {
 	m_pRunningThread = pThread;

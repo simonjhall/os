@@ -168,8 +168,8 @@ public:
 		if (GetState() != kTransferState)
 			return false;
 
-		PrinterUart<PL011> p;
-		p << "sd read from logical address " << address << " byte count " << byteCount << "\n";
+//		PrinterUart<PL011> p;
+//		p << "sd read from logical address " << address << " byte count " << byteCount << "\n";
 
 		//read the slack into a dummy buffer
 		unsigned int left_in_pump = 0;
@@ -177,22 +177,22 @@ public:
 		{
 			char dummy[512];
 
-			p << "read until stop high\n";
+//			p << "read until stop high\n";
 
 			ReadDataUntilStop(address & ~511);
 
-			p << "read out data high\n";
+//			p << "read out data high\n";
 			left_in_pump = ReadOutData(dummy, address & 511, 0);
 		}
 		else
 		{
-			p << "read data until stop\n";
+//			p << "read data until stop, address " << address << "\n";
 			ReadDataUntilStop(address);
 		}
 
-		p << "read out data\n";
+//		p << "read out data\n";
 		ReadOutData(pDest, byteCount, left_in_pump);
-		p << "data read ok\n";
+//		p << "data read ok\n";
 
 		//reset the data lines
 		m_pBaseAddress[sm_sysctl] |= (1 << 26);
@@ -264,6 +264,10 @@ protected:
 
 	virtual void PumpBlock(void)
 	{
+		PrinterUart<PL011> p;
+
+//		p << "pump block\n";
+
 		unsigned int status;
 		int timeout = 1000000;
 		do
@@ -283,9 +287,11 @@ protected:
 				}
 			}
 
-//				p << "status is " << status << "\n";
+//			p << "status is " << status << "\n";
 
-		} while ((!status & (1 << 5)));			//buffer read ready
+		} while (!(status & (1 << 5)));			//while buffer read ready bit not set
+
+//		p << "pumped, " << "status is " << status << "\n";
 	}
 
 	virtual unsigned int ReadOutData(void *pDest, unsigned int byteCount, unsigned int bytesLeftInPump)
@@ -305,10 +311,10 @@ protected:
 				m_pBaseAddress[sm_stat] |= (1 << 5);
 			}
 
-
 			if (byteCount >= 4)
 			{
 				*(unsigned int *)outA = m_pBaseAddress[sm_data];
+//				p << "read out " << *(unsigned int *)outA << "\n";
 				outA += 4;
 				byteCount -= 4;
 				bytesLeftInPump -= 4;

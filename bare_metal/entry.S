@@ -142,7 +142,7 @@
 	PRINT_NEWLINE
 .endm
 
-.set PBES,0
+.set PBES,1
 
 #16kb aligned
 #pbes disable
@@ -261,7 +261,7 @@ map_loop:
 	orr r2, #1
 	mcr p15, 0, r2, c2, c0, 2
 
-	#turn on the mmu
+	#turn on the mmu (sctlr)
 	#get the current value
 	mrc p15, 0, r2, c1, c0, 0
 	orr r2, #1					/* enable */
