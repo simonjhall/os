@@ -30,6 +30,8 @@ namespace PhysPages
 
 	void *FindMultiplePages(unsigned int num, unsigned int alignOrder);
 	void ReleaseMultiplePages(unsigned int p, unsigned int num);
+
+	unsigned int PageUsedCount(void);
 }
 
 

@@ -205,7 +205,7 @@ protected:
 			//data control
 			m_pBaseAddress[11] = 1 | (1 << 1);		//enable + read
 
-			*pOutW++ = ((unsigned int *)m_pBaseAddress)[32];
+			*pOutW++ = ((volatile unsigned int *)m_pBaseAddress)[32];
 			byteCount -= 4;
 
 			//qemu issue
@@ -222,7 +222,7 @@ protected:
 			//data control
 			m_pBaseAddress[11] = 1 | (1 << 1);		//enable + read
 
-			*pOutB++ = ((unsigned char *)m_pBaseAddress)[0x80];
+			*pOutB++ = ((volatile unsigned char *)m_pBaseAddress)[0x80];
 			byteCount--;
 
 			//qemu issue

@@ -210,7 +210,7 @@ phys_entry:
 map_loop:
 	#construct a section entry for the phys address
 	#but store twice, once to the target virtual address and one to the physical address
-	mov r4, #0x1e00				/* tex=1 | ap=3 | one | domain=0000| xn=0 | c=1 | b=1 | one | zero*/
+	mov r4, #0x1600				/* tex=1 | ap=1 | one | domain=0000| xn=0 | c=1 | b=1 | one | zero*/
 	orr r4, #0xe
 
 	#phys addr of the section
@@ -295,6 +295,7 @@ done_clear:
 	cps #31
 	ldr sp, =initial_stack
 	ldr r0, =initial_stack_end
+	ldr r0, [r0]
 	mov sp, r0
 	sub sp, #4
 

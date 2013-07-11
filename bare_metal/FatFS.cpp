@@ -403,7 +403,7 @@ void FatFS::BuildDirectoryStructure(void)
 
 void FatFS::ListDirectory(FatDirectory &rDir)
 {
-	PrinterUart<PL011> p;
+//	PrinterUart<PL011> p;
 
 	unsigned int cluster = rDir.GetStartCluster();
 
@@ -436,7 +436,7 @@ void FatFS::ListDirectory(FatDirectory &rDir)
 
 //			BaseDirent *pFile;
 
-			p << "making dirent name " << pDirent->m_name << "\n";
+//			p << "making dirent name " << pDirent->m_name << "\n";
 
 			if (pDirent->m_type == FATDirEnt::kDirectory)
 			{

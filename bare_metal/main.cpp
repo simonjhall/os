@@ -28,7 +28,7 @@ int main(int argc, const char **argv);
 
 const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
-unsigned int initial_stack_end;
+unsigned int initial_stack_end = (unsigned int)&initial_stack[initial_stack_size];
 
 extern "C" void EnableIrq(bool);
 extern "C" void EnableFiq(bool);
@@ -183,21 +183,13 @@ static void MapKernel(unsigned int physEntryPoint)
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, true,
     		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
-//    unsigned int tramp_phys = (unsigned int)&__trampoline_start__ - virt_phys_offset;
-//    VirtMem::MapPhysToVirt((void *)tramp_phys, (void *)((unsigned int)VectorTable::GetTableAddress() + 0x1000), 4096,
-//    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
-
     //executable top section
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), (void *)0xffff0000, 4096, true,
     			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
 
     memset((void *)0xffff0000, 0, 4096);
 
-  /*  pEntries[4094].section.Init(PhysPages::FindMultiplePages(256, 8),
-    			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0);
-    memset((void *)(4094U * 1048576), 0, 1048576);
 
-*/
     //copy in the high code
     unsigned char *pHighCode = (unsigned char *)(0xffff0fe0 - 4);
     unsigned char *pHighSource = (unsigned char *)&TlsLow;
@@ -212,50 +204,9 @@ static void MapKernel(unsigned int physEntryPoint)
     VirtMem::FlushTlb();
 }
 
-unsigned int FillPHdr(Elf &elf, ElfW(Phdr) *pHdr, unsigned int voffset)
-{
-	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
-	{
-		void *pData;
-		unsigned int vaddr;
-		unsigned int memSize, fileSize;
-
-		int p_type = elf.GetProgramHeader(count, &pData, &vaddr, &memSize, &fileSize);
-
-		vaddr += voffset;
-
-		pHdr[count].p_align = 2;
-		pHdr[count].p_filesz = fileSize;
-		pHdr[count].p_flags = 0;
-		pHdr[count].p_memsz = memSize;
-		pHdr[count].p_offset = 0;
-		pHdr[count].p_paddr = vaddr;
-		pHdr[count].p_type = p_type;
-		pHdr[count].p_vaddr = vaddr;
-	}
-
-	return elf.GetNumProgramHeaders();
-}
-
-ProcessFS *pfsA;
-ProcessFS *pfsB;
 VirtualFS *vfs;
 
 extern "C" void m3_entry(void);
-
-void ThreadFuncA(void)
-{
-	PrinterUart<PL011> p;
-
-	while (1)
-	{
-		p << "in thread A\n";
-		for (int count = 0; count < 100; count++)
-			DelayMillisecond();
-
-		InvokeSyscall(0);
-	}
-}
 
 extern "C" void Setup(unsigned int entryPoint)
 {
@@ -444,10 +395,6 @@ extern "C" void Setup(unsigned int entryPoint)
 	pIdle->SetName("idle");
 	Scheduler::GetMasterScheduler().AddSpecialThread(*pIdle, Scheduler::kIdleThread);
 
-//	Thread *pBlocked;
-//	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
-//	ASSERT(!pBlocked);
-//	ASSERT(pThread);
 
 #ifdef PBES
 	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
@@ -468,11 +415,6 @@ extern "C" void Setup(unsigned int entryPoint)
 	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
 //	pPic->RegisterInterrupt(*pTimer10, InterruptController::kIrq);
 
-	/*while (1)
-	{
-		p << pGpTimer2->GetCurrentValue() << " fired " << pGpTimer2->HasInterruptFired() << "\n";
-	}*/
-
 	int swi = 0;
 
 	p << "go\n";
@@ -491,16 +433,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	masterClockClearValue = pTimer0->GetFiqClearValue();
 
 	pPic = new VersatilePb::PL190((volatile unsigned int *)0xfee40000);
+	p << "pic is " << pPic << "\n";
 	pPic->RegisterInterrupt(*pTimer0, InterruptController::kFiq);
 	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
 
-//	pTimer0->Enable(true);
-//	pTimer1->Enable(true);
 #endif
-
-//	pThread->Run();
-//
-//	while(1);
 
 //	{
 #ifdef PBES
@@ -537,111 +474,7 @@ extern "C" void Setup(unsigned int entryPoint)
 		ASSERT(ok);
 		p << "finished\n";
 
-/*		unsigned int buffer[512];
-		sd.ReadDataFromLogicalAddress(0, buffer, 512);
-
-		for (unsigned int count = 0; count < 512 / 4; count++)
-		{
-			p << buffer[count] << " ";
-			if ((count % 8) == 0)
-				p << "\n";
-		}*/
-
-
 		MBR mbr(sd);
-//		while(1);
-
-//		VirtualFS vfs;
-//		vfs.Mkdir("/", "Volumes");
-//		vfs.Mkdir("/Volumes", "sd");
-//
-//		FatFS fat(sd);
-//
-//		vfs.Attach(fat, "/Volumes/sd");
-//
-////		BaseDirent *b = vfs.Locate("/");
-////		b = vfs.Locate("/Volumes");
-////		b = vfs.Locate("/Volumes/sd");
-////		b = vfs.Locate("/Volumes/sd/Libraries");
-////
-////		b = vfs.Locate("/Volumes/sd/Libraries/ld-2.15.so");
-////
-////		b = vfs.Locate("/Volumes/sd/Programs/tester");
-////
-//		fat.Attach(vfs, "/Programs");
-////
-////		b = vfs.Locate("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.15.so");
-//
-//		BaseDirent *f = vfs.OpenByName("/Volumes/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", O_RDONLY);
-//		ASSERT(f);
-//		ProcessFS pfs("/Volumes", "/sd/Programs");
-//
-//		char string[500];
-//		pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.17.so", string, 500);
-//		pfs.BuildFullPath("Volumes/sd/Libraries/ld-2.17.so", string, 500);
-//		pfs.Chdir("Volumes");
-//		pfs.Chdir("/sd");
-//
-//		int fd = pfs.Open(*f);
-//		ASSERT(fd >= 0);
-//		int fd2 = pfs.Dup(fd);
-//		int fd3 = pfs.Dup(fd2);
-//		WrappedFile *w = pfs.GetFile(fd2);
-//		pfs.Close(fd2);
-//		w = pfs.GetFile(fd3);
-//		pfs.Close(fd3);
-//		pfs.Close(fd);
-//		w = pfs.GetFile(fd);
-//
-//		vfs.Mkdir("/", "Devices");
-//
-//		PL011 uart;
-//		Stdio in(Stdio::kStdin, uart, vfs);
-//		vfs.AddOrphanFile("/Devices", in);
-//
-//		BaseDirent *pIn = vfs.OpenByName("/Devices/stdin", O_WRONLY);
-//
-//		Stdio out(Stdio::kStdout, uart, vfs);
-//		vfs.AddOrphanFile("/Devices", out);
-//
-//		BaseDirent *pOut = vfs.OpenByName("/Devices/stdout", O_WRONLY);
-//		((File *)pOut)->WriteTo("hello", strlen("hello"), 0);
-//
-//		TTY tty(in, out, vfs);
-//		vfs.AddOrphanFile("/Devices", tty);
-//
-//		int ld = pfs.Open(*vfs.OpenByName(pfs.BuildFullPath("/sd/Programs/Volumes/sd/Libraries/ld-2.15.so", string, 500),
-//				O_RDONLY));
-//
-//		char elf_header[100];
-//		pfs.GetFile(ld)->Read(elf_header, 100);
-
-//		sd.GoIdleState();
-//		unsigned int ocr = sd.SendOcr();
-//
-//		unsigned int cid = sd.AllSendCid();
-//		unsigned int rela = sd.SendRelativeAddr();
-//
-//		p.PrintString("CID "); p.Print(cid); p.PrintString("\n");
-//		p.PrintString("RCA "); p.Print(rela >> 16); p.PrintString("\n");
-//		p.PrintString("STATUS "); p.Print(rela & 0xffff); p.PrintString("\n");
-//
-//		sd.SelectDeselectCard(rela >> 16);
-//
-//		sd.ReadDataUntilStop(0);
-//
-//		char buffer[100];
-//		sd.ReadOutData(buffer, 100);
-//
-//		sd.StopTransmission();
-//	}
-
-//	asm volatile ("swi 0");
-
-//	p.PrintString("swi\n");
-
-//	asm volatile (".word 0xffffffff\n");
-//	InvokeSyscall(1234);
 
 	p << "creating VFS\n";
 	vfs = new VirtualFS();
@@ -700,160 +533,6 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	pThread->Run();
 
+	ASSERT(0);
 	while(1);
-
-#if 0
-
-	pfsA = new ProcessFS("/Volumes/sd/minimal", "/");
-	char string[500];
-
-	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdin", O_RDONLY)) == 0);
-	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stdout", O_RDONLY)) == 1);
-	ASSERT(pfsA->Open(*vfs->OpenByName("/Devices/stderr", O_RDONLY)) == 2);
-
-	BaseDirent *pBusybox = vfs->OpenByName(pfsA->BuildFullPath("/bin/busybox", string, 500),
-			O_RDONLY);
-	ASSERT(pBusybox);
-	int exe = pfsA->Open(*pBusybox);
-	BaseDirent *ld_minimal = vfs->OpenByName(pfsA->BuildFullPath("/lib/ld-minimal.so", string, 500),
-			O_RDONLY);
-	ASSERT(ld_minimal);
-	int ld = pfsA->Open(*ld_minimal);
-
-	pfsB = new ProcessFS("/Volumes/sd", "/");
-
-
-//	char string[500];
-
-//	int exe = pfsB.Open(*vfs.OpenByName(pfsB.BuildFullPath("/Programs/tester", string, 500),
-//			O_RDONLY));
-//	int ld = pfsB->Open(*vfs->OpenByName(pfsB->BuildFullPath("/Libraries/ld_stripped.so", string, 500),
-//			O_RDONLY));
-
-//	char elf_header[100];
-	stat64 exe_stat, ld_stat;
-	pfsA->GetFile(exe)->Fstat(exe_stat);
-	pfsA->GetFile(ld)->Fstat(ld_stat);
-
-	unsigned char *pProgramData, *pInterpData;
-	pProgramData = new unsigned char[exe_stat.st_size];
-	ASSERT(pProgramData);
-	pInterpData = new unsigned char[ld_stat.st_size];
-	ASSERT(pInterpData);
-
-	pfsA->GetFile(exe)->Read(pProgramData, exe_stat.st_size);
-	pfsA->GetFile(ld)->Read(pInterpData, ld_stat.st_size);
-
-	Elf startingElf, interpElf;
-
-	startingElf.Load(pProgramData, exe_stat.st_size);
-
-	interpElf.Load(pInterpData, ld_stat.st_size);
-
-	bool has_tls = false;
-	unsigned int tls_memsize, tls_filesize, tls_vaddr;
-
-	//////////////////////////////////////
-	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
-	ASSERT(has_tls == false);
-	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
-	SetHighBrk((void *)0x10000000);
-	//////////////////////////////////////
-
-	RfeData rfe;
-//	rfe.m_pPc = &_start;
-	if (pInterpName)
-		rfe.func = (void *)((unsigned int)interpElf.GetEntryPoint() + 0x70000000);
-	else
-		rfe.func = (void *)((unsigned int)startingElf.GetEntryPoint());
-	rfe.m_pSp = (unsigned int *)0xffeffff8;		//4095MB-8b
-
-	memset(&rfe.m_cpsr, 0, 4);
-	rfe.m_cpsr.m_mode = kUser;
-	rfe.m_cpsr.m_a = 1;
-	rfe.m_cpsr.m_i = 0;
-	rfe.m_cpsr.m_f = 0;
-
-	if ((unsigned int)rfe.m_pPc & 1)		//thumb
-		rfe.m_cpsr.m_t = 1;
-
-	//move down enough for some stuff
-	rfe.m_pSp = rfe.m_pSp - 128;
-	//fill in argc
-	rfe.m_pSp[0] = 3;
-	//fill in argv
-	const char *pElfName = "busybox";
-//	const char *pElfName = "pwd";
-	const char *pEnv = "LAD_DEBUG=all";
-
-	ElfW(auxv_t) *pAuxVec = (ElfW(auxv_t) *)&rfe.m_pSp[7];
-	unsigned int aux_size = sizeof(ElfW(auxv_t)) * 6;
-
-	ElfW(Phdr) *pHdr = (ElfW(Phdr) *)((unsigned int)pAuxVec + aux_size);
-
-	pAuxVec[0].a_type = AT_PHDR;
-//	pAuxVec[0].a_un.a_val = (unsigned int)pHdr;
-//	pAuxVec[0].a_un.a_val = (unsigned int)startingElf.GetAllProgramHeaders();
-	pAuxVec[0].a_un.a_val = 0x8000 + 52;
-
-	pAuxVec[1].a_type = AT_PHNUM;
-//	pAuxVec[1].a_un.a_val = 1;
-
-	pAuxVec[2].a_type = AT_ENTRY;
-	pAuxVec[2].a_un.a_val = (unsigned int)startingElf.GetEntryPoint();
-
-	pAuxVec[3].a_type = AT_BASE;
-	pAuxVec[3].a_un.a_val = 0x70000000;
-
-	pAuxVec[4].a_type = AT_PAGESZ;
-	pAuxVec[4].a_un.a_val = 4096;
-
-	pAuxVec[5].a_type = AT_NULL;
-	pAuxVec[5].a_un.a_val = 0;
-
-	/*pHdr->p_align = 2;
-//	pHdr->p_filesz = (unsigned int)&thread_section_mid - (unsigned int)&thread_section_begin;
-//	pHdr->p_memsz = (unsigned int)&thread_section_end - (unsigned int)&thread_section_begin;
-	pHdr->p_offset = 0;
-	pHdr->p_paddr = 0;
-//	pHdr->p_vaddr = (unsigned int)&thread_section_begin;
-	pHdr->p_type = PT_TLS;
-
-	if (has_tls)
-	{
-		pHdr->p_filesz = tls_filesize;
-		pHdr->p_memsz = tls_memsize;
-		pHdr->p_vaddr = tls_vaddr;
-	}
-	else
-	{
-		pHdr->p_filesz = 0;
-		pHdr->p_memsz = 0;
-		pHdr->p_vaddr = 0;
-	}*/
-
-
-//	pAuxVec[1].a_un.a_val = FillPHdr(startingElf, pHdr, 0);
-	pAuxVec[1].a_un.a_val = startingElf.GetNumProgramHeaders();
-	unsigned int hdr_size = sizeof(ElfW(Phdr)) * pAuxVec[1].a_un.a_val;
-
-	unsigned int text_start_addr = (unsigned int)pAuxVec + aux_size + hdr_size;
-
-	unsigned int e = (unsigned int)strcpy((char *)text_start_addr, pEnv);
-	unsigned int a = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1, pElfName);
-	unsigned int b = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1 + strlen(pElfName) + 1, "ls");
-	unsigned int c = (unsigned int)strcpy((char *)text_start_addr + strlen(pEnv) + 1 + strlen(pElfName) + 1 + strlen("ls") + 1, "-l");
-
-	rfe.m_pSp[1] = a;
-	rfe.m_pSp[2] = b;
-	rfe.m_pSp[3] = c;
-	rfe.m_pSp[4] = 0;
-	rfe.m_pSp[5] = e;
-	rfe.m_pSp[6] = 0;
-
-	pTimer0->Enable(true);
-	pTimer1->Enable(true);
-
-	ChangeModeAndJump(0, 0, 0, &rfe);
-#endif
 }

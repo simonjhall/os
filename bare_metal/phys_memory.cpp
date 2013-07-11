@@ -94,6 +94,16 @@ void ReservePages(unsigned int start, unsigned int num)
 	}
 }
 
+unsigned int PageUsedCount(void)
+{
+	unsigned int total = 0;
+	for (unsigned int count = 0; count < s_totalPages; count++)
+		if (g_usedPage[count])
+			total++;
+
+	return total;
+}
+
 }
 
 

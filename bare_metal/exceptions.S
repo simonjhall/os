@@ -92,6 +92,7 @@ Resume:
 	#get our proper stack
 	#everything is disabled here - except for fiq
 	ldr sp, =initial_stack_end
+	ldr sp, [sp]
 	sub sp, #8
 
 	#we now have a proper stack for the interrupt category

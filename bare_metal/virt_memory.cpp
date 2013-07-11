@@ -200,7 +200,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 				ASSERT((int)current_fault + (int)current_pagetable + (int)current_section == 1);
 
 				//map the whole thing
-				if (len == 1048576)
+				if (to_map == 1048576)
 				{
 					//map the section
 					if (commit)
