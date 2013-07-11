@@ -67,17 +67,18 @@ extern "C" void Irq(void)
 	static unsigned int clock = 0;
 	PrinterUart<PL011> p;
 	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
-	p << "pic is " << pPic << "\n";
+//	p << "pic is " << pPic << "\n";
 
 	InterruptSource *pSource;
 
+	ASSERT(pPic);
 	while ((pSource = pPic->WhatHasFired()))
 	{
 		//todo add to list
 		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
 		pSource->HandleInterrupt();
 	}
-	p << "returning from irq\n";
+//	p << "returning from irq\n";
 }
 
 
@@ -142,41 +143,41 @@ static void MapKernel(unsigned int physEntryPoint)
 #ifdef PBES
     //L4 PER
     VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     //private A9 memory
     VirtMem::MapPhysToVirt((void *)(0x482U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     //UART - DUP!
     VirtMem::MapPhysToVirt((void *)(0x480 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
     //display
     for (int count = 0; count < 16; count++)
 		VirtMem::MapPhysToVirt((void *)((0x580 + count) * 1048576), (void *)((0xfc0U + count) * 1048576), 1048576, true,
-				TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+				TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 /*
     VirtMem::MapPhysToVirt((void *)(0x4a0 * 1048576), (void *)(0x4a0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     VirtMem::MapPhysToVirt((void *)(0x4a3 * 1048576), (void *)(0x4a3U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     VirtMem::MapPhysToVirt((void *)(0x550 * 1048576), (void *)(0x550U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
     TTB_phys = (unsigned int *)PhysPages::FindMultiplePages(256, 8);
     TTB_virt = (unsigned int *)0x10100000;
     if (!VirtMem::MapPhysToVirt(TTB_phys, TTB_virt, 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0))
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
     	ASSERT(0);*/
 #else
     //sd
     VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     //uart
     VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
     //timer and primary interrupt controller
     VirtMem::MapPhysToVirt((void *)(0x101U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 #endif
 
     //exception vector, plus the executable high secton
@@ -277,7 +278,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	void *phys_entry = PhysPages::FindMultiplePages(256, 8);
 	if (!VirtMem::MapPhysToVirt(phys_entry, (void *)0x10000000, 1048576,
-    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kStronglyOrdered, 0))
+    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0))
 		ASSERT(0);
 
 	p << " phys entry " << (unsigned int)phys_entry << "\n";
@@ -292,13 +293,13 @@ extern "C" void Setup(unsigned int entryPoint)
 	} combined;
 
 	combined.s.Init(phys_entry, TranslationTable::kRwRw, TranslationTable::kExec,
-			TranslationTable::kStronglyOrdered, 0);
+			TranslationTable::kShareableDevice, 0);
 
 	for (int count = 0; count < 4096; count++)
 		TTB_virt[count] = combined.i;
 
 	combined.s.Init((void *)(0x480 * 1048576),
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kStronglyOrdered, 0);
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 	TTB_virt[0x480] = combined.i;
 
 	asm volatile ("dsb");
@@ -505,21 +506,28 @@ extern "C" void Setup(unsigned int entryPoint)
 	vfs->Attach(fat, "/Volumes/sd");
 
 	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
-//	BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
+	if (!pLoader)
+		pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-linux.so.3", O_RDONLY);
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
-	Process *pBusybox = new Process(*new ProcessFS("/Volumes/sd/minimal", "/"),
-			"/bin/busybox", *vfs, *(File *)pLoader);
-	pBusybox->SetDefaultStdio();
-	pBusybox->SetEnvironment("LAD_DEBUG=all");
-	pBusybox->AddArgument("find");
-//	pBusybox->AddArgument("-l");
-//	pBusybox->AddArgument("/");
+	for (int count = 0; count < 2; count++)
+	{
+		Process *pBusybox1 = new Process(*new ProcessFS("/Volumes/sd/minimal", "/"),
+				"/bin/busybox", *vfs, *(File *)pLoader);
+		pBusybox1->SetDefaultStdio();
+		pBusybox1->SetEnvironment("LAD_DEBUG=all");
+		pBusybox1->AddArgument("find");
+		pBusybox1->AddArgument("-l");
+		pBusybox1->AddArgument("/");
 
-	pBusybox->MakeRunnable();
+//		pBusybox1->AddArgument("dd");
 
-	pBusybox->Schedule(Scheduler::GetMasterScheduler());
+		pBusybox1->MakeRunnable();
+
+		pBusybox1->Schedule(Scheduler::GetMasterScheduler());
+	}
+
 
 	Thread *pBlocked;
 	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
