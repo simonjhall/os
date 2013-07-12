@@ -3,6 +3,7 @@
 	<name>bare_metal</name>
 	<comment></comment>
 	<projects>
+		<project>qemu</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

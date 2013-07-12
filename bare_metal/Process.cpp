@@ -169,7 +169,7 @@ Process::Process(const char *pRootFilename, const char *pInitialDirectory,
 	else
 		m_entryPoint = (unsigned int)startingElf.GetEntryPoint();
 
-	VirtMem::DumpVirtToPhys(0, (void *)0x7fffffff, true, true, false);
+//	VirtMem::DumpVirtToPhys(0, (void *)0x7fffffff, true, true, false);
 }
 
 Process::~Process()

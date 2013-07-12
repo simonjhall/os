@@ -1,5 +1,3 @@
-.set PBES,0
-
 .section .entry, "ax"
 
 .global Setup
@@ -210,8 +208,8 @@ phys_entry:
 map_loop:
 	#construct a section entry for the phys address
 	#but store twice, once to the target virtual address and one to the physical address
-	mov r4, #0x1600				/* tex=1 | ap=1 | one | domain=0000| xn=0 | c=1 | b=1 | one | zero*/
-	orr r4, #0xe
+	mov r4, #0x1600				/* tex=1 | ap=1 | one | domain=0000| xn=0 | c=0 | b=0 | one | zero*/
+	orr r4, #0x2
 
 	#phys addr of the section
 	lsl r5, r3, #20
@@ -267,6 +265,8 @@ map_loop:
 	orr r2, #1					/* enable */
 	bic r2, #2					/* disable alignment fault checking */
 	orr r2, #(1 << 13)			/* remap high exception vector */
+	orr r2, #(1 << 12)			/* icache enable */
+	orr r2, #(1 << 2)				/* dcache enable */
 	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
 
 	#good to go

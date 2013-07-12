@@ -171,6 +171,43 @@ void DumpMem(T *pVirtual, unsigned int len)
 	}
 }
 
+namespace Omap4460
+{
+
+enum Smc
+{
+	//L2 cache maintenance
+	kL2CacheWriteDebugRegister = 0x100,
+	kL2CacheCleanAndInvalidateRangePa = 0x101,
+	kL2EnableDisableCache = 0x102,
+	kL2WriteAuxCR = 0x109,
+	kL2WriteTagAndDataRamLatencyCR = 0x112,
+	kL2WritePrefetchControlRegister = 0x113,
+
+	//multicore maintenance
+	kReadAuxCoreBoot01 = 0x103,
+	kModAuxCoreBoot0 = 0x104,
+	kWriteAuxCoreBoot1 = 0x105,
+	kReadWkgControl01 = 0x106,
+	kClearWkgControl01 = 0x107,
+
+	//snoop control unit
+	kSetPowerStatusR = 0x108,
+
+	//lockdown TLBs
+	kSelectTlbEntryForRead = 0x10a,
+	kSelectTlbEntryForWrite = 0x10b,
+	kReadTlbVaEntry = 0x10c,
+	kWRiteTlbVaEntry = 0x10d,
+	kReadTlbPaEntry = 0x10e,
+	kWriteTlbPaEntry = 0x10f,
+	kReadTlbAttrEntry = 0x110,
+	kWriteTlbAttrEntry = 0x111,
+};
+
+extern "C" unsigned int OmapSmc(unsigned int *r0, unsigned int *r1, Smc function);
+}
+
 }
 
 

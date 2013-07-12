@@ -213,6 +213,7 @@ extern "C" void Setup(unsigned int entryPoint)
 {
 	MapKernel(entryPoint);
 
+
 	PrinterUart<PL011> p;
 	PL011::EnableFifo(false);
 	PL011::EnableUart(true);
@@ -239,6 +240,26 @@ extern "C" void Setup(unsigned int entryPoint)
 		ASSERT(0);
 
 	p << "memory pool initialised\n";
+
+#ifdef PBES
+	volatile unsigned int *pl310 = (volatile unsigned int *)0xfee42000;
+	p << pl310[0] << "\n";
+	p << pl310[4 >> 2] << "\n";
+	p << pl310[0x100 >> 2] << "\n";
+	p << pl310[0x104 >> 2] << "\n";
+
+	unsigned int r0, r1;
+	r0 = 1;
+	r1 = 0;
+	VirtMem::Omap4460::OmapSmc(&r0, &r1, VirtMem::Omap4460::kL2EnableDisableCache);
+
+	p << pl310[0] << "\n";
+	p << pl310[4 >> 2] << "\n";
+	p << pl310[0x100 >> 2] << "\n";
+	p << pl310[0x104 >> 2] << "\n";
+
+//	while(1);
+#endif
 
 #if 0
 	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
@@ -511,14 +532,14 @@ extern "C" void Setup(unsigned int entryPoint)
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
-	for (int count = 0; count < 6; count++)
+	for (int count = 0; count < 1; count++)
 	{
 		Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
 				"/bin/busybox", *vfs, *(File *)pLoader);
 		pBusybox1->SetDefaultStdio();
 		pBusybox1->SetEnvironment("LAD_DEBUG=all");
 		pBusybox1->AddArgument("find");
-		pBusybox1->AddArgument("-l");
+//		pBusybox1->AddArgument("-l");
 		pBusybox1->AddArgument("/");
 
 //		pBusybox1->AddArgument("dd");

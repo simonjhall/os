@@ -188,6 +188,36 @@ InsertPageTableLoAndFlush:
 .endfunc
 .size InsertPageTableLoAndFlush, .-InsertPageTableLoAndFlush
 
+.global OmapSmc
+.func OmapSmc
+OmapSmc:
+	push {r4-r12, lr}
+
+	#the thing to call
+	mov r12, r2
+
+	#r0
+	mov r2, r0
+	ldr r0, [r2]
+	#r1
+	mov r3, r1
+	ldr r1, [r3]
+
+	#call it
+	push {r2, r3}
+	smc 1
+	pop {r2, r3}
+
+	#r0
+	str r0, [r2]
+	#r1
+	str r1, [r3]
+
+
+	pop {r4-r12, pc}
+.endfunc
+.size OmapSmc, .-OmapSmc
+
 
 /***************************************/
 

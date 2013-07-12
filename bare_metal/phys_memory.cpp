@@ -93,7 +93,7 @@ void BlankUsedPages(void)
 void ReservePages(unsigned int start, unsigned int num)
 {
 	//in case we've got the wrong memory model
-	ASSERT(start - s_startAddr <= start);
+	ASSERT(start - s_startPage <= start);
 	start -= s_startPage;
 
 	for (unsigned int count = start; count < start + num; count++)

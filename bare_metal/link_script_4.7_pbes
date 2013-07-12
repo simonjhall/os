@@ -1,0 +1,40 @@
+OUTPUT_FORMAT("elf32-littlearm")
+/*qemu_offset = 0x0000c000;*/
+qemu_offset = 0;
+phys = 0xf000d000 + qemu_offset;
+SECTIONS
+{
+	. = 0xf0000040 + qemu_offset;
+	.entry : {
+	. = ALIGN(4);
+	*(.entry)
+	}
+	  . = 0xf000c000 + qemu_offset;
+	.trampoline : {
+	*(.trampoline)
+	}
+	
+ 	.text phys : AT(phys) {
+ 		*(.text .text.*)
+ 		. = ALIGN(4096);
+ 	}
+	.rodata : {
+	*(.rodata .rodata.*)
+	}
+	
+	.data : {
+	*(.data .data.*)
+	}
+
+	__bss_start__ = .;
+	.bss : 
+	{
+		*(.bss)
+	}
+	__bss_end__ = .;
+
+	.note.gnu.build-id : {
+		note_gnu_build_id = .;
+	}
+	__end__ = .;
+}

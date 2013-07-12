@@ -105,11 +105,11 @@ bool InitL1L2Allocators(void)
 
 	//map them virtually
 	if (!MapPhysToVirt(pL1Phys, (void *)0xfe000000, 1048576, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
 		return false;
 
 	if (!MapPhysToVirt(pL2Phys, (void *)(0xfe000000 + 1048576), 1048576, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
 		return false;
 
 	if (!MapPhysToVirt(pStacks, (void *)(0xfe000000 + 1048576 * 2), 1048576, true,
