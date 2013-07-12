@@ -159,6 +159,9 @@ public:
 	void *GetBrk(void);
 	void SetBrk(void *);
 
+	void *GetHighZero(void);
+	void SetHighZero(void *);
+
 	friend int SupervisorCall(Thread &rBlocked, Process *pParent);
 protected:
 	//list of all the attached threads in the process
@@ -173,6 +176,8 @@ protected:
 
 	//brk position
 	void *m_pBrk;
+	//anon mmap
+	void *m_pHighZero;
 
 	//all file handles
 	ProcessFS m_pfs;

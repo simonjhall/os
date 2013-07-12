@@ -64,9 +64,9 @@ extern "C" void _Irq(void);
 extern "C" void _Irq(void);
 extern "C" void Irq(void)
 {
-	static unsigned int clock = 0;
-	PrinterUart<PL011> p;
-	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
+//	static unsigned int clock = 0;
+//	PrinterUart<PL011> p;
+//	p << "irq " << clock++ << " time " << Formatter<float>(master_clock / 100.0f, 2) << "\n";
 //	p << "pic is " << pPic << "\n";
 
 	InterruptSource *pSource;
@@ -75,7 +75,7 @@ extern "C" void Irq(void)
 	while ((pSource = pPic->WhatHasFired()))
 	{
 		//todo add to list
-		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
+//		p << "interrupt from " << pSource << " # " << pSource->GetInterruptNumber() << "\n";
 		pSource->HandleInterrupt();
 	}
 //	p << "returning from irq\n";
@@ -511,7 +511,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	ASSERT(pLoader);
 	ASSERT(pLoader->IsDirectory() == false);
 
-	for (int count = 0; count < 2; count++)
+	for (int count = 0; count < 6; count++)
 	{
 		Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
 				"/bin/busybox", *vfs, *(File *)pLoader);

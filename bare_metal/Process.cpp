@@ -125,6 +125,7 @@ Process::Process(const char *pRootFilename, const char *pInitialDirectory,
 	ASSERT(has_tls == false);
 	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
 	SetBrk((void *)0x10000000);
+	SetHighZero((void *)0x60000000);
 
 	//allocate a stack
 	if (!VirtMem::AllocAndMapVirtContig((void *)(0x80000000 - 4096), 1, false,
@@ -176,8 +177,12 @@ Process::~Process()
 	ASSERT(m_state == kStopped);
 
 	//delete all threads
-	for (auto it = m_threads.begin(); it != m_threads.end(); it++)
-		delete *it;
+	while (m_threads.size())
+	{
+		auto p = m_threads.back();
+		delete p;
+		m_threads.pop_back();
+	}
 
 	//free the page tables
 	//todo check for shared page tables
@@ -339,6 +344,16 @@ void Process::Deschedule(Scheduler& rSched)
 		rSched.RemoveThread(**it);
 
 	m_state = kStopped;
+}
+
+void* Process::GetHighZero(void)
+{
+	return m_pHighZero;
+}
+
+void Process::SetHighZero(void *p)
+{
+	m_pHighZero = p;
 }
 
 char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)

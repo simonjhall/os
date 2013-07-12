@@ -296,11 +296,10 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 		int flags = pRegisters[3];
 
 		ASSERT(((unsigned int)pDest & 4095) == 0);
-
-		static unsigned int highZero = 0x60000000;
+		ASSERT(pParent);
 
 		if (pDest == 0)
-			pDest = (void *)highZero;
+			pDest = pParent->GetHighZero();
 
 		/*p.PrintString("mmap of file ");
 		p.Print(file);
@@ -352,8 +351,8 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 			if (mmap_result != (void *)-1)
 			{
 				pDest = (void *)((unsigned int)pDest + length);		//rounded up length
-				if ((unsigned int)pDest > highZero)
-					highZero = (unsigned int)pDest;
+				if (pDest > pParent->GetHighZero())
+					pParent->SetHighZero(pDest);
 			}
 
 			return (unsigned int)mmap_result;
@@ -407,8 +406,6 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 //			p.PrintString("UNIMPLEMENTED mmap\n");
 		else
 		{
-			ASSERT(pParent);
-
 			//do it via the file handle instead
 			WrappedFile *f = pParent->m_pfs.GetFile(file);
 			if (f)
@@ -417,8 +414,8 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 				if (mmap_result != (void *)-1)
 				{
 					pDest = (void *)((unsigned int)pDest + length);		//rounded up length
-					if ((unsigned int)pDest > highZero)
-						highZero = (unsigned int)pDest;
+					if (pDest > pParent->GetHighZero())
+						pParent->SetHighZero(pDest);
 				}
 
 				return (unsigned int)mmap_result;
