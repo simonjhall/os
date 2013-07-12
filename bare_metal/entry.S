@@ -1,3 +1,5 @@
+.set PBES,0
+
 .section .entry, "ax"
 
 .global Setup
@@ -141,8 +143,6 @@
 
 	PRINT_NEWLINE
 .endm
-
-.set PBES,1
 
 #16kb aligned
 #pbes disable

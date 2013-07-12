@@ -28,6 +28,8 @@ namespace PhysPages
 	void *FindPage(void);
 	void ReleasePage(unsigned int p);
 
+	void IncreaseCount(void *);
+
 	void *FindMultiplePages(unsigned int num, unsigned int alignOrder);
 	void ReleaseMultiplePages(unsigned int p, unsigned int num);
 

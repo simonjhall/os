@@ -132,6 +132,8 @@ bool InitL1L2Allocators(void)
 	for (unsigned int count = 0; count < 4096; count++)
 		g_pPageTableMasterL1VirtLo->e[count].fault.Init();
 
+	FlushTlb();
+
 	return true;
 }
 
@@ -374,7 +376,7 @@ bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEn
 	return true;
 }
 
-bool RemovePageTable(void *pVirtual, bool hi)
+bool RemovePageTable(void *pVirtual, bool hi, bool flush)
 {
 	ASSERT(g_allocatorsInited);
 
@@ -403,6 +405,10 @@ bool RemovePageTable(void *pVirtual, bool hi)
 	//release the memory
 	if (!g_subTables.Free(pOldVirt))
 		ASSERT(0);
+
+	if (flush)
+		FlushTlb();
+
 	return true;
 }
 

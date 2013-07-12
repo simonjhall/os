@@ -95,6 +95,8 @@ public:
 	Thread(unsigned int entryPoint, Process *pParent, bool priv,
 			unsigned int stackSizePages, int priority, unsigned int userStack = 0);
 
+	~Thread();
+
 	State GetState(void);
 	bool SetState(State s);
 
@@ -114,6 +116,7 @@ protected:
 	Process *m_pParent;
 	//whether it's a system thread or not
 	bool m_isPriv;
+	TranslationTable::SmallPageActual *m_pPrivStack;
 	//register etc state
 	ExceptionState m_pausedState;
 	//thread state
@@ -136,7 +139,8 @@ public:
 		kDead,
 	};
 
-	Process(ProcessFS &, const char *, BaseFS &rVfs, File &rLoader);
+	Process(const char *pRootFilename, const char *pInitialDirectory,
+			const char *, BaseFS &rVfs, File &rLoader);
 	~Process();
 
 	void SetDefaultStdio(void);
@@ -171,7 +175,7 @@ protected:
 	void *m_pBrk;
 
 	//all file handles
-	ProcessFS &m_rPfs;
+	ProcessFS m_pfs;
 	//and loaded through this
 	BaseFS &m_rVfs;
 

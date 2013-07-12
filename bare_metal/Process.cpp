@@ -20,9 +20,10 @@ namespace VirtMem
 	extern FixedSizeAllocator<TranslationTable::L1Table, 1048576 / sizeof(TranslationTable::L1Table)> g_masterTables;
 }
 
-Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLoader)
+Process::Process(const char *pRootFilename, const char *pInitialDirectory,
+		const char *pFilename, BaseFS &rVfs, File &rLoader)
 : m_pMainThread(0),
-  m_rPfs(rPfs),
+  m_pfs(pRootFilename, pInitialDirectory),
   m_rVfs(rVfs),
   m_pExeFile(0),
   m_rLoader(rLoader),
@@ -32,7 +33,7 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 	char string[length];
 
 	//build the file name
-	if (!m_rPfs.BuildFullPath(pFilename, string, length))
+	if (!m_pfs.BuildFullPath(pFilename, string, length))
 	{
 		m_state = kDead;
 		return;
@@ -172,6 +173,22 @@ Process::Process(ProcessFS &rPfs, const char *pFilename, BaseFS &rVfs, File &rLo
 
 Process::~Process()
 {
+	ASSERT(m_state == kStopped);
+
+	//delete all threads
+	for (auto it = m_threads.begin(); it != m_threads.end(); it++)
+		delete *it;
+
+	//free the page tables
+	//todo check for shared page tables
+	for (unsigned int count = 0; count < 2048; count++)
+		VirtMem::RemovePageTable((void *)(count * 1048576), false, false);
+
+	//unmap lo
+	VirtMem::SetL1TableLo(0);
+
+	//free lo
+	VirtMem::g_masterTables.Free(m_pVirtTable);
 }
 
 void Process::MapProcess(void)
@@ -192,16 +209,16 @@ void Process::SetBrk(void *p)
 void Process::SetDefaultStdio(void)
 {
 	//open stdio
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdin", O_RDONLY)) == 0);
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stdout", O_RDONLY)) == 1);
-	ASSERT(m_rPfs.Open(*m_rVfs.OpenByName("/Devices/stderr", O_RDONLY)) == 2);
+	ASSERT(m_pfs.Open(*m_rVfs.OpenByName("/Devices/stdin", O_RDONLY)) == 0);
+	ASSERT(m_pfs.Open(*m_rVfs.OpenByName("/Devices/stdout", O_RDONLY)) == 1);
+	ASSERT(m_pfs.Open(*m_rVfs.OpenByName("/Devices/stderr", O_RDONLY)) == 2);
 }
 
 void Process::SetStdio(File& rStdio, File& rStdout, File& rStderr)
 {
-	ASSERT(m_rPfs.Open(rStdio) == 0);
-	ASSERT(m_rPfs.Open(rStdout) == 1);
-	ASSERT(m_rPfs.Open(rStderr) == 2);
+	ASSERT(m_pfs.Open(rStdio) == 0);
+	ASSERT(m_pfs.Open(rStdout) == 1);
+	ASSERT(m_pfs.Open(rStderr) == 2);
 }
 
 void Process::AddArgument(const char *p)
@@ -269,6 +286,9 @@ void Process::MakeRunnable(void)
 	char *envPos = pSp;
 	pSp += strlen(m_pEnvironment) + 1;
 
+	delete[] m_pEnvironment;
+	m_pEnvironment = 0;
+
 	unsigned int slot = 0;
 	//number of arguments
 	*(unsigned int *)(sp + slot++ * sizeof(int)) = m_arguments.size();
@@ -278,6 +298,8 @@ void Process::MakeRunnable(void)
 		strcpy(pSp, *it);
 		*(unsigned int *)(sp + slot++ * sizeof(int)) = (unsigned int)pSp;
 		pSp += strlen(*it) + 1;
+
+		delete[] *it;
 	}
 
 	//a zero once we're out of args
@@ -415,11 +437,10 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 
 	if (m_isPriv)
 	{
-		TranslationTable::SmallPageActual *sp;
-		if (!VirtMem::g_sysThreadStacks.Allocate(&sp))
+		if (!VirtMem::g_sysThreadStacks.Allocate(&m_pPrivStack))
 			ASSERT(0);
 
-		m_pausedState.m_regs[13] = (unsigned int)sp;
+		m_pausedState.m_regs[13] = (unsigned int)m_pPrivStack;
 		m_pausedState.m_spsr.m_mode = kSystem;
 	}
 	else
@@ -429,6 +450,12 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 	}
 
 	memset(m_name, 0, sm_nameLength);
+}
+
+Thread::~Thread()
+{
+	if (m_isPriv)
+		VirtMem::g_sysThreadStacks.Free(m_pPrivStack);
 }
 
 Thread::State Thread::GetState(void)

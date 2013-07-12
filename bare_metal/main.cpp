@@ -513,7 +513,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	for (int count = 0; count < 2; count++)
 	{
-		Process *pBusybox1 = new Process(*new ProcessFS("/Volumes/sd/minimal", "/"),
+		Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
 				"/bin/busybox", *vfs, *(File *)pLoader);
 		pBusybox1->SetDefaultStdio();
 		pBusybox1->SetEnvironment("LAD_DEBUG=all");

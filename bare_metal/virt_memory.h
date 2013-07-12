@@ -17,7 +17,7 @@ namespace VirtMem
 
 //insertion and deletion of page tables
 bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEntryL2 **ppNewTableVirt, bool hi);
-bool RemovePageTable(void *pVirtual, bool hi);
+bool RemovePageTable(void *pVirtual, bool hi, bool flush = true);
 
 //mapping and unmapping memory
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,

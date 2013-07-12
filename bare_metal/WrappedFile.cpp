@@ -192,6 +192,8 @@ ProcessFS::ProcessFS(const char *pRootFilename, const char *pInitialDirectory)
 ProcessFS::~ProcessFS()
 {
 	//delete files
+	for (unsigned int count = 0; count < m_fileHandles.size(); count++)
+		Close(count);
 }
 
 void ProcessFS::Chdir(const char *pPath)

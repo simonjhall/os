@@ -102,10 +102,10 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 //		if (f)
 //			return pfsB->Open(*f);
 
-		f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 		if (f)
 		{
-			int fd = pParent->m_rPfs.Open(*f);
+			int fd = pParent->m_pfs.Open(*f);
 //			p << "fd = " << fd << "\n";
 			return fd;
 		}
@@ -206,7 +206,9 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 				char c = pBuf[count];
 				if (c == '\n')
 				{
+#ifdef PBES
 					p.PrintChar('\r');
+#endif
 					p.PrintChar('\n');
 				}
 				else
@@ -266,7 +268,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 //		else
 //			p.PrintString("UNIMPLEMENTED READ\n");
 
-		WrappedFile *f = pParent->m_rPfs.GetFile(fd);
+		WrappedFile *f = pParent->m_pfs.GetFile(fd);
 		if (f)
 			return f->Read(pBuf, len);
 
@@ -408,7 +410,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 			ASSERT(pParent);
 
 			//do it via the file handle instead
-			WrappedFile *f = pParent->m_rPfs.GetFile(file);
+			WrappedFile *f = pParent->m_pfs.GetFile(file);
 			if (f)
 			{
 				void *mmap_result = f->Mmap2(pDest, length_unrounded, prot, flags, off_pg, false);
@@ -480,7 +482,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
@@ -524,7 +526,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 //		else
 //			p.PrintString("UNIMPLEMENTED FSTAT\n");
 
-		WrappedFile *f = pParent->m_rPfs.GetFile(handle);
+		WrappedFile *f = pParent->m_pfs.GetFile(handle);
 
 		if (f)
 		{
@@ -555,7 +557,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 //			return 0;
 //		}
 
-		if (pParent->m_rPfs.Close(fd))
+		if (pParent->m_pfs.Close(fd))
 			return 0;
 
 		return -1;
@@ -568,7 +570,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 		linux_dirent64 *pDir = (linux_dirent64 *)pRegisters[1];
 		unsigned int len = pRegisters[2];
 
-		WrappedFile *f = pParent->m_rPfs.GetFile(handle);
+		WrappedFile *f = pParent->m_pfs.GetFile(handle);
 
 		if (f)
 			return f->Getdents64(pDir, len);
@@ -615,7 +617,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pBuf, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pBuf, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
@@ -623,7 +625,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 			{
 				pParent->m_rVfs.Close(*f);
 
-				pParent->m_rPfs.Chdir(pBuf);
+				pParent->m_pfs.Chdir(pBuf);
 				return 0;
 			}
 			else
@@ -642,7 +644,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 		char *pBuf = (char *)pRegisters[0];
 		size_t size = (size_t)pRegisters[1];
 
-		if (pParent->m_rPfs.Getcwd(pBuf, size))
+		if (pParent->m_pfs.Getcwd(pBuf, size))
 			return (unsigned int)size;			//I disagree...should be ptr
 		else
 			return -ENAMETOOLONG;
@@ -656,7 +658,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 
 		static const int s_nameLength = 256;
 		char filename[s_nameLength];
-		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 
 		if (f)
 		{
@@ -710,10 +712,10 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 		char filename[s_nameLength];
 		BaseDirent *f;
 
-		f = pParent->m_rVfs.OpenByName(pParent->m_rPfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+		f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
 		if (f)
 		{
-			int fd = pParent->m_rPfs.Open(*f);
+			int fd = pParent->m_pfs.Open(*f);
 			return fd;
 		}
 
@@ -724,13 +726,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 		if (pParent)
 		{
 			//kill all threads
-			for (auto it = pParent->m_threads.begin(); it != pParent->m_threads.end(); it++)
-				if (!(*it)->SetState(Thread::kDead))
-				{
-					ASSERT(0);
-				}
-				else
-					Scheduler::GetMasterScheduler().RemoveThread(**it);
+			pParent->Deschedule(Scheduler::GetMasterScheduler());
 
 			delete pParent;
 			pParent = 0;

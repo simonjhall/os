@@ -21,7 +21,9 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 			char c = p[count];
 			if (c == '\n')
 			{
+#ifdef PBES
 				PrintChar('\r');
+#endif
 				PrintChar('\n');
 			}
 			else
@@ -34,7 +36,9 @@ void Printer::PrintString(const char *pString, bool with_len, size_t len)
 			char c = *p++;
 			if (c == '\n')
 			{
+#ifdef PBES
 				PrintChar('\r');
+#endif
 				PrintChar('\n');
 			}
 			else
