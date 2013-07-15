@@ -188,7 +188,9 @@
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.option.optimization.level.1957509361" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.2073200379" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.other.561659863" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0  -mthumb-interwork" valueType="string"/>
-								<option id="gnu.c.compiler.option.preprocessor.def.symbols.3915606" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols"/>
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.3915606" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="PBES"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1380696069" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool command="arm-linux-gnueabihf-g++" id="cdt.managedbuild.tool.gnu.c.linker.base.976457149" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.base"/>
@@ -246,6 +248,7 @@
 		<configuration configurationName="Debug qemu">
 			<resource resourceType="PROJECT" workspacePath="/bare_metal"/>
 		</configuration>
+		<configuration configurationName="Release PBES"/>
 		<configuration configurationName="Debug">
 			<resource resourceType="PROJECT" workspacePath="/bare_metal"/>
 		</configuration>
