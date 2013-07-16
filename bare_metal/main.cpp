@@ -152,6 +152,14 @@ static void MapKernel(unsigned int physEntryPoint)
     VirtMem::MapPhysToVirt((void *)(0x480 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
     		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
 
+
+    VirtMem::MapPhysToVirt((void *)(0x4a1 * 1048576), (void *)(0xe00U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    VirtMem::MapPhysToVirt((void *)(0x4a3 * 1048576), (void *)(0xe01U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    VirtMem::MapPhysToVirt((void *)(0x4a0 * 1048576), (void *)(0xe02U * 1048576), 1048576, true,
+    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+
     //display
     for (int count = 0; count < 16; count++)
 		VirtMem::MapPhysToVirt((void *)((0x580 + count) * 1048576), (void *)((0xfc0U + count) * 1048576), 1048576, true,
@@ -384,6 +392,37 @@ namespace Dispcc
 	volatile unsigned int *DISPC_WB_ATTRIBUTES2 = (volatile unsigned int *)0xFC001810;
 }
 
+OMAP4460::GPIO *g_pGpios[6];
+inline bool PinToGpio(unsigned int gpio, unsigned int &outGpio, unsigned int &outPin)
+{
+	int want_pin = gpio;
+	int want_gpio = want_pin / 32;
+	want_pin %= 32;
+
+	outGpio = want_gpio;
+	outPin = want_pin;
+
+	return true;
+}
+
+OMAP4460::GPIO::Pin &GetPin(unsigned int p)
+{
+	unsigned int gpio, pin;
+	ASSERT(PinToGpio(p, gpio, pin));
+
+	return g_pGpios[gpio]->GetPin(pin);
+}
+
+unsigned int conv_u(unsigned int u)
+{
+	if ((u >> 20) == 0xe02)
+		return (u & 1048575) | (0x4a0 << 20);
+	else if ((u >> 20) == 0xe01)
+		return (u & 1048575) | (0x4a3 << 20);
+	else
+		ASSERT(0);
+}
+
 extern "C" void Setup(unsigned int entryPoint)
 {
 	MapKernel(entryPoint);
@@ -417,6 +456,256 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "memory pool initialised\n";
 
 
+#ifdef PBES__
+	p << "DeviceName OMAP4460_ES1.x\n";
+	unsigned int u;
+
+	u = 0xe0204100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204110; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204120; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204124; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204128; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020412c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204130; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204134; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204138; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020413c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204140; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204144; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204148; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020414c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204150; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204160; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204164; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204168; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020416c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204170; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204188; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020418c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020419c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041a0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041a4; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041a8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041ac; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041b8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041bc; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041c8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041cc; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041dc; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041e0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041e4; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041e8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041ec; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041f0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02041f4; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204208; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020420c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204260; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204264; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204270; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204280; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204400; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204404; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204408; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204420; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204500; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204520; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204528; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204530; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204538; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204540; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204548; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204550; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204558; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204560; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204568; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204570; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204578; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204580; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0204588; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208104; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208110; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208114; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208118; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020811c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208124; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208128; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020812c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208130; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208138; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208140; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208144; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208148; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020814c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208150; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208154; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208158; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020815c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208160; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208164; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208180; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208184; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208188; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe020818c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208190; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02081b4; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208600; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208628; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208630; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208638; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208640; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208700; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208708; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208720; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208800; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208808; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208820; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208828; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208830; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208900; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208904; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208908; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208920; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208a00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208a04; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208a08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208a20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b28; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b30; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b38; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208b40; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208c00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208c04; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208c08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208c20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208c30; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d28; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d30; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208d38; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208e00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208e20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208e28; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208e40; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208f00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208f04; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208f08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208f20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0208f28; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209000; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209004; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209008; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209020; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209028; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209104; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209120; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209200; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209204; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209208; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209220; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209300; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209304; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209308; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209328; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209330; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209338; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209358; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209360; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209368; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02093d0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02093e0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209400; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209408; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209428; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209430; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209438; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209440; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209448; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209450; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209458; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209460; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209468; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209470; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209478; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209480; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209488; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094a0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094a8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094b0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094b8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094c0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094e0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094f0; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe02094f8; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209500; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209508; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209520; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209528; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209538; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209540; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209548; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209550; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209558; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0209560; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0106100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0106108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010610c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0106110; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107800; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107820; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107830; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107838; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107840; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107850; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107860; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107878; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107888; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107a00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107a08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe0107a20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a000; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a104; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a110; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a11c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a204; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a208; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a210; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a214; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a218; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a21c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a220; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a224; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a234; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a310; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a314; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a318; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a31c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a320; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a324; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a400; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a41c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a420; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a510; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a514; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	u = 0xe010a51c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	while(1);
+#endif
+
+//	p << "was " << *(volatile unsigned int *)0xe020815c << "\n";
+//	*(volatile unsigned int *)0xe020815c = 0x21e;
+//	DelaySecond();
+//	p << "now " << *(volatile unsigned int *)0xe020815c << "\n";
+//	DelaySecond();
 
 #ifdef PBES
 	volatile unsigned int *pl310 = (volatile unsigned int *)0xfee42000;
@@ -438,54 +727,233 @@ extern "C" void Setup(unsigned int entryPoint)
 //	while(1);
 #endif
 
+#ifdef PBES
+	//led pin mux
+	*(volatile unsigned int *)0xe00000fc = 0x11b;
+	for (int count = 2; count < 7; count++)
+		g_pGpios[count - 1] = new OMAP4460::GPIO((volatile unsigned int *)(0xfef55000 + (count - 2) * 0x2000), count);
+
+	g_pGpios[0] = new OMAP4460::GPIO((volatile unsigned int *)(0xe0110000), 1);
+
+
+	auto gpio0 = GetPin(0);
+	auto gpio110 = GetPin(110);
+	auto gpio122 = GetPin(122);
+	gpio0.SetAs(OMAP4460::GPIO::kOutput);
+	gpio110.SetAs(OMAP4460::GPIO::kOutput);
+	gpio122.SetAs(OMAP4460::GPIO::kInput);
+
+	gpio0.Write(true);
+/*	bool flash = false;
+
+	while (1)
+	{
+		p << gpio122.Read() << "\n";
+		gpio110.Write(flash);
+		flash = !flash;
+		DelaySecond();
+	}
+
+	while(1)
+	{
+		for (int count = 1; count < 7; count++)
+		{
+			p.PrintDec((count - 1) * 32, false);
+			p << " " << g_pGpios[count - 1]->Read() << " ";
+		}
+		p << "\n";
+		DelaySecond();
+	}*/
+#endif
+
 #if 1
+	/*const int width = 800;
+	const int horiz_front_porch = 40;
+	const int horiz_sync = 128;
+	const int horiz_back_porch = 88;
+	const bool horiz_pol = false;			//false = +ve
+
+	const int height = 600;
+	const int vert_front_porch = 1;
+	const int vert_sync = 4;
+	const int vert_back_porch = 23;
+	const bool vert_pol = false;
+
+	*(volatile unsigned int *)0xe020815c = 0x204;
+	const int div1 = 2;
+	const int div2 = 5;*/
+
+	const int width = 640;
+	const int horiz_front_porch = 16;
+	const int horiz_sync = 96;
+	const int horiz_back_porch = 48;
+	const bool horiz_pol = true;			//false = +ve
+
+	const int height = 480;
+	const int vert_front_porch = 11;
+	const int vert_sync = 2;
+	const int vert_back_porch = 31;
+	const bool vert_pol = true;
+
+	*(volatile unsigned int *)0xe020815c = 0x21e;
+	const int div1 = 2;
+	const int div2 = 1;
+
+	/*const int width = 1920;
+	const int horiz_front_porch = 44;
+	const int horiz_sync = 88;
+	const int horiz_back_porch = 148;
+	const bool horiz_pol = true;			//false = +ve, true = -ve
+
+	const int height = 1034;
+	const int vert_front_porch = 5;
+	const int vert_sync = 5;
+	const int vert_back_porch = 35;
+	const bool vert_pol = true;
+
+	const int div = 2;
+	bool interlace = true;*/
+
+	//dma configuration
+	*Dispcc::DISPC_GFX_BA_0 = (unsigned int)PhysPages::FindMultiplePages(1024, 0);
+//	*Dispcc::DISPC_GFX_BA_1 = (unsigned int)PhysPages::FindMultiplePages(1024, 0);			//not necessary?
+
+//	*Dispcc::DISPC_GFX_PIXEL_INC = 4;
+//	*Dispcc::DISPC_GFX_ROW_INC = 5;
+
+	unsigned int phys = *Dispcc::DISPC_GFX_BA_0;
+	unsigned int virt = 0xd0000000;
+
+	void *plut = PhysPages::FindPage();
+	unsigned int *vlut = (unsigned int *)(virt + 1024 * 4096);
+
+	for (int count = 0; count < 1024; count++)
+		ASSERT(VirtMem::MapPhysToVirt((void *)(phys + count * 4096),
+				(void *)(virt + count * 4096),
+				4096,
+				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
+
+	ASSERT(VirtMem::MapPhysToVirt((void *)plut,
+				(void *)(virt + 1024 * 4096),
+				4096,
+				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
+
+	unsigned int *fb = (unsigned int *)0xd0000000;
+	/*for (int count = 0; count < 640 * 480; count++)
+//		fb[count] = (0x4000 * count) & 0xff00;
+		fb[count] = 0xffffffff;*/
+
+	memset(fb, 0, width * height * 4);
+	memset(vlut, 0xff, 4096);
+
+	for (int y = 0; y < height; y++)
+		for (int x = 0; x < width; x++)
+			fb[y * width + x] = (unsigned char)x | ((unsigned char)y << 8);
+
+	for (int y = 0; y < height; y += 16)
+		for (int x = 0; x < width; x++)
+		{
+			fb[y * width + x] = 0xffffffff;
+		}
+
+	for (int x = 0; x < width; x += 16)
+		for (int y = 0; y < height; y++)
+		{
+			fb[y * width + x] = 0xffffffff;
+		}
+
+	/*for (int count = 0; count < 256; count++)
+	{
+		*Dispcc::DISPC_GAMMA_TABLE0 = (count << 24) | 0xffffff;
+		*Dispcc::DISPC_GAMMA_TABLE1 = (count << 24) | 0xffffff;
+		*Dispcc::DISPC_GAMMA_TABLE2 = (count << 24) | 0xffffff;
+	}*/
+
+	p << "base addrs\n" << *Dispcc::DISPC_GFX_BA_0 << " " << *Dispcc::DISPC_GFX_BA_1 << "\n";
+
+	p << "row inc \n" << *Dispcc::DISPC_GFX_ROW_INC << " pixel inc " << *Dispcc::DISPC_GFX_PIXEL_INC << "\n";
+
+	//configure gfx window
+	*Dispcc::DISPC_GFX_ATTRIBUTES |= (0xc << 1);		//select the format of image
+	*Dispcc::DISPC_GFX_SIZE = (width - 1) | ((height - 1) << 16);		//set the x/y size of image
+
+	//configure gfx pipeline processing
+//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 5);			//replication
+//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 9);			//nibble mode
+//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 24);			//antiflicker
+	*Dispcc::DISPC_CONFIG1 |= (1 << 3);					//lut as gamma table
+	*Dispcc::DISPC_GFX_TABLE_BA = (unsigned int)plut;
+
+//	*Dispcc::DISPC_CONFIG1 |= (1 << 9);
+
+	//pipeline layer output
+//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 8);			//channelout, for tv
+	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 30);			//channelout2, for lcd2
+//	*Dispcc::DISPC_CONTROL1 |= (1 << 6);				//gotv
+	*Dispcc::DISPC_CONTROL2 |= (1 << 5);				//golcd 2
+	*Dispcc::DISPC_GFX_ATTRIBUTES |= 1;					//enable graphics pipeline
+
 	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
-	*Dispcc::DISPC_DEFAULT_COLOR0 = 0xffffff;
-	*Dispcc::DISPC_DEFAULT_COLOR1 = 0xffffff;
-	*Dispcc::DISPC_DEFAULT_COLOR2 = 0xffffff;
+//	*Dispcc::DISPC_DEFAULT_COLOR2 = 0xffffff;
 
 	//DISPC_CONTROL2[12] overlay optimisation, 2689
-	*Dispcc::DISPC_CONTROL1 &= ~(1 << 12);
-	*Dispcc::DISPC_CONTROL2 &= ~(1 << 12);
+//	*Dispcc::DISPC_CONTROL2 &= ~(1 << 12);
 
 	//DISPC_CONFIG2[18] alpha blender, 2731
-	*Dispcc::DISPC_CONFIG1 |= (1 << 18);
+//	*Dispcc::DISPC_CONFIG1 |= (1 << 18);
 
-	//transparency colour key selection DISPC_CONFIG2[11]
-	*Dispcc::DISPC_CONFIG1 &= ~(1 << 11);
-	*Dispcc::DISPC_CONFIG2 &= ~(1 << 11);
+	//transparency tv colour key selection DISPC_CONFIG2[11]
+//	*Dispcc::DISPC_CONFIG2 &= ~(1 << 11);
 
 	//set transparency colour value, DISPC_TRANS_COLOR2 2706
-	*Dispcc::DISPC_TRANS_COLOR0 = 0;
-	*Dispcc::DISPC_TRANS_COLOR1 = 0;
-	*Dispcc::DISPC_TRANS_COLOR2 = 0;
+//	*Dispcc::DISPC_TRANS_COLOR2 = 0xffffffff;
 
 	//transparency colour key disabled DISPC_CONFIG2[10]
-	*Dispcc::DISPC_CONFIG1 &= ~(1 << 10);
-	*Dispcc::DISPC_CONFIG2 &= ~(1 << 10);
-/*
+//	*Dispcc::DISPC_CONFIG1 |= (1 << 10);
+//
+//	*Dispcc::DISPC_CONFIG1 |= (1 << 9);			//gamma table enable
 
-	//DISPC_POL_FREQ2, 2713
-//	*Dispcc::DISPC_POL_FREQ1 = (1 << 14) | (1 << 13) | (1 << 12);
-//	*Dispcc::DISPC_POL_FREQ2 = (1 << 14) | (1 << 13) | (1 << 12);
-
-	*(volatile unsigned int *)0xfc001620 |= 1;*/
 
 	p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
 	p << "turning on\n";
 
-	*Dispcc::DISPC_SIZE_TV = 0x02CF04FF;
+	/**Dispcc::DISPC_SIZE_TV = 0x02CF04FF;
 	*Dispcc::DISPC_CONTROL1 |= (1 << 6);
-	*Dispcc::DISPC_CONTROL1 |= (1 << 1);
+	*Dispcc::DISPC_CONTROL1 |= (1 << 1);*/
 
-	p << "supposed to be on\n";
+	//http://www.epanorama.net/faq/vga2rgb/calc.html
+
+	*Dispcc::DISPC_POL_FREQ2 = ((int)vert_pol << 13) | ((int)horiz_pol << 12);			//-vsync, -hsync
+	*Dispcc::DISPC_DIVISOR2 = (div1 << 16) | div2;					//170.6/1/6=~25 MHz
+	*Dispcc::DISPC_SIZE_LCD2 = ((height - 1) << 16) | (width - 1);				//640x480
+	*Dispcc::DISPC_CONTROL2 |= (1 << 3);						//active tft
+	*Dispcc::DISPC_TIMING_V2 = (vert_back_porch << 20) | (vert_front_porch << 8) | vert_sync;		//31 back porch, 11 front porch, 2 sync width
+	*Dispcc::DISPC_TIMING_H2 = (horiz_back_porch << 20) | (horiz_front_porch << 8) | horiz_sync;		//48 back, 16 front, 96 sync
+
+	*Dispcc::DISPC_CONTROL2 |= (1 << 5);						//golcd2
+	*Dispcc::DISPC_CONTROL2 |= (1 << 0);						//lcdenable
+
+	p << "default colour " << *Dispcc::DISPC_DEFAULT_COLOR2 << "\n";
+	p << "control " << *Dispcc::DISPC_CONTROL2 << "\n";
+	p << "config1 " << *Dispcc::DISPC_CONFIG1 << "\n";
+	p << "config2 " << *Dispcc::DISPC_CONFIG2 << "\n";
+	p << "trans colour " << *Dispcc::DISPC_TRANS_COLOR2 << "\n";
+
+	/*p << "supposed to be on\n";
 //	p << "is " << *Dispcc::DISPC_CONTROL1 << "\n";
 	while (1)
 	{
 		p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
+
+		for (int count = 2; count < 7; count++)
+		{
+			p.PrintDec((count - 1) * 32, false);
+			p << " " << g_pGpios[count - 2]->Read() << " ";
+		}
+		p << "\n";
 		DelaySecond();
 	}
-
+*/
 
 	while(1);
 #endif
