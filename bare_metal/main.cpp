@@ -426,9 +426,14 @@ unsigned int conv_u(unsigned int u)
 		ASSERT(0);
 }
 
+extern "C" void Setup2(unsigned int entryPoint)
+{
+	*(volatile unsigned int *)0x48020000 = 'a';
+}
+
 extern "C" void Setup(unsigned int entryPoint)
 {
-//	*(volatile unsigned int *)0x48020000 = 'a';
+	*(volatile unsigned int *)0x48020000 = 'a';
 	MapKernel(entryPoint);
 
 
@@ -728,6 +733,13 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << pl310[0x100 >> 2] << "\n";
 	p << pl310[0x104 >> 2] << "\n";
 
+
+	/***
+	 * change to 1.2 GHz
+	 */
+
+	*(volatile unsigned int *)0xe020416c = 0xc07d07;
+
 //	while(1);
 #endif
 
@@ -743,9 +755,11 @@ extern "C" void Setup(unsigned int entryPoint)
 	auto gpio0 = GetPin(0);
 	auto gpio110 = GetPin(110);
 	auto gpio122 = GetPin(122);
+	auto s2_switch = GetPin(113);
 	gpio0.SetAs(OMAP4460::GPIO::kOutput);
 	gpio110.SetAs(OMAP4460::GPIO::kOutput);
 	gpio122.SetAs(OMAP4460::GPIO::kInput);
+	s2_switch.SetAs(OMAP4460::GPIO::kInput);
 
 	gpio0.Write(true);
 /*	bool flash = false;
@@ -832,7 +846,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	std::sort(pclks.begin(), pclks.end(), DispMode::comp_func);
 	for (auto it = pclks.begin(); it != pclks.end(); it++)
 	{
-		p << Formatter<float>((float)(*it)->m_pclk / 1000000, 2); p << " ";
+//		p << Formatter<float>((float)(*it)->m_pclk / 1000000, 2); p << " ";
 		p.PrintDec((*it)->m_f, false); p << " ";
 		p.PrintDec((*it)->m_l, false); p << " ";
 		p.PrintDec((*it)->m_p, false);
@@ -843,7 +857,7 @@ extern "C" void Setup(unsigned int entryPoint)
 #if 1
 //	*(volatile unsigned int *)0xe020815c &= ~(1 << 5);
 
-	const int width = 800;
+/*	const int width = 800;
 	const int horiz_front_porch = 32;
 	const int horiz_sync = 64;
 	const int horiz_back_porch = 152;
@@ -859,9 +873,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	const int div1 = 3;
 	const int div2 = 1;
 
-	bool interlace = false;
+	bool interlace = false;*/
 
-/*	const int width = 1280;
+	/*const int width = 1280;
 	const int horiz_front_porch = 56;
 	const int horiz_sync = 136;
 	const int horiz_back_porch = 384-136-56;
@@ -898,7 +912,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	bool interlace = false;*/
 
-	/*const int width = 640;
+	const int width = 640;
 	const int horiz_front_porch = 16;
 	const int horiz_sync = 96;
 	const int horiz_back_porch = 48;
@@ -914,7 +928,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	const int div1 = 3;
 	const int div2 = 2;
 
-	bool interlace = false;*/
+	bool interlace = false;
 
 
 	/*const int width = 1920;
@@ -960,7 +974,7 @@ extern "C" void Setup(unsigned int entryPoint)
 		ASSERT(VirtMem::MapPhysToVirt((void *)(phys + count * 4096),
 				(void *)(virt + count * 4096),
 				4096,
-				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
+				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWtNoWa, 0));
 
 	ASSERT(VirtMem::MapPhysToVirt((void *)plut,
 				(void *)(virt + ((width * height * 4) / 4096 + 1) * 4096),
@@ -1107,22 +1121,35 @@ extern "C" void Setup(unsigned int entryPoint)
 		DelaySecond();
 	}*/
 
+	*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
+
 	unsigned char clock = 0;
 	while (1)
 	{
-		unsigned int *p = fb;
+		while (!(*Dispcc::DISPC_IRQSTATUS & 0x40000));
+		*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
+
+		unsigned int *pix = fb;
 		for (int y = 0; y < height; y++)
-		{
+		{/*
 			unsigned int code = ((y + clock) & 0xff)
-				| (((y + clock * 2) & 0xff) << 8)
-				| (((y + clock * 3) & 0xff) << 16);
+				| (((y + clock) & 0xff) << 8)
+				| (((y + clock) & 0xff) << 16);*/
 
 
 			for (int x = 0; x < width; x++)
-				*p++ = code;
+			{
+				unsigned int code = ((x + clock) & 0xff)
+					| (((x + clock) & 0xff) << 8)
+					| (((x + clock) & 0xff) << 16);
+
+				*pix++ = code;
+			}
 		}
 
 		clock++;
+
+
 	}
 
 
