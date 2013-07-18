@@ -297,7 +297,7 @@ done_clear:
 	ldr r0, =initial_stack_end
 	ldr r0, [r0]
 	mov sp, r0
-	sub sp, #4
+	sub sp, #8
 
 	mov r0, #0
 	blx GetStackHigh

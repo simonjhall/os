@@ -27,6 +27,9 @@ int main(int argc, const char **argv);
 #include <elf.h>
 #include <fcntl.h>
 
+#include <algorithm>
+#include <vector>
+
 const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end = (unsigned int)&initial_stack[initial_stack_size];
@@ -425,6 +428,7 @@ unsigned int conv_u(unsigned int u)
 
 extern "C" void Setup(unsigned int entryPoint)
 {
+//	*(volatile unsigned int *)0x48020000 = 'a';
 	MapKernel(entryPoint);
 
 
@@ -766,22 +770,115 @@ extern "C" void Setup(unsigned int entryPoint)
 	}*/
 #endif
 
+	struct DispMode
+	{
+		DispMode(unsigned int pclk, unsigned int f, unsigned int l, unsigned int p)
+		: m_pclk(pclk),
+		  m_f(f),
+		  m_l(l),
+		  m_p(p)
+		{
+		}
+
+		unsigned int m_pclk;
+		unsigned int m_f;
+		unsigned int m_l;
+		unsigned int m_p;
+
+		static bool comp_func(DispMode *i, DispMode *j)
+		{
+			return i->m_pclk < j->m_pclk;
+		}
+	};
+
+	struct comparer
+	{
+	};
+
+	std::vector<DispMode *> pclks;
+
+	for (int f = 1; f < 32; f++)
+	{
+		unsigned int fclk = 1536000000 / f;
+		if (fclk > 186000000)
+			continue;
+
+		for (int l = 1; l <= 255; l++)
+		{
+			unsigned int lclk = fclk / l;
+
+			for (int pe = 1; pe <= 255; pe++)
+			{
+				unsigned int pclk = lclk / pe;
+				if (pclk < 25000000)
+					continue;
+				else
+				{
+					/*p.PrintDec(fclk, false); p << " ";
+					p.PrintDec(lclk, false); p << " ";
+					p.PrintDec(pclk, false); p << " ";
+					p.PrintDec(pclk / 1000000, false); p << " ";
+					p.PrintDec(f, false); p << " ";
+					p.PrintDec(l, false); p << " ";
+					p.PrintDec(pe, false); p << " ";*/
+
+					pclks.push_back(new DispMode(pclk, f, l, pe));
+					/*p << "\n";*/
+				}
+			}
+		}
+	}
+
+	std::sort(pclks.begin(), pclks.end(), DispMode::comp_func);
+	for (auto it = pclks.begin(); it != pclks.end(); it++)
+	{
+		p << Formatter<float>((float)(*it)->m_pclk / 1000000, 2); p << " ";
+		p.PrintDec((*it)->m_f, false); p << " ";
+		p.PrintDec((*it)->m_l, false); p << " ";
+		p.PrintDec((*it)->m_p, false);
+		p << "\n";
+	}
+
+
 #if 1
-	/*const int width = 800;
-	const int horiz_front_porch = 40;
-	const int horiz_sync = 128;
-	const int horiz_back_porch = 88;
+//	*(volatile unsigned int *)0xe020815c &= ~(1 << 5);
+
+	const int width = 800;
+	const int horiz_front_porch = 32;
+	const int horiz_sync = 64;
+	const int horiz_back_porch = 152;
 	const bool horiz_pol = false;			//false = +ve
 
 	const int height = 600;
 	const int vert_front_porch = 1;
-	const int vert_sync = 4;
-	const int vert_back_porch = 23;
+	const int vert_sync = 3;
+	const int vert_back_porch = 27;
 	const bool vert_pol = false;
 
-	*(volatile unsigned int *)0xe020815c = 0x204;
-	const int div1 = 2;
-	const int div2 = 5;*/
+	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 9;
+	const int div1 = 3;
+	const int div2 = 1;
+
+	bool interlace = false;
+
+/*	const int width = 1280;
+	const int horiz_front_porch = 56;
+	const int horiz_sync = 136;
+	const int horiz_back_porch = 384-136-56;
+	const bool horiz_pol = true;			//false = +ve
+
+	const int height = 720;
+	const int vert_front_porch = 1;
+	const int vert_sync = 1;
+	const int vert_back_porch = 24;
+	const bool vert_pol = false;
+
+	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
+	const int div1 = 1;
+	const int div2 = 2;
+
+	bool interlace = false;*/
+/*
 
 	const int width = 640;
 	const int horiz_front_porch = 16;
@@ -795,60 +892,95 @@ extern "C" void Setup(unsigned int entryPoint)
 	const int vert_back_porch = 31;
 	const bool vert_pol = true;
 
-	*(volatile unsigned int *)0xe020815c = 0x21e;
-	const int div1 = 2;
-	const int div2 = 1;
+	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
+	const int div1 = 3;
+	const int div2 = 2;
 
-	/*const int width = 1920;
-	const int horiz_front_porch = 44;
-	const int horiz_sync = 88;
-	const int horiz_back_porch = 148;
-	const bool horiz_pol = true;			//false = +ve, true = -ve
+	bool interlace = false;*/
 
-	const int height = 1034;
-	const int vert_front_porch = 5;
-	const int vert_sync = 5;
-	const int vert_back_porch = 35;
+	/*const int width = 640;
+	const int horiz_front_porch = 16;
+	const int horiz_sync = 96;
+	const int horiz_back_porch = 48;
+	const bool horiz_pol = true;			//false = +ve
+
+	const int height = 480;
+	const int vert_front_porch = 11;
+	const int vert_sync = 11;
+	const int vert_back_porch = 31;
 	const bool vert_pol = true;
 
-	const int div = 2;
+	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
+	const int div1 = 3;
+	const int div2 = 2;
+
+	bool interlace = false;*/
+
+
+	/*const int width = 1920;
+	const int horiz_front_porch = 1968 - 1920;
+	const int horiz_sync = 2000 - 1968;
+	const int horiz_back_porch = 2080 - 2000;
+	const bool horiz_pol = true;			//false = +ve, true = -ve
+
+	const int height = 1200;
+	const int vert_front_porch = 3;
+	const int vert_sync = 6;
+	const int vert_back_porch = 1235 - 1209;
+	const bool vert_pol = false;
+
+	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
+	const int div1 = 1;
+	const int div2 = 1;
 	bool interlace = true;*/
 
+	*Dispcc::DISPC_DIVISOR = (1 << 16) | 1;			//change dispc_core_clk to dispc_fclk/1
+
+//	p << *(volatile unsigned int *)0xe020815c << "\n";
+//	while (!(*(volatile unsigned int *)0xe020815c & (1 << 5)))
+//		p << *(volatile unsigned int *)0xe020815c << "\n";
+
+
 	//dma configuration
-	*Dispcc::DISPC_GFX_BA_0 = (unsigned int)PhysPages::FindMultiplePages(1024, 0);
+	*Dispcc::DISPC_GFX_BA_0 = (unsigned int)PhysPages::FindMultiplePages((width * height * 4) / 4096 + 1, 0);
 //	*Dispcc::DISPC_GFX_BA_1 = (unsigned int)PhysPages::FindMultiplePages(1024, 0);			//not necessary?
 
 //	*Dispcc::DISPC_GFX_PIXEL_INC = 4;
 //	*Dispcc::DISPC_GFX_ROW_INC = 5;
 
+	p.PrintDec(__LINE__, false);
+
 	unsigned int phys = *Dispcc::DISPC_GFX_BA_0;
 	unsigned int virt = 0xd0000000;
 
 	void *plut = PhysPages::FindPage();
-	unsigned int *vlut = (unsigned int *)(virt + 1024 * 4096);
+	unsigned int *vlut = (unsigned int *)(virt + ((width * height * 4) / 4096 + 1) * 4096);
 
-	for (int count = 0; count < 1024; count++)
+	for (int count = 0; count < (width * height * 4) / 4096 + 1; count++)
 		ASSERT(VirtMem::MapPhysToVirt((void *)(phys + count * 4096),
 				(void *)(virt + count * 4096),
 				4096,
 				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
 
 	ASSERT(VirtMem::MapPhysToVirt((void *)plut,
-				(void *)(virt + 1024 * 4096),
+				(void *)(virt + ((width * height * 4) / 4096 + 1) * 4096),
 				4096,
 				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
 
 	unsigned int *fb = (unsigned int *)0xd0000000;
+
+	p.PrintDec(__LINE__, false);
 	/*for (int count = 0; count < 640 * 480; count++)
 //		fb[count] = (0x4000 * count) & 0xff00;
 		fb[count] = 0xffffffff;*/
+
 
 	memset(fb, 0, width * height * 4);
 	memset(vlut, 0xff, 4096);
 
 	for (int y = 0; y < height; y++)
 		for (int x = 0; x < width; x++)
-			fb[y * width + x] = (unsigned char)x | ((unsigned char)y << 8);
+			fb[y * width + x] = (unsigned char)x | ((unsigned char)y << 8) | ((unsigned char)(x - y) << 16);
 
 	for (int y = 0; y < height; y += 16)
 		for (int x = 0; x < width; x++)
@@ -873,6 +1005,8 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "row inc \n" << *Dispcc::DISPC_GFX_ROW_INC << " pixel inc " << *Dispcc::DISPC_GFX_PIXEL_INC << "\n";
 
+	p.PrintDec(__LINE__, false);
+
 	//configure gfx window
 	*Dispcc::DISPC_GFX_ATTRIBUTES |= (0xc << 1);		//select the format of image
 	*Dispcc::DISPC_GFX_SIZE = (width - 1) | ((height - 1) << 16);		//set the x/y size of image
@@ -890,11 +1024,16 @@ extern "C" void Setup(unsigned int entryPoint)
 //	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 8);			//channelout, for tv
 	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 30);			//channelout2, for lcd2
 //	*Dispcc::DISPC_CONTROL1 |= (1 << 6);				//gotv
+	*Dispcc::DISPC_CONTROL2 |= (3 << 8);				//24-bit
 	*Dispcc::DISPC_CONTROL2 |= (1 << 5);				//golcd 2
 	*Dispcc::DISPC_GFX_ATTRIBUTES |= 1;					//enable graphics pipeline
 
+	p.PrintDec(__LINE__, false);
+
+	*Dispcc::DISPC_CONTROL1 |= (1 << 14) | (1 << 15);
+
 	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
-//	*Dispcc::DISPC_DEFAULT_COLOR2 = 0xffffff;
+	*Dispcc::DISPC_DEFAULT_COLOR2 = 0x7f7f7f7f;
 
 	//DISPC_CONTROL2[12] overlay optimisation, 2689
 //	*Dispcc::DISPC_CONTROL2 &= ~(1 << 12);
@@ -917,18 +1056,24 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
 	p << "turning on\n";
 
+	p.PrintDec(__LINE__, false);
+
+	*Dispcc::DISPC_CONFIG2 |= ((int)interlace << 22);
+
 	/**Dispcc::DISPC_SIZE_TV = 0x02CF04FF;
 	*Dispcc::DISPC_CONTROL1 |= (1 << 6);
 	*Dispcc::DISPC_CONTROL1 |= (1 << 1);*/
 
 	//http://www.epanorama.net/faq/vga2rgb/calc.html
 
-	*Dispcc::DISPC_POL_FREQ2 = ((int)vert_pol << 13) | ((int)horiz_pol << 12);			//-vsync, -hsync
+	*Dispcc::DISPC_POL_FREQ2 = ((int)horiz_pol << 13) | ((int)vert_pol << 12);			//-vsync, -hsync
 	*Dispcc::DISPC_DIVISOR2 = (div1 << 16) | div2;					//170.6/1/6=~25 MHz
 	*Dispcc::DISPC_SIZE_LCD2 = ((height - 1) << 16) | (width - 1);				//640x480
 	*Dispcc::DISPC_CONTROL2 |= (1 << 3);						//active tft
-	*Dispcc::DISPC_TIMING_V2 = (vert_back_porch << 20) | (vert_front_porch << 8) | vert_sync;		//31 back porch, 11 front porch, 2 sync width
-	*Dispcc::DISPC_TIMING_H2 = (horiz_back_porch << 20) | (horiz_front_porch << 8) | horiz_sync;		//48 back, 16 front, 96 sync
+	*Dispcc::DISPC_TIMING_V2 = (vert_back_porch << 20) | (vert_front_porch << 8) | (vert_sync - 1);		//31 back porch, 11 front porch, 2 sync width
+	*Dispcc::DISPC_TIMING_H2 = ((horiz_back_porch - 1) << 20) | ((horiz_front_porch - 1) << 8) | (horiz_sync - 1);		//48 back, 16 front, 96 sync
+
+	p.PrintDec(__LINE__, false);
 
 	*Dispcc::DISPC_CONTROL2 |= (1 << 5);						//golcd2
 	*Dispcc::DISPC_CONTROL2 |= (1 << 0);						//lcdenable
@@ -938,12 +1083,20 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "config1 " << *Dispcc::DISPC_CONFIG1 << "\n";
 	p << "config2 " << *Dispcc::DISPC_CONFIG2 << "\n";
 	p << "trans colour " << *Dispcc::DISPC_TRANS_COLOR2 << "\n";
+	p << "pol freq 2 " << *Dispcc::DISPC_POL_FREQ2 << "\n";
+	p << "divisor 2 " << *Dispcc::DISPC_DIVISOR2 << "\n";
+	p << "size lcd 2 " << *Dispcc::DISPC_SIZE_LCD2 << "\n";
+	p << "timing v2 " << *Dispcc::DISPC_TIMING_V2 << "\n";
+	p << "timing h2 " << *Dispcc::DISPC_TIMING_H2 << "\n";
 
-	/*p << "supposed to be on\n";
+	p.PrintDec(__LINE__, false);
+
+	p << "supposed to be on\n";
 //	p << "is " << *Dispcc::DISPC_CONTROL1 << "\n";
-	while (1)
+	/*while (1)
 	{
 		p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
+		*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
 
 		for (int count = 2; count < 7; count++)
 		{
@@ -952,10 +1105,32 @@ extern "C" void Setup(unsigned int entryPoint)
 		}
 		p << "\n";
 		DelaySecond();
-	}
-*/
+	}*/
 
-	while(1);
+	unsigned char clock = 0;
+	while (1)
+	{
+		unsigned int *p = fb;
+		for (int y = 0; y < height; y++)
+		{
+			unsigned int code = ((y + clock) & 0xff)
+				| (((y + clock * 2) & 0xff) << 8)
+				| (((y + clock * 3) & 0xff) << 16);
+
+
+			for (int x = 0; x < width; x++)
+				*p++ = code;
+		}
+
+		clock++;
+	}
+
+
+	while(1)
+	{
+		p << gpio122.Read() << "\n";
+		DelaySecond();
+	}
 #endif
 
 #if 0
