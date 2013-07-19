@@ -192,7 +192,7 @@ bool MMCi::Reset(void)
 		}
 	}
 
-	ClockFrequencyChange(/*sm_400kHzClock*/25);
+	ClockFrequencyChange(/*sm_400kHzClock*/35);
 
 	p << "going idle state\n";
 	GoIdleState();

@@ -171,7 +171,7 @@ void DumpMem(T *pVirtual, unsigned int len)
 	}
 }
 
-namespace Omap4460
+namespace OMAP4460
 {
 
 enum Smc

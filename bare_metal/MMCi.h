@@ -216,7 +216,7 @@ protected:
 //		p << "sending sd app cmd\n";
 		CommandArgument(kSdAppCmd, 0, k48bResponse, false);
 		unsigned int resp10 = Response(0);
-		unsigned int resp32 = Response(1);
+		/*unsigned int resp32 =*/ Response(1);
 //		p << "response is " << resp32 << resp10 << "\n";
 		if (resp10 & (1 << 5))
 		{
