@@ -9,13 +9,15 @@
 #define PRINT_UART_H_
 
 #include "print.h"
+#include "IoSpace.h"
 
 class PL011
 {
 public:
+
 	static void EnableUart(bool e)
 	{
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 
 		unsigned int current = p[sm_control];
 		current = current & ~1;						//deselect enable/disable
@@ -25,7 +27,7 @@ public:
 
 	static bool IsUartEnabled(void)
 	{
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 
 		unsigned int current = p[sm_control];
 		return (bool)(current & 1);
@@ -36,7 +38,7 @@ public:
 		bool existing = IsUartEnabled();
 		EnableUart(false);
 
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 
 		unsigned int current = p[sm_lineControl];
 		current = current & ~(1 << 4);					//deselect the fifo enable bit
@@ -48,14 +50,14 @@ public:
 
 	static bool IsFifoEnabled(void)
 	{
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 		unsigned int current = p[sm_lineControl];
 		return (bool)((current >> 4) & 1);
 	}
 
 	static bool WriteByte(unsigned char b)
 	{
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 
 #ifdef PBES
 		while (p[0x44 >> 2] & 1);
@@ -71,7 +73,7 @@ public:
 
 	static bool ReadByte(unsigned char &b)
 	{
-		volatile unsigned int *p = (volatile unsigned int *)sm_baseAddress;
+		volatile unsigned int *p = GetBaseAddress();
 
 		unsigned int receive_empty = (p[sm_flag] >> 4) & 1;
 		if (receive_empty)
@@ -82,12 +84,15 @@ public:
 	}
 
 private:
+	static volatile unsigned *GetBaseAddress(void)
+	{
 #ifdef PBES
-	static const unsigned int sm_baseAddress = 0xfd020000;
-//	static const unsigned int sm_baseAddress = 0x48020000;
+		return IoSpace::GetDefaultIoSpace()->Get("UART3").m_pVirt;
 #else
-	static const unsigned int sm_baseAddress = 0xfd0f1000;
+		return IoSpace::GetDefaultIoSpace()->Get("UART 0 Interface").m_pVirt;
 #endif
+	}
+
 	//offsets in words
 	static const unsigned int sm_data = 0;
 	static const unsigned int sm_receiveStatusErrorClear = 1;

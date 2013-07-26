@@ -26,6 +26,9 @@ void PrcmDump(Printer &p)
 	p << "DeviceName OMAP4460_ES1.x\n";
 	unsigned int u;
 
+	// 0xe0204 == CM1
+	// 0xe0208 == CM2
+
 	u = 0xe0204100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0204108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0204110; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
@@ -222,6 +225,7 @@ void PrcmDump(Printer &p)
 	u = 0xe0209550; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0209558; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0209560; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	//PRM
 	u = 0xe0106100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0106108; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe010610c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
@@ -238,6 +242,7 @@ void PrcmDump(Printer &p)
 	u = 0xe0107a00; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0107a08; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe0107a20; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
+	//SCRM
 	u = 0xe010a000; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe010a100; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 	u = 0xe010a104; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";

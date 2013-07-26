@@ -20,6 +20,7 @@
 #include "GPIO.h"
 #include "Modeline.h"
 #include "DSS.h"
+#include "IoSpace.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -146,54 +147,17 @@ static void MapKernel(unsigned int physEntryPoint)
     //use the zero lo
     VirtMem::SetL1TableLo(0);
 
-    //IO sections
+    if (!InitMempool((void *)0xa0000000, 256 * 5))		//5MB
+		ASSERT(0);
+
 #ifdef PBES
-    //L4 PER
-    VirtMem::MapPhysToVirt((void *)(0x480U * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    //private A9 memory
-    VirtMem::MapPhysToVirt((void *)(0x482U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    //UART - DUP!
-    VirtMem::MapPhysToVirt((void *)(0x480 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-
-
-    VirtMem::MapPhysToVirt((void *)(0x4a1 * 1048576), (void *)(0xe00U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    VirtMem::MapPhysToVirt((void *)(0x4a3 * 1048576), (void *)(0xe01U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    VirtMem::MapPhysToVirt((void *)(0x4a0 * 1048576), (void *)(0xe02U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-
-    //display
-    for (int count = 0; count < 16; count++)
-		VirtMem::MapPhysToVirt((void *)((0x580 + count) * 1048576), (void *)((0xfc0U + count) * 1048576), 1048576, true,
-				TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-/*
-    VirtMem::MapPhysToVirt((void *)(0x4a0 * 1048576), (void *)(0x4a0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    VirtMem::MapPhysToVirt((void *)(0x4a3 * 1048576), (void *)(0x4a3U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    VirtMem::MapPhysToVirt((void *)(0x550 * 1048576), (void *)(0x550U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-
-    TTB_phys = (unsigned int *)PhysPages::FindMultiplePages(256, 8);
-    TTB_virt = (unsigned int *)0x10100000;
-    if (!VirtMem::MapPhysToVirt(TTB_phys, TTB_virt, 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
-    	ASSERT(0);*/
+    IoSpace::SetDefaultIoSpace(new OMAP4460::OmapIoSpace((volatile unsigned int *)0xfc000000));
 #else
-    //sd
-    VirtMem::MapPhysToVirt((void *)(256 * 1048576), (void *)(0xfefU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    //uart
-    VirtMem::MapPhysToVirt((void *)(257 * 1048576), (void *)(0xfd0U * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-    //timer and primary interrupt controller
-    VirtMem::MapPhysToVirt((void *)(0x101U * 1048576), (void *)(0xfeeU * 1048576), 1048576, true,
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+    IoSpace::SetDefaultIoSpace(new VersatilePb::VersIoSpace((volatile unsigned int *)0xfc000000));
 #endif
+    ASSERT(IoSpace::GetDefaultIoSpace());
+
+    IoSpace::GetDefaultIoSpace()->Map();
 
     //exception vector, plus the executable high secton
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, true,
@@ -262,8 +226,9 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "mmu and uart enabled\n";
 
-	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, false);
-	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, true);
+	/*VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, false);
+	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, true);*/
+	VirtMem::DumpVirtToPhys((void *)0xf0000000, (void *)0xffffffff, true, true, true);
 
 	VectorTable::EncodeAndWriteBkpt(VectorTable::kReset);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Und, VectorTable::kUndefinedInstruction);
@@ -280,20 +245,8 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	p << "fpu enabled\n";
 
-	if (!InitMempool((void *)0xa0000000, 256 * 5))		//5MB
-		ASSERT(0);
-
-	p << "memory pool initialised\n";
-
-
-//	p << "was " << *(volatile unsigned int *)0xe020815c << "\n";
-//	*(volatile unsigned int *)0xe020815c = 0x21e;
-//	DelaySecond();
-//	p << "now " << *(volatile unsigned int *)0xe020815c << "\n";
-//	DelaySecond();
-
 #ifdef PBES
-	volatile unsigned int *pl310 = (volatile unsigned int *)0xfee42000;
+	volatile unsigned int *pl310 = IoSpace::GetDefaultIoSpace()->Get("PL310");
 	p << pl310[0] << "\n";
 	p << pl310[4 >> 2] << "\n";
 	p << pl310[0x100 >> 2] << "\n";
@@ -314,42 +267,47 @@ extern "C" void Setup(unsigned int entryPoint)
 	 * change to 1.2 GHz
 	 */
 
-//	p << "changing clock speed\n";
-//	*(volatile unsigned int *)0xe020416c = 0xc07d07;
-//	p << "done\n";
+	/*p << "changing clock speed\n";
+	IoSpace::GetDefaultIoSpace()->Get("CM1")[0x16c >> 2] = 0xc07d07;
+	p << "done\n";*/
 
 //	while(1);
-#endif
 
-#ifdef PBES
 	//led pin mux
-	*(volatile unsigned int *)0xe00000fc = 0x11b;
-	for (int count = 2; count < 7; count++)
-		g_pGpios[count - 1] = new OMAP4460::GPIO((volatile unsigned int *)(0xfef55000 + (count - 2) * 0x2000), count);
+	IoSpace::GetDefaultIoSpace()->Get("SYSCTRL_PADCONF_CORE")[0xfc >> 2] = 0x11b;
 
-	g_pGpios[0] = new OMAP4460::GPIO((volatile unsigned int *)(0xe0110000), 1);
+	g_pGpios[0] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO1"), 1);
+	g_pGpios[1] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO2"), 2);
+	g_pGpios[2] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO3"), 3);
+	g_pGpios[3] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO4"), 4);
+	g_pGpios[4] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO5"), 5);
+	g_pGpios[5] = new OMAP4460::GPIO(IoSpace::GetDefaultIoSpace()->Get("GPIO6"), 6);
 
 
 	auto gpio0 = GetPin(0);
+	auto gpio1 = GetPin(1);
+	auto gpio62 = GetPin(62);
 	auto gpio110 = GetPin(110);
 	auto gpio122 = GetPin(122);
 	auto s2_switch = GetPin(113);
 	gpio0.SetAs(OMAP4460::GPIO::kOutput);
+	gpio1.SetAs(OMAP4460::GPIO::kOutput);
+	gpio62.SetAs(OMAP4460::GPIO::kOutput);
 	gpio110.SetAs(OMAP4460::GPIO::kOutput);
 	gpio122.SetAs(OMAP4460::GPIO::kInput);
 	s2_switch.SetAs(OMAP4460::GPIO::kInput);
 
 	gpio0.Write(true);
-/*	bool flash = false;
+	/*bool flash = false;
 
 	while (1)
 	{
-		p << gpio122.Read() << "\n";
+		p << s2_switch.Read() << "\n";
 		gpio110.Write(flash);
 		flash = !flash;
 		DelaySecond();
-	}
-
+	}*/
+/*
 	while(1)
 	{
 		for (int count = 1; count < 7; count++)
@@ -360,7 +318,7 @@ extern "C" void Setup(unsigned int entryPoint)
 		p << "\n";
 		DelaySecond();
 	}*/
-#endif
+
 
 	Modeline::SetDefaultModesList(new std::list<Modeline>);
 	Modeline::AddDefaultModes();
@@ -383,7 +341,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	OMAP4460::Gfx g(pPhysFb, OMAP4460::Gfx::kxRGB24_8888,
 			width, height, 1, 1, 0, 0);
 	g.Attach();
-
+#endif
 
 #if 0
 	extern unsigned int m3_magic;
@@ -501,6 +459,8 @@ extern "C" void Setup(unsigned int entryPoint)
 #endif
 
 
+	p << "enabling interrupts\n";
+
 	//enable interrupts
 	EnableIrq(true);
 	EnableFiq(true);
@@ -517,55 +477,39 @@ extern "C" void Setup(unsigned int entryPoint)
 	pIdle->SetName("idle");
 	Scheduler::GetMasterScheduler().AddSpecialThread(*pIdle, Scheduler::kIdleThread);
 
+	p << "making timer and interrupt controller\n";
+
 
 #ifdef PBES
-	pPic = new CortexA9MPCore::GenericInterruptController((volatile unsigned int *)0xfee40100, (volatile unsigned int *)0xfee41000);
-	p << "pic is " << pPic << "\n";
-	pTimer1 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef32000, 0, 2);
+	pPic = new CortexA9MPCore::GenericInterruptController(
+			&IoSpace::GetDefaultIoSpace()->Get("SCU/GIC_Proc_Interface/Timer")[0x100 >> 2],
+			IoSpace::GetDefaultIoSpace()->Get("GIC_Intr_Distributor"));
+
+	pTimer1 = new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER2"), 0, 2);
 	ASSERT(pTimer1);
-	p << "pTimer1 is " << pTimer1 << "\n";
 	pTimer1->SetFrequencyInMicroseconds(1 * 1000 * 1000);
-//	pTimer1->Enable(true);
-
-//	pTimer10 = new OMAP4460::GpTimer((volatile unsigned int *)0xfef86000, 0, 10);
-//	pTimer10->SetFrequencyInMicroseconds(1 * 1000 * 1000);
-//	pTimer10->Enable(true);
-
-	p << "timer interrupt " << pTimer1->GetInterruptNumber() << "\n";
-//	p << "timer interrupt " << pTimer10->GetInterruptNumber() << "\n";
 
 	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
-//	pPic->RegisterInterrupt(*pTimer10, InterruptController::kIrq);
-
-//	int swi = 0;
-
-	p << "go\n";
-
-//	while(1)
-//		pPic->SoftwareInterrupt((swi++) & 0xf);
 #else
-	pTimer0 = new VersatilePb::SP804((volatile unsigned int *)0xfeee2000, 0);
+	pTimer0 = new VersatilePb::SP804(IoSpace::GetDefaultIoSpace()->Get("Timer modules 0 and 1 interface"), 0);
 	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
 
-	pTimer1 = new VersatilePb::SP804((volatile unsigned int *)0xfeee3000, 1);
+	pTimer1 = new VersatilePb::SP804(IoSpace::GetDefaultIoSpace()->Get("Timer modules 2 and 3 interface"), 1);
 	pTimer1->SetFrequencyInMicroseconds(1 * 1000 * 1000);
 
 	pMasterClockClear = (unsigned int)pTimer0->GetFiqClearAddress();
 	ASSERT(pMasterClockClear);
 	masterClockClearValue = pTimer0->GetFiqClearValue();
 
-	pPic = new VersatilePb::PL190((volatile unsigned int *)0xfee40000);
+	pPic = new VersatilePb::PL190(IoSpace::GetDefaultIoSpace()->Get("Vectored Interrupt Controller"));
 	p << "pic is " << pPic << "\n";
 	pPic->RegisterInterrupt(*pTimer0, InterruptController::kFiq);
 	pPic->RegisterInterrupt(*pTimer1, InterruptController::kIrq);
 
 #endif
 
-	for (int count = 0; count < 16; count++)
-	{
-		p << VectorTable::GetTableAddress()[count] << "\n";
-	}
-
+#if 1
+	p << "registering interrupts\n";
 	pPic->RegisterInterrupt(*dss, InterruptController::kIrq);
 	dss->OnInterrupt([](InterruptSource &)
 			{
@@ -573,24 +517,38 @@ extern "C" void Setup(unsigned int entryPoint)
 				p << "vsync\n";
 			});
 	dss->SetInterruptMask(/*OMAP4460::DSS::sm_vSync2*/-1);
-	dss->EnableInterrupt(true);
+//	dss->EnableInterrupt(true);
+//	pTimer1->Enable(true);
+//	pTimer1->EnableInterrupt(true);
 
-	while(1)
+
+	/*//enable port clocks
+	*(volatile unsigned int *)0xe0209358 |= (1 << 24);
+	p << "port clocks " << *(volatile unsigned int *)0xe0209358;
+
+	//put the phy in reset
+	gpio1.Write(false);
+	gpio62.Write(false);
+	for (int count = 0; count < 10; count++)
+		DelayMillisecond();
+*/
+	/*while(1)
 	{
-		p << "still alive\n";
+		p << "waiting\n";
 		DelaySecond();
-	}
+	}*/
+#endif
 
 
 //	{
 #ifdef PBES
-		OMAP4460::MMCi sd((volatile void *)(0xfefU * 1048576 + 0x9c000), 1);
+		OMAP4460::MMCi sd(IoSpace::GetDefaultIoSpace()->Get("HSMMC1"), 1);
 
 		p << "resetting\n";
 		if (!sd.Reset())
 			p << "reset failed\n";
 #else
-		VersatilePb::PL181 sd((volatile void *)(0xfefU * 1048576 + 0x5000));
+		VersatilePb::PL181 sd(IoSpace::GetDefaultIoSpace()->Get("Multimedia Card Interface 0 (MMCI0)"));
 #endif
 
 		p << "go idle state\n";
@@ -681,7 +639,7 @@ extern "C" void Setup(unsigned int entryPoint)
 //	pTimer0->Enable(true);
 	pTimer1->Enable(true);
 
-	dss->EnableInterrupt(true);
+//	dss->EnableInterrupt(true);
 
 	pThread->Run();
 
