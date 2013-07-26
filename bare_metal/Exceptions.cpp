@@ -9,10 +9,56 @@
 #include "Process.h"
 #include "Scheduler.h"
 
+extern ExceptionState __UndState;
+extern ExceptionState __SvcState;
+extern ExceptionState __PrfState;
+extern ExceptionState __DatState;
+extern ExceptionState __IrqState;
+
+void DumpAllStates(Printer &p)
+{
+	p << "undefined\n";
+	p << __UndState.m_returnAddress << " " << __UndState.m_spsrAsWord << "\n";
+	for (int count = 0; count < 15; count++)
+		p << __UndState.m_regs[count] << "\n";
+	p << __UndState.m_newPc << "\n";
+	p << (int)__UndState.m_mode << "\n";
+
+	p << "supervisor call\n";
+	p << __SvcState.m_returnAddress << " " << __SvcState.m_spsrAsWord << "\n";
+	for (int count = 0; count < 15; count++)
+		p << __SvcState.m_regs[count] << "\n";
+	p << __SvcState.m_newPc << "\n";
+	p << (int)__SvcState.m_mode << "\n";
+
+	p << "prefetch abort\n";
+	p << __PrfState.m_returnAddress << " " << __PrfState.m_spsrAsWord << "\n";
+	for (int count = 0; count < 15; count++)
+		p << __PrfState.m_regs[count] << "\n";
+	p << __PrfState.m_newPc << "\n";
+	p << (int)__PrfState.m_mode << "\n";
+
+	p << "data abort\n";
+	p << __DatState.m_returnAddress << " " << __DatState.m_spsrAsWord << "\n";
+	for (int count = 0; count < 15; count++)
+		p << __DatState.m_regs[count] << "\n";
+	p << __DatState.m_newPc << "\n";
+	p << (int)__DatState.m_mode << "\n";
+
+	p << "irq\n";
+	p << __IrqState.m_returnAddress << " " << __IrqState.m_spsrAsWord << "\n";
+	for (int count = 0; count < 15; count++)
+		p << __IrqState.m_regs[count] << "\n";
+	p << __IrqState.m_newPc << "\n";
+	p << (int)__IrqState.m_mode << "\n";
+}
+
 extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 {
 	PrinterUart<PL011> p;
 	bool thumb = pState->m_spsr.m_t;
+
+//	DumpAllStates(p);
 
 	Thread *pThread = Scheduler::GetMasterScheduler().WhatIsRunning();
 
@@ -133,11 +179,11 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 			//return to the unfinished instruction
 			pState->m_newPc = pState->m_returnAddress;
 
-		/*	p << "irq at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
+			p << "irq at " << pState->m_returnAddress << " returning to " << pState->m_newPc << "\n";
 			p << "cpsr " << pState->m_spsrAsWord << "\n";
 			for (int count = 0; count < 15; count++)
 				p << "\t" << count << " " << pState->m_regs[count] << "\n";
-*/
+
 			//run all the interrupt handlers, and clear recorded interrupts
 			//we can't enqueue them all in a list and run them elsewhere as interrupts will be turned on
 			//and we'll come right back here

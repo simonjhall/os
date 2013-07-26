@@ -22,6 +22,11 @@ static inline void assert_func(void)
 
 #define ASSERT(x) { if (!(x)) {PrinterUart<PL011> p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.PrintDec(__LINE__, true);assert_func();} }
 
+//caches
+extern "C" void v7_invalidate_l1(void);
+extern "C" void v7_flush_icache_all(void);
+extern "C" void v7_flush_dcache_all(void);
+
 bool InitMempool(void *pBase, unsigned int numPages);
 
 void *internal_mmap(void *addr, size_t length, int prot, int flags,

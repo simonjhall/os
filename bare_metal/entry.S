@@ -265,8 +265,6 @@ map_loop:
 	orr r2, #1					/* enable */
 	bic r2, #2					/* disable alignment fault checking */
 	orr r2, #(1 << 13)			/* remap high exception vector */
-	orr r2, #(1 << 12)			/* icache enable */
-	orr r2, #(1 << 2)				/* dcache enable */
 	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
 
 	#good to go

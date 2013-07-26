@@ -183,8 +183,16 @@ EnableIrqFiqForMode:
 .global InsertPageTableLoAndFlush
 .func InsertPageTableLoAndFlush
 InsertPageTableLoAndFlush:
+	push {lr}
+
+	bl v7_flush_icache_all
+	bl v7_flush_dcache_all
+
 	mcr p15, 0, r0, c2, c0, 0
-	b FlushTlb
+
+	bl FlushTlb
+
+	pop {pc}
 .endfunc
 .size InsertPageTableLoAndFlush, .-InsertPageTableLoAndFlush
 

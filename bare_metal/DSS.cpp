@@ -189,6 +189,10 @@ namespace Dispcc
 }
 
 DSS::DSS()
+: InterruptSource(),
+  pPhysGammaTable(0),
+  m_interruptMask(0),
+  m_interruptsEnabled(false)
 {
 	FillTimingsList();
 	pPhysGammaTable = PhysPages::FindPage();
@@ -275,6 +279,51 @@ void DSS::SpinWaitForVsyncAndClear(void)
 {
 	*Dispcc::DISPC_IRQSTATUS &= ~0x40000;
 	while ((*Dispcc::DISPC_IRQSTATUS & 0x40000) == 0);
+}
+
+void DSS::EnableInterrupt(bool e)
+{
+	m_interruptsEnabled = e;
+
+	if (e)
+	{
+		ClearInterrupt();
+		*Dispcc::DISPC_IRQENABLE = m_interruptMask;
+	}
+	else
+		*Dispcc::DISPC_IRQENABLE = 0;
+}
+
+unsigned int DSS::GetInterruptNumber(void)
+{
+	return 25 + 32;
+}
+
+bool DSS::HasInterruptFired(void)
+{
+	return (*Dispcc::DISPC_IRQSTATUS & m_interruptMask) ? true : false;
+}
+
+void DSS::ClearInterrupt(void)
+{
+	*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
+}
+
+void DSS::SetInterruptMask(unsigned int m)
+{
+	m_interruptMask = m;
+	if (m_interruptsEnabled)
+		*Dispcc::DISPC_IRQENABLE = m_interruptMask;
+}
+
+unsigned int DSS::GetInterruptMask(void)
+{
+	return m_interruptMask;
+}
+
+unsigned int DSS::RawIrqStatus(void)
+{
+	return *Dispcc::DISPC_IRQSTATUS;
 }
 
 void DSS::FillTimingsList(void)

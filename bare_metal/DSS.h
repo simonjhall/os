@@ -8,6 +8,7 @@
 #ifndef DSS_H_
 #define DSS_H_
 
+#include "InterruptSource.h"
 #include "Modeline.h"
 #include <vector>
 
@@ -82,15 +83,52 @@ private:
 	unsigned int m_posX, m_posY;
 };
 
-class DSS
+class DSS : public InterruptSource
 {
 public:
 	DSS();
 	virtual ~DSS();
 
 	bool EnableDisplay(Modeline mode);
-
 	void SpinWaitForVsyncAndClear(void);
+
+	virtual void EnableInterrupt(bool e);
+	virtual unsigned int GetInterruptNumber(void);
+	virtual bool HasInterruptFired(void);
+	virtual void ClearInterrupt(void);
+
+	void SetInterruptMask(unsigned int);
+	unsigned int GetInterruptMask(void);
+
+	unsigned int RawIrqStatus(void);
+
+	static const unsigned int sm_frameDone1			= 1 << 0;
+	static const unsigned int sm_vSync1				= 1 << 1;
+	static const unsigned int sm_eVsyncEven			= 1 << 2;
+	static const unsigned int sm_eVsyncOdd			= 1 << 3;
+	static const unsigned int sm_acBiasCount1		= 1 << 4;
+	static const unsigned int sm_programmedLine		= 1 << 5;
+	static const unsigned int sm_gfxBufferUnderflow	= 1 << 6;
+	static const unsigned int sm_gfxEndWindow		= 1 << 7;
+	static const unsigned int sm_paletteGammaLoad	= 1 << 8;
+	static const unsigned int sm_ocpError			= 1 << 9;
+	static const unsigned int sm_vid1BufferUnderflow= 1 << 10;
+	static const unsigned int sm_vid1EndWindow		= 1 << 11;
+	static const unsigned int sm_vid2BufferUnderflow= 1 << 12;
+	static const unsigned int sm_vid2EndWindow		= 1 << 13;
+	static const unsigned int sm_syncLost1			= 1 << 14;
+	static const unsigned int sm_syncLostTv			= 1 << 15;
+	static const unsigned int sm_wakeUp				= 1 << 16;
+	static const unsigned int sm_syncLost2			= 1 << 17;
+	static const unsigned int sm_vSync2				= 1 << 18;
+	static const unsigned int sm_vid3EndWindow		= 1 << 19;
+	static const unsigned int sm_vid3BufferUnderflow= 1 << 20;
+	static const unsigned int sm_acBiasCount2		= 1 << 21;
+	static const unsigned int sm_frameDone2			= 1 << 22;
+	static const unsigned int sm_frameDoneWb		= 1 << 23;
+	static const unsigned int sm_frameDoneTv		= 1 << 24;
+	static const unsigned int sm_wbBufferOverflow	= 1 << 25;
+	static const unsigned int sm_wbErrorUncomplete	= 1 << 26;
 
 private:
 	void FillTimingsList(void);
@@ -126,6 +164,8 @@ private:
 	std::vector<ClockCombo> m_pclks;
 
 	void *pPhysGammaTable;
+	unsigned int m_interruptMask;
+	bool m_interruptsEnabled;
 };
 
 } /* namespace OMAP4460 */

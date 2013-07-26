@@ -44,6 +44,7 @@ Resume:
 
 .macro HANDLER exceptionId, funcName, handlerFunc, storeName
 
+.global \storeName
 \storeName:
 	#return address, spsr
 	.fill 2, 4, 0

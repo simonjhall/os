@@ -15,7 +15,10 @@ static unsigned int conv_u(unsigned int u)
 	else if ((u >> 20) == 0xe01)
 		return (u & 1048575) | (0x4a3 << 20);
 	else
+	{
 		ASSERT(0);
+		return 0;
+	}
 }
 
 void PrcmDump(Printer &p)

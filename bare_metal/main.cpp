@@ -21,8 +21,6 @@
 #include "Modeline.h"
 #include "DSS.h"
 
-int main(int argc, const char **argv);
-
 #include <stdio.h>
 #include <string.h>
 #include <link.h>
@@ -116,6 +114,9 @@ unsigned int *TTB_phys;
 
 static void MapKernel(unsigned int physEntryPoint)
 {
+	v7_flush_icache_all();
+    v7_flush_dcache_all();
+
 	//entry may be pushed up a little bit
 	unsigned int entry_aligned_back = (unsigned int)&entry_maybe_misaligned & ~4095;
 //	unsigned int virt_phys_offset = entry_aligned_back - physEntryPoint;
@@ -222,181 +223,7 @@ static void MapKernel(unsigned int physEntryPoint)
 VirtualFS *vfs;
 
 extern "C" void m3_entry(void);
-/*
-namespace Dispcc
-{
-	volatile unsigned int *DISPC_REVISION = (volatile unsigned int *)0xFC001000;
-	volatile unsigned int *DISPC_SYSCONFIG = (volatile unsigned int *)0xFC001010;
-	volatile unsigned int *DISPC_SYSSTATUS = (volatile unsigned int *)0xFC001014;
-	volatile unsigned int *DISPC_IRQSTATUS = (volatile unsigned int *)0xFC001018;
-	volatile unsigned int *DISPC_IRQENABLE = (volatile unsigned int *)0xFC00101C;
-	volatile unsigned int *DISPC_CONTROL1  = (volatile unsigned int *)0xFC001040;
-	volatile unsigned int *DISPC_CONFIG1 = (volatile unsigned int *)0xFC001044;
-	volatile unsigned int *DISPC_DEFAULT_COLOR0 = (volatile unsigned int *)0xFC00104C;
-	volatile unsigned int *DISPC_DEFAULT_COLOR1 = (volatile unsigned int *)0xFC001050;
-	volatile unsigned int *DISPC_TRANS_COLOR0 = (volatile unsigned int *)0xFC001054;
-	volatile unsigned int *DISPC_TRANS_COLOR1 = (volatile unsigned int *)0xFC001058;
-	volatile unsigned int *DISPC_LINE_STATUS = (volatile unsigned int *)0xFC00105C;
-	volatile unsigned int *DISPC_LINE_NUMBER = (volatile unsigned int *)0xFC001060;
-	volatile unsigned int *DISPC_TIMING_H1 = (volatile unsigned int *)0xFC001064;
-	volatile unsigned int *DISPC_TIMING_V1 = (volatile unsigned int *)0xFC001068;
-	volatile unsigned int *DISPC_POL_FREQ1 = (volatile unsigned int *)0xFC00106C;
-	volatile unsigned int *DISPC_DIVISOR1 = (volatile unsigned int *)0xFC001070;
-	volatile unsigned int *DISPC_GLOBAL_ALPHA = (volatile unsigned int *)0xFC001074;
-	volatile unsigned int *DISPC_SIZE_TV = (volatile unsigned int *)0xFC001078;
-	volatile unsigned int *DISPC_SIZE_LCD1 = (volatile unsigned int *)0xFC00107C;
 
-	volatile unsigned int *DISPC_GFX_BA_0 = (volatile unsigned int *)(0xFC001080 + 4 * 0);
-	volatile unsigned int *DISPC_GFX_BA_1 = (volatile unsigned int *)(0xFC001080 + 4 * 1);
-	volatile unsigned int *DISPC_GFX_POSITION = (volatile unsigned int *)0xFC001088;
-	volatile unsigned int *DISPC_GFX_SIZE = (volatile unsigned int *)0xFC00108C;
-	volatile unsigned int *DISPC_GFX_ATTRIBUTES = (volatile unsigned int *)0xFC0010A0;
-	volatile unsigned int *DISPC_GFX_BUF_THRESHOLD = (volatile unsigned int *)0xFC0010A4;
-	volatile unsigned int *DISPC_GFX_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC0010A8;
-	volatile unsigned int *DISPC_GFX_ROW_INC = (volatile unsigned int *)0xFC0010AC;
-	volatile unsigned int *DISPC_GFX_PIXEL_INC = (volatile unsigned int *)0xFC0010B0;
-	volatile unsigned int *DISPC_GFX_TABLE_BA = (volatile unsigned int *)0xFC0010B8;
-
-	volatile unsigned int *DISPC_VID1_BA_0 = (volatile unsigned int *)(0xFC0010BC + 4 * 0);
-	volatile unsigned int *DISPC_VID1_BA_1 = (volatile unsigned int *)(0xFC0010BC + 4 * 1);
-	volatile unsigned int *DISPC_VID1_POSITION = (volatile unsigned int *)0xFC0010C4;
-	volatile unsigned int *DISPC_VID1_SIZE = (volatile unsigned int *)0xFC0010C8;
-	volatile unsigned int *DISPC_VID1_ATTRIBUTES = (volatile unsigned int *)0xFC0010CC;
-	volatile unsigned int *DISPC_VID1_BUF_THRESHOLD = (volatile unsigned int *)0xFC0010D0;
-	volatile unsigned int *DISPC_VID1_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC0010D4;
-	volatile unsigned int *DISPC_VID1_ROW_INC = (volatile unsigned int *)0xFC0010D8;
-	volatile unsigned int *DISPC_VID1_PIXEL_INC = (volatile unsigned int *)0xFC0010DC;
-	volatile unsigned int *DISPC_VID1_FIR = (volatile unsigned int *)0xFC0010E0;
-	volatile unsigned int *DISPC_VID1_PICTURE_SIZE = (volatile unsigned int *)0xFC0010E4;
-	volatile unsigned int *DISPC_VID1_ACCU_0 = (volatile unsigned int *)(0xFC0010E8 + 4 * 0);
-	volatile unsigned int *DISPC_VID1_ACCU_1 = (volatile unsigned int *)(0xFC0010E8 + 4 * 1);
-	volatile unsigned int *DISPC_VID1_FIR_COEF_H_0 = (volatile unsigned int *)(0xFC0010F0 + 8 * 0);
-	volatile unsigned int *DISPC_VID1_FIR_COEF_H_1 = (volatile unsigned int *)(0xFC0010F0 + 8 * 1);
-	volatile unsigned int *DISPC_VID1_FIR_COEF_HV_0 = (volatile unsigned int *)(0xFC0010F4 + 8 * 0);
-	volatile unsigned int *DISPC_VID1_FIR_COEF_HV_1 = (volatile unsigned int *)(0xFC0010F4 + 8 * 1);
-//	volatile unsigned int *DISPC_VID1_CONV_COEF0 = (volatile unsigned int *)0xFC001130;
-//	volatile unsigned int *DISPC_VID1_CONV_COEF1 = (volatile unsigned int *)0xFC001134;
-//	volatile unsigned int *DISPC_VID1_CONV_COEF2 = (volatile unsigned int *)0xFC001138;
-//	volatile unsigned int *DISPC_VID1_CONV_COEF3 = (volatile unsigned int *)0xFC00113C;
-//	volatile unsigned int *DISPC_VID1_CONV_COEF4 = (volatile unsigned int *)0xFC001140;
-
-	volatile unsigned int *DISPC_VID2_BA_0 = (volatile unsigned int *)(0xFC00114C + 4 * 0);
-	volatile unsigned int *DISPC_VID2_BA_1 = (volatile unsigned int *)(0xFC00114C + 4 * 1);
-	volatile unsigned int *DISPC_VID2_POSITION = (volatile unsigned int *)0xFC001154;
-	volatile unsigned int *DISPC_VID2_SIZE = (volatile unsigned int *)0xFC001158;
-	volatile unsigned int *DISPC_VID2_ATTRIBUTES = (volatile unsigned int *)0xFC00115C;
-	volatile unsigned int *DISPC_VID2_BUF_THRESHOLD = (volatile unsigned int *)0xFC001160;
-	volatile unsigned int *DISPC_VID2_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC001164;
-	volatile unsigned int *DISPC_VID2_ROW_INC = (volatile unsigned int *)0xFC001168;
-	volatile unsigned int *DISPC_VID2_PIXEL_INC = (volatile unsigned int *)0xFC00116C;
-	volatile unsigned int *DISPC_VID2_FIR = (volatile unsigned int *)0xFC001170;
-	volatile unsigned int *DISPC_VID2_PICTURE_SIZE = (volatile unsigned int *)0xFC001174;
-	volatile unsigned int *DISPC_VID2_ACCU_0 = (volatile unsigned int *)(0xFC001178 + 4 * 0);
-	volatile unsigned int *DISPC_VID2_ACCU_1 = (volatile unsigned int *)(0xFC001178 + 4 * 1);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_H_0 = (volatile unsigned int *)(0xFC001180 + 8 * 0);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_H_1 = (volatile unsigned int *)(0xFC001180 + 8 * 1);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_HV_0 = (volatile unsigned int *)(0xFC001184 + 8 * 0);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_HV_1 = (volatile unsigned int *)(0xFC001184 + 8 * 1);
-
-	volatile unsigned int *DISPC_VID2_CONV_COEF0 = (volatile unsigned int *)0xFC0011C0;
-	volatile unsigned int *DISPC_VID2_CONV_COEF1 = (volatile unsigned int *)0xFC0011C4;
-	volatile unsigned int *DISPC_VID2_CONV_COEF2 = (volatile unsigned int *)0xFC0011C8;
-	volatile unsigned int *DISPC_VID2_CONV_COEF3 = (volatile unsigned int *)0xFC0011CC;
-	volatile unsigned int *DISPC_VID2_CONV_COEF4 = (volatile unsigned int *)0xFC0011D0;
-
-	volatile unsigned int *DISPC_DATA1_CYCLE1 = (volatile unsigned int *)0xFC0011D4;
-	volatile unsigned int *DISPC_DATA1_CYCLE2 = (volatile unsigned int *)0xFC0011D8;
-	volatile unsigned int *DISPC_DATA1_CYCLE3 = (volatile unsigned int *)0xFC0011DC;
-
-//	volatile unsigned int *DISPC_VID1_FIR_COEF_V_0 = (volatile unsigned int *)(0xFC0011E0 + 4 * 0);
-//	volatile unsigned int *DISPC_VID1_FIR_COEF_V_1 = (volatile unsigned int *)(0xFC0011E0 + 4 * 1);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_V_0 = (volatile unsigned int *)(0xFC001200 + 4 * 0);
-//	volatile unsigned int *DISPC_VID2_FIR_COEF_V_1 = (volatile unsigned int *)(0xFC001200 + 4 * 1);
-
-	volatile unsigned int *DISPC_CPR1_COEF_R = (volatile unsigned int *)0xFC001220;
-	volatile unsigned int *DISPC_CPR1_COEF_G = (volatile unsigned int *)0xFC001224;
-	volatile unsigned int *DISPC_CPR1_COEF_B = (volatile unsigned int *)0xFC001228;
-
-	volatile unsigned int *DISPC_GFX_PRELOAD = (volatile unsigned int *)0xFC00122C;
-	volatile unsigned int *DISPC_VID1_PRELOAD = (volatile unsigned int *)0xFC001230;
-	volatile unsigned int *DISPC_VID2_PRELOAD = (volatile unsigned int *)0xFC001234;
-
-	volatile unsigned int *DISPC_CONTROL2 = (volatile unsigned int *)0xFC001238;
-
-	volatile unsigned int *DISPC_VID3_ACCU_0 = (volatile unsigned int *)(0xFC001300 + 4 * 0);
-	volatile unsigned int *DISPC_VID3_ACCU_1 = (volatile unsigned int *)(0xFC001300 + 4 * 1);
-	volatile unsigned int *DISPC_VID3_BA_0 = (volatile unsigned int *)(0xFC001308 + 4 * 0);
-	volatile unsigned int *DISPC_VID3_BA_1 = (volatile unsigned int *)(0xFC001308 + 4 * 1);
-	volatile unsigned int *DISPC_VID3_ATTRIBUTES = (volatile unsigned int *)0xFC001370;
-	volatile unsigned int *DISPC_VID3_CONV_COEF0 = (volatile unsigned int *)0xFC001374;
-	volatile unsigned int *DISPC_VID3_CONV_COEF1 = (volatile unsigned int *)0xFC001378;
-	volatile unsigned int *DISPC_VID3_CONV_COEF2 = (volatile unsigned int *)0xFC00137C;
-	volatile unsigned int *DISPC_VID3_CONV_COEF3 = (volatile unsigned int *)0xFC001380;
-	volatile unsigned int *DISPC_VID3_CONV_COEF4 = (volatile unsigned int *)0xFC001384;
-	volatile unsigned int *DISPC_VID3_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC001388;
-	volatile unsigned int *DISPC_VID3_BUF_THRESHOLD = (volatile unsigned int *)0xFC00138C;
-	volatile unsigned int *DISPC_VID3_FIR = (volatile unsigned int *)0xFC001390;
-	volatile unsigned int *DISPC_VID3_PICTURE_SIZE = (volatile unsigned int *)0xFC001394;
-	volatile unsigned int *DISPC_VID3_PIXEL_INC = (volatile unsigned int *)0xFC001398;
-	volatile unsigned int *DISPC_VID3_POSITION = (volatile unsigned int *)0xFC00139C;
-	volatile unsigned int *DISPC_VID3_PRELOAD = (volatile unsigned int *)0xFC0013A0;
-	volatile unsigned int *DISPC_VID3_ROW_INC = (volatile unsigned int *)0xFC0013A4;
-	volatile unsigned int *DISPC_VID3_SIZE = (volatile unsigned int *)0xFC0013A8;
-	volatile unsigned int *DISPC_DEFAULT_COLOR2 = (volatile unsigned int *)0xFC0013AC;
-	volatile unsigned int *DISPC_TRANS_COLOR2 = (volatile unsigned int *)0xFC0013B0;
-	volatile unsigned int *DISPC_CPR2_COEF_B = (volatile unsigned int *)0xFC0013B4;
-	volatile unsigned int *DISPC_CPR2_COEF_G = (volatile unsigned int *)0xFC0013B8;
-	volatile unsigned int *DISPC_CPR2_COEF_R = (volatile unsigned int *)0xFC0013BC;
-	volatile unsigned int *DISPC_DATA2_CYCLE1 = (volatile unsigned int *)0xFC0013C0;
-	volatile unsigned int *DISPC_DATA2_CYCLE2 = (volatile unsigned int *)0xFC0013C4;
-	volatile unsigned int *DISPC_DATA2_CYCLE3 = (volatile unsigned int *)0xFC0013C8;
-	volatile unsigned int *DISPC_SIZE_LCD2 = (volatile unsigned int *)0xFC0013CC;
-	volatile unsigned int *DISPC_TIMING_H2 = (volatile unsigned int *)0xFC001400;
-	volatile unsigned int *DISPC_TIMING_V2 = (volatile unsigned int *)0xFC001404;
-	volatile unsigned int *DISPC_POL_FREQ2 = (volatile unsigned int *)0xFC001408;
-	volatile unsigned int *DISPC_DIVISOR2 = (volatile unsigned int *)0xFC00140C;
-
-	volatile unsigned int *DISPC_WB_ACCU_0 = (volatile unsigned int *)(0xFC001500 + 4 * 0);
-	volatile unsigned int *DISPC_WB_ACCU_1 = (volatile unsigned int *)(0xFC001500 + 4 * 1);
-	volatile unsigned int *DISPC_WB_BA_0 = (volatile unsigned int *)(0xFC001508 + 4 * 0);
-	volatile unsigned int *DISPC_WB_BA_1 = (volatile unsigned int *)(0xFC001508 + 4 * 1);
-	volatile unsigned int *DISPC_WB_ATTRIBUTES = (volatile unsigned int *)0xFC001570;
-	volatile unsigned int *DISPC_WB_CONV_COEF0 = (volatile unsigned int *)0xFC001574;
-	volatile unsigned int *DISPC_WB_CONV_COEF1 = (volatile unsigned int *)0xFC001578;
-	volatile unsigned int *DISPC_WB_CONV_COEF2 = (volatile unsigned int *)0xFC00157C;
-	volatile unsigned int *DISPC_WB_CONV_COEF3 = (volatile unsigned int *)0xFC001580;
-	volatile unsigned int *DISPC_WB_CONV_COEF4 = (volatile unsigned int *)0xFC001584;
-	volatile unsigned int *DISPC_WB_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC001588;
-	volatile unsigned int *DISPC_WB_BUF_THRESHOLD = (volatile unsigned int *)0xFC00158C;
-	volatile unsigned int *DISPC_WB_FIR = (volatile unsigned int *)0xFC001590;
-	volatile unsigned int *DISPC_WB_PICTURE_SIZE = (volatile unsigned int *)0xFC001594;
-	volatile unsigned int *DISPC_WB_PIXEL_INC = (volatile unsigned int *)0xFC001598;
-	volatile unsigned int *DISPC_WB_ROW_INC = (volatile unsigned int *)0xFC0015A4;
-	volatile unsigned int *DISPC_WB_SIZE = (volatile unsigned int *)0xFC0015A8;
-
-	volatile unsigned int *DISPC_VID1_BA_UV_0 = (volatile unsigned int *)(0xFC001600 + 4 * 0);
-	volatile unsigned int *DISPC_VID1_BA_UV_1 = (volatile unsigned int *)(0xFC001600 + 4 * 1);
-	volatile unsigned int *DISPC_VID2_BA_UV_0 = (volatile unsigned int *)(0xFC001608 + 4 * 0);
-	volatile unsigned int *DISPC_VID2_BA_UV_1 = (volatile unsigned int *)(0xFC001608 + 4 * 1);
-	volatile unsigned int *DISPC_VID3_BA_UV_0 = (volatile unsigned int *)(0xFC001610 + 4 * 0);
-	volatile unsigned int *DISPC_VID3_BA_UV_1 = (volatile unsigned int *)(0xFC001610 + 4 * 1);
-	volatile unsigned int *DISPC_WB_BA_UV_0 = (volatile unsigned int *)(0xFC001618 + 4 * 0);
-	volatile unsigned int *DISPC_WB_BA_UV_1 = (volatile unsigned int *)(0xFC001618 + 4 * 1);
-
-	volatile unsigned int *DISPC_CONFIG2 = (volatile unsigned int *)0xFC001620;
-	volatile unsigned int *DISPC_VID1_ATTRIBUTES2 = (volatile unsigned int *)0xFC001624;
-	volatile unsigned int *DISPC_VID2_ATTRIBUTES2 = (volatile unsigned int *)0xFC001628;
-	volatile unsigned int *DISPC_VID3_ATTRIBUTES2 = (volatile unsigned int *)0xFC00162C;
-	volatile unsigned int *DISPC_GAMMA_TABLE0 = (volatile unsigned int *)0xFC001630;
-	volatile unsigned int *DISPC_GAMMA_TABLE1 = (volatile unsigned int *)0xFC001634;
-	volatile unsigned int *DISPC_GAMMA_TABLE2 = (volatile unsigned int *)0xFC001638;
-	volatile unsigned int *DISPC_VID1_FIR2 = (volatile unsigned int *)0xFC00163C;
-
-	volatile unsigned int *DISPC_GLOBAL_BUFFER = (volatile unsigned int *)0xFC001800;
-	volatile unsigned int *DISPC_DIVISOR = (volatile unsigned int *)0xFC001804;
-	volatile unsigned int *DISPC_WB_ATTRIBUTES2 = (volatile unsigned int *)0xFC001810;
-}
-*/
 OMAP4460::GPIO *g_pGpios[6];
 inline bool PinToGpio(unsigned int gpio, unsigned int &outGpio, unsigned int &outPin)
 {
@@ -418,16 +245,16 @@ OMAP4460::GPIO::Pin &GetPin(unsigned int p)
 	return g_pGpios[gpio]->GetPin(pin);
 }
 
-extern "C" void Setup2(unsigned int entryPoint)
-{
-	*(volatile unsigned int *)0x48020000 = 'a';
-}
+extern "C" void EnableCaches(void);
 
 extern "C" void Setup(unsigned int entryPoint)
 {
-	*(volatile unsigned int *)0x48020000 = 'a';
-	MapKernel(entryPoint);
+	v7_invalidate_l1();
+	v7_flush_icache_all();
 
+	EnableCaches();
+
+	MapKernel(entryPoint);
 
 	PrinterUart<PL011> p;
 	PL011::EnableFifo(false);
@@ -438,10 +265,12 @@ extern "C" void Setup(unsigned int entryPoint)
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, false);
 	VirtMem::DumpVirtToPhys(0, (void *)0xffffffff, true, true, true);
 
+	VectorTable::EncodeAndWriteBkpt(VectorTable::kReset);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Und, VectorTable::kUndefinedInstruction);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Svc, VectorTable::kSupervisorCall);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Prf, VectorTable::kPrefetchAbort);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Dat, VectorTable::kDataAbort);
+	VectorTable::EncodeAndWriteBkpt(VectorTable::kHypTrap);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Irq, VectorTable::kIrq);
 	VectorTable::EncodeAndWriteLiteralLoad(&_Fiq, VectorTable::kFiq);
 
@@ -485,7 +314,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	 * change to 1.2 GHz
 	 */
 
-	*(volatile unsigned int *)0xe020416c = 0xc07d07;
+//	p << "changing clock speed\n";
+//	*(volatile unsigned int *)0xe020416c = 0xc07d07;
+//	p << "done\n";
 
 //	while(1);
 #endif
@@ -537,12 +368,14 @@ extern "C" void Setup(unsigned int entryPoint)
 	for (auto it = Modeline::GetDefaultModesList()->begin(); it != Modeline::GetDefaultModesList()->end(); it++)
 		it->Print(p);
 
-	OMAP4460::DSS dss;
+	OMAP4460::DSS *dss = new OMAP4460::DSS;
 	Modeline m;
 	if (Modeline::FindModeline("1920x1080@60", m))
-		dss.EnableDisplay(m);
+		dss->EnableDisplay(m);
 	else
 		ASSERT(0);
+
+	p << "display should be enabled\n";
 
 	const int width = 1920 / 2;
 	const int height = 1080 / 2;
@@ -551,396 +384,6 @@ extern "C" void Setup(unsigned int entryPoint)
 			width, height, 1, 1, 0, 0);
 	g.Attach();
 
-	while(1)
-	{
-		for (int y = 0; y < 1080; y++)
-			for (int x = 0; x < 1920; x++)
-			{
-				g.SetNewPositionOnVsync(x, y);
-				dss.SpinWaitForVsyncAndClear();
-			}
-
-		p << "still alive\n";
-	}
-
-#if 0
-
-	struct DispMode
-	{
-		DispMode(unsigned int pclk, unsigned int f, unsigned int l, unsigned int p)
-		: m_pclk(pclk),
-		  m_f(f),
-		  m_l(l),
-		  m_p(p)
-		{
-		}
-
-		unsigned int m_pclk;
-		unsigned int m_f;
-		unsigned int m_l;
-		unsigned int m_p;
-
-		static bool comp_func(DispMode *i, DispMode *j)
-		{
-			return i->m_pclk < j->m_pclk;
-		}
-	};
-
-	struct comparer
-	{
-	};
-
-	std::vector<DispMode *> pclks;
-
-	for (int f = 1; f < 32; f++)
-	{
-		unsigned int fclk = 1536000000 / f;
-		if (fclk > 186000000)
-			continue;
-
-		for (int l = 1; l <= 255; l++)
-		{
-			unsigned int lclk = fclk / l;
-
-			for (int pe = 1; pe <= 255; pe++)
-			{
-				unsigned int pclk = lclk / pe;
-				if (pclk < 25000000)
-					continue;
-				else
-				{
-					/*p.PrintDec(fclk, false); p << " ";
-					p.PrintDec(lclk, false); p << " ";
-					p.PrintDec(pclk, false); p << " ";
-					p.PrintDec(pclk / 1000000, false); p << " ";
-					p.PrintDec(f, false); p << " ";
-					p.PrintDec(l, false); p << " ";
-					p.PrintDec(pe, false); p << " ";*/
-
-					pclks.push_back(new DispMode(pclk, f, l, pe));
-					/*p << "\n";*/
-				}
-			}
-		}
-	}
-
-	std::sort(pclks.begin(), pclks.end(), DispMode::comp_func);
-	for (auto it = pclks.begin(); it != pclks.end(); it++)
-	{
-//		p << Formatter<float>((float)(*it)->m_pclk / 1000000, 2); p << " ";
-		p.PrintDec((*it)->m_f, false); p << " ";
-		p.PrintDec((*it)->m_l, false); p << " ";
-		p.PrintDec((*it)->m_p, false);
-		p << "\n";
-	}
-
-
-#if 1
-//	*(volatile unsigned int *)0xe020815c &= ~(1 << 5);
-
-/*	const int width = 800;
-	const int horiz_front_porch = 32;
-	const int horiz_sync = 64;
-	const int horiz_back_porch = 152;
-	const bool horiz_pol = false;			//false = +ve
-
-	const int height = 600;
-	const int vert_front_porch = 1;
-	const int vert_sync = 3;
-	const int vert_back_porch = 27;
-	const bool vert_pol = false;
-
-	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 9;
-	const int div1 = 3;
-	const int div2 = 1;
-
-	bool interlace = false;*/
-
-	/*const int width = 1280;
-	const int horiz_front_porch = 56;
-	const int horiz_sync = 136;
-	const int horiz_back_porch = 384-136-56;
-	const bool horiz_pol = true;			//false = +ve
-
-	const int height = 720;
-	const int vert_front_porch = 1;
-	const int vert_sync = 1;
-	const int vert_back_porch = 24;
-	const bool vert_pol = false;
-
-	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
-	const int div1 = 1;
-	const int div2 = 2;
-
-	bool interlace = false;*/
-/*
-
-	const int width = 640;
-	const int horiz_front_porch = 16;
-	const int horiz_sync = 96;
-	const int horiz_back_porch = 48;
-	const bool horiz_pol = true;			//false = +ve
-
-	const int height = 480;
-	const int vert_front_porch = 11;
-	const int vert_sync = 2;
-	const int vert_back_porch = 31;
-	const bool vert_pol = true;
-
-	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
-	const int div1 = 3;
-	const int div2 = 2;
-
-	bool interlace = false;*/
-
-	const int width = 640;
-	const int horiz_front_porch = 16;
-	const int horiz_sync = 96;
-	const int horiz_back_porch = 48;
-	const bool horiz_pol = true;			//false = +ve
-
-	const int height = 480;
-	const int vert_front_porch = 11;
-	const int vert_sync = 11;
-	const int vert_back_porch = 31;
-	const bool vert_pol = true;
-
-	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
-	const int div1 = 3;
-	const int div2 = 2;
-
-	bool interlace = false;
-
-
-	/*const int width = 1920;
-	const int horiz_front_porch = 1968 - 1920;
-	const int horiz_sync = 2000 - 1968;
-	const int horiz_back_porch = 2080 - 2000;
-	const bool horiz_pol = true;			//false = +ve, true = -ve
-
-	const int height = 1200;
-	const int vert_front_porch = 3;
-	const int vert_sync = 6;
-	const int vert_back_porch = 1235 - 1209;
-	const bool vert_pol = false;
-
-	*(volatile unsigned int *)0xe020815c = (*(volatile unsigned int *)0xe020815c & ~31) | 10;
-	const int div1 = 1;
-	const int div2 = 1;
-	bool interlace = true;*/
-
-	*Dispcc::DISPC_DIVISOR = (1 << 16) | 1;			//change dispc_core_clk to dispc_fclk/1
-
-//	p << *(volatile unsigned int *)0xe020815c << "\n";
-//	while (!(*(volatile unsigned int *)0xe020815c & (1 << 5)))
-//		p << *(volatile unsigned int *)0xe020815c << "\n";
-
-
-	//dma configuration
-	*Dispcc::DISPC_GFX_BA_0 = (unsigned int)PhysPages::FindMultiplePages((width * height * 4) / 4096 + 1, 0);
-//	*Dispcc::DISPC_GFX_BA_1 = (unsigned int)PhysPages::FindMultiplePages(1024, 0);			//not necessary?
-
-//	*Dispcc::DISPC_GFX_PIXEL_INC = 4;
-//	*Dispcc::DISPC_GFX_ROW_INC = 5;
-
-	p.PrintDec(__LINE__, false);
-
-	unsigned int phys = *Dispcc::DISPC_GFX_BA_0;
-	unsigned int virt = 0xd0000000;
-
-	void *plut = PhysPages::FindPage();
-	unsigned int *vlut = (unsigned int *)(virt + ((width * height * 4) / 4096 + 1) * 4096);
-
-	for (int count = 0; count < (width * height * 4) / 4096 + 1; count++)
-		ASSERT(VirtMem::MapPhysToVirt((void *)(phys + count * 4096),
-				(void *)(virt + count * 4096),
-				4096,
-				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWtNoWa, 0));
-
-	ASSERT(VirtMem::MapPhysToVirt((void *)plut,
-				(void *)(virt + ((width * height * 4) / 4096 + 1) * 4096),
-				4096,
-				true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0));
-
-	unsigned int *fb = (unsigned int *)0xd0000000;
-
-	p.PrintDec(__LINE__, false);
-	/*for (int count = 0; count < 640 * 480; count++)
-//		fb[count] = (0x4000 * count) & 0xff00;
-		fb[count] = 0xffffffff;*/
-
-
-	memset(fb, 0, width * height * 4);
-	memset(vlut, 0xff, 4096);
-
-	for (int y = 0; y < height; y++)
-		for (int x = 0; x < width; x++)
-			fb[y * width + x] = (unsigned char)x | ((unsigned char)y << 8) | ((unsigned char)(x - y) << 16);
-
-	for (int y = 0; y < height; y += 16)
-		for (int x = 0; x < width; x++)
-		{
-			fb[y * width + x] = 0xffffffff;
-		}
-
-	for (int x = 0; x < width; x += 16)
-		for (int y = 0; y < height; y++)
-		{
-			fb[y * width + x] = 0xffffffff;
-		}
-
-	/*for (int count = 0; count < 256; count++)
-	{
-		*Dispcc::DISPC_GAMMA_TABLE0 = (count << 24) | 0xffffff;
-		*Dispcc::DISPC_GAMMA_TABLE1 = (count << 24) | 0xffffff;
-		*Dispcc::DISPC_GAMMA_TABLE2 = (count << 24) | 0xffffff;
-	}*/
-
-	p << "base addrs\n" << *Dispcc::DISPC_GFX_BA_0 << " " << *Dispcc::DISPC_GFX_BA_1 << "\n";
-
-	p << "row inc \n" << *Dispcc::DISPC_GFX_ROW_INC << " pixel inc " << *Dispcc::DISPC_GFX_PIXEL_INC << "\n";
-
-	p.PrintDec(__LINE__, false);
-
-	//configure gfx window
-	*Dispcc::DISPC_GFX_ATTRIBUTES |= (0xc << 1);		//select the format of image
-	*Dispcc::DISPC_GFX_SIZE = (width - 1) | ((height - 1) << 16);		//set the x/y size of image
-
-	//configure gfx pipeline processing
-//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 5);			//replication
-//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 9);			//nibble mode
-//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 24);			//antiflicker
-	*Dispcc::DISPC_CONFIG1 |= (1 << 3);					//lut as gamma table
-	*Dispcc::DISPC_GFX_TABLE_BA = (unsigned int)plut;
-
-//	*Dispcc::DISPC_CONFIG1 |= (1 << 9);
-
-	//pipeline layer output
-//	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 8);			//channelout, for tv
-	*Dispcc::DISPC_GFX_ATTRIBUTES |= (1 << 30);			//channelout2, for lcd2
-//	*Dispcc::DISPC_CONTROL1 |= (1 << 6);				//gotv
-	*Dispcc::DISPC_CONTROL2 |= (3 << 8);				//24-bit
-	*Dispcc::DISPC_CONTROL2 |= (1 << 5);				//golcd 2
-	*Dispcc::DISPC_GFX_ATTRIBUTES |= 1;					//enable graphics pipeline
-
-	p.PrintDec(__LINE__, false);
-
-	*Dispcc::DISPC_CONTROL1 |= (1 << 14) | (1 << 15);
-
-	//lcd2 panel background colour, DISPC_DEFAULT_COLOR2 2706
-	*Dispcc::DISPC_DEFAULT_COLOR2 = 0x7f7f7f7f;
-
-	//DISPC_CONTROL2[12] overlay optimisation, 2689
-//	*Dispcc::DISPC_CONTROL2 &= ~(1 << 12);
-
-	//DISPC_CONFIG2[18] alpha blender, 2731
-//	*Dispcc::DISPC_CONFIG1 |= (1 << 18);
-
-	//transparency tv colour key selection DISPC_CONFIG2[11]
-//	*Dispcc::DISPC_CONFIG2 &= ~(1 << 11);
-
-	//set transparency colour value, DISPC_TRANS_COLOR2 2706
-//	*Dispcc::DISPC_TRANS_COLOR2 = 0xffffffff;
-
-	//transparency colour key disabled DISPC_CONFIG2[10]
-//	*Dispcc::DISPC_CONFIG1 |= (1 << 10);
-//
-//	*Dispcc::DISPC_CONFIG1 |= (1 << 9);			//gamma table enable
-
-
-	p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
-	p << "turning on\n";
-
-	p.PrintDec(__LINE__, false);
-
-	*Dispcc::DISPC_CONFIG2 |= ((int)interlace << 22);
-
-	/**Dispcc::DISPC_SIZE_TV = 0x02CF04FF;
-	*Dispcc::DISPC_CONTROL1 |= (1 << 6);
-	*Dispcc::DISPC_CONTROL1 |= (1 << 1);*/
-
-	//http://www.epanorama.net/faq/vga2rgb/calc.html
-
-	*Dispcc::DISPC_POL_FREQ2 = ((int)horiz_pol << 13) | ((int)vert_pol << 12);			//-vsync, -hsync
-	*Dispcc::DISPC_DIVISOR2 = (div1 << 16) | div2;					//170.6/1/6=~25 MHz
-	*Dispcc::DISPC_SIZE_LCD2 = ((height - 1) << 16) | (width - 1);				//640x480
-	*Dispcc::DISPC_CONTROL2 |= (1 << 3);						//active tft
-	*Dispcc::DISPC_TIMING_V2 = (vert_back_porch << 20) | (vert_front_porch << 8) | (vert_sync - 1);		//31 back porch, 11 front porch, 2 sync width
-	*Dispcc::DISPC_TIMING_H2 = ((horiz_back_porch - 1) << 20) | ((horiz_front_porch - 1) << 8) | (horiz_sync - 1);		//48 back, 16 front, 96 sync
-
-	p.PrintDec(__LINE__, false);
-
-	*Dispcc::DISPC_CONTROL2 |= (1 << 5);						//golcd2
-	*Dispcc::DISPC_CONTROL2 |= (1 << 0);						//lcdenable
-
-	p << "default colour " << *Dispcc::DISPC_DEFAULT_COLOR2 << "\n";
-	p << "control " << *Dispcc::DISPC_CONTROL2 << "\n";
-	p << "config1 " << *Dispcc::DISPC_CONFIG1 << "\n";
-	p << "config2 " << *Dispcc::DISPC_CONFIG2 << "\n";
-	p << "trans colour " << *Dispcc::DISPC_TRANS_COLOR2 << "\n";
-	p << "pol freq 2 " << *Dispcc::DISPC_POL_FREQ2 << "\n";
-	p << "divisor 2 " << *Dispcc::DISPC_DIVISOR2 << "\n";
-	p << "size lcd 2 " << *Dispcc::DISPC_SIZE_LCD2 << "\n";
-	p << "timing v2 " << *Dispcc::DISPC_TIMING_V2 << "\n";
-	p << "timing h2 " << *Dispcc::DISPC_TIMING_H2 << "\n";
-
-	p.PrintDec(__LINE__, false);
-
-	p << "supposed to be on\n";
-//	p << "is " << *Dispcc::DISPC_CONTROL1 << "\n";
-	/*while (1)
-	{
-		p << "irq stat " << *Dispcc::DISPC_IRQSTATUS << "\n";
-		*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
-
-		for (int count = 2; count < 7; count++)
-		{
-			p.PrintDec((count - 1) * 32, false);
-			p << " " << g_pGpios[count - 2]->Read() << " ";
-		}
-		p << "\n";
-		DelaySecond();
-	}*/
-
-	*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
-
-	unsigned char clock = 0;
-	while (1)
-	{
-		while (!(*Dispcc::DISPC_IRQSTATUS & 0x40000));
-		*Dispcc::DISPC_IRQSTATUS = 0xffffffff;
-
-		unsigned int *pix = fb;
-		for (int y = 0; y < height; y++)
-		{/*
-			unsigned int code = ((y + clock) & 0xff)
-				| (((y + clock) & 0xff) << 8)
-				| (((y + clock) & 0xff) << 16);*/
-
-
-			for (int x = 0; x < width; x++)
-			{
-				unsigned int code = ((x + clock) & 0xff)
-					| (((x + clock) & 0xff) << 8)
-					| (((x + clock) & 0xff) << 16);
-
-				*pix++ = code;
-			}
-		}
-
-		clock++;
-
-
-	}
-
-
-	while(1)
-	{
-		p << gpio122.Read() << "\n";
-		DelaySecond();
-	}
-#endif
-#endif
 
 #if 0
 	extern unsigned int m3_magic;
@@ -1118,6 +561,27 @@ extern "C" void Setup(unsigned int entryPoint)
 
 #endif
 
+	for (int count = 0; count < 16; count++)
+	{
+		p << VectorTable::GetTableAddress()[count] << "\n";
+	}
+
+	pPic->RegisterInterrupt(*dss, InterruptController::kIrq);
+	dss->OnInterrupt([](InterruptSource &)
+			{
+				PrinterUart<PL011> p;
+				p << "vsync\n";
+			});
+	dss->SetInterruptMask(/*OMAP4460::DSS::sm_vSync2*/-1);
+	dss->EnableInterrupt(true);
+
+	while(1)
+	{
+		p << "still alive\n";
+		DelaySecond();
+	}
+
+
 //	{
 #ifdef PBES
 		OMAP4460::MMCi sd((volatile void *)(0xfefU * 1048576 + 0x9c000), 1);
@@ -1216,6 +680,8 @@ extern "C" void Setup(unsigned int entryPoint)
 
 //	pTimer0->Enable(true);
 	pTimer1->Enable(true);
+
+	dss->EnableInterrupt(true);
 
 	pThread->Run();
 

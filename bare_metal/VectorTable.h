@@ -17,11 +17,13 @@ namespace VectorTable
 		kSupervisorCall = 2,
 		kPrefetchAbort = 3,
 		kDataAbort = 4,
+		kHypTrap = 5,
 		kIrq = 6,
 		kFiq = 7,
 	};
 	typedef void(*ExceptionVector)(void);
 
+	void EncodeAndWriteBkpt(ExceptionType e);
 	void EncodeAndWriteBranch(ExceptionVector v, ExceptionType e, unsigned int subtract = 0);
 	void EncodeAndWriteLiteralLoad(ExceptionVector v, ExceptionType e);
 	unsigned int *GetTableAddress(void);

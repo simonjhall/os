@@ -43,4 +43,10 @@ unsigned int *GetTableAddress(void)
 	return (unsigned int *)0xffff0000;
 }
 
+void EncodeAndWriteBkpt(ExceptionType e)
+{
+	unsigned int *pBase = GetTableAddress();
+	pBase[(unsigned int)e] = 0xe1200070;
+}
+
 }

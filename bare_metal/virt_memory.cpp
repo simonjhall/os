@@ -327,6 +327,9 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 
 	if (mapper(false))
 	{
+		v7_flush_icache_all();
+		v7_flush_dcache_all();
+
 		bool ok = mapper(true);
 		ASSERT(ok);
 
@@ -379,6 +382,12 @@ bool AddPageTable(void *pVirtual, unsigned int domain, TranslationTable::TableEn
 bool RemovePageTable(void *pVirtual, bool hi, bool flush)
 {
 	ASSERT(g_allocatorsInited);
+
+	if (flush)
+	{
+		v7_flush_icache_all();
+		v7_flush_dcache_all();
+	}
 
 	//find the entry
 	unsigned int megabyte = (unsigned int)pVirtual >> 20;
