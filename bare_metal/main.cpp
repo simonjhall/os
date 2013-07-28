@@ -211,6 +211,270 @@ OMAP4460::GPIO::Pin &GetPin(unsigned int p)
 
 extern "C" void EnableCaches(void);
 
+struct omap_uhh {
+	volatile unsigned int rev;	/* 0x00 */
+	volatile unsigned int hwinfo;	/* 0x04 */
+	volatile unsigned char reserved1[0x8];
+	volatile unsigned int sysc;	/* 0x10 */
+	volatile unsigned int syss;	/* 0x14 */
+	volatile unsigned char reserved2[0x28];
+	volatile unsigned int hostconfig;	/* 0x40 */
+	volatile unsigned int debugcsr;	/* 0x44 */
+};
+
+struct omap_usbtll {
+	volatile unsigned int rev;		/* 0x00 */
+	volatile unsigned int hwinfo;		/* 0x04 */
+	volatile unsigned char reserved1[0x8];
+	volatile unsigned int sysc;		/* 0x10 */
+	volatile unsigned int syss;		/* 0x14 */
+	volatile unsigned int irqst;		/* 0x18 */
+	volatile unsigned int irqen;		/* 0x1c */
+	volatile unsigned char reserved2[0x10];
+	volatile unsigned int shared_conf;	/* 0x30 */
+	volatile unsigned char reserved3[0xc];
+	volatile unsigned int channel_conf;	/* 0x40 */
+};
+
+struct omap_ehci {
+	volatile unsigned int hccapbase;		/* 0x00 */
+	volatile unsigned int hcsparams;		/* 0x04 */
+	volatile unsigned int hccparams;		/* 0x08 */
+	volatile unsigned char reserved1[0x04];
+	volatile unsigned int usbcmd;		/* 0x10 */
+	volatile unsigned int usbsts;		/* 0x14 */
+	volatile unsigned int usbintr;		/* 0x18 */
+	volatile unsigned int frindex;		/* 0x1c */
+	volatile unsigned int ctrldssegment;	/* 0x20 */
+	volatile unsigned int periodiclistbase;	/* 0x24 */
+	volatile unsigned int asysnclistaddr;	/* 0x28 */
+	volatile unsigned char reserved2[0x24];
+	volatile unsigned int configflag;		/* 0x50 */
+	volatile unsigned int portsc_i;		/* 0x54 */
+	volatile unsigned char reserved3[0x38];
+	volatile unsigned int insreg00;		/* 0x90 */
+	volatile unsigned int insreg01;		/* 0x94 */
+	volatile unsigned int insreg02;		/* 0x98 */
+	volatile unsigned int insreg03;		/* 0x9c */
+	volatile unsigned int insreg04;		/* 0xa0 */
+	volatile unsigned int insreg05_utmi_ulpi;	/* 0xa4 */
+	volatile unsigned int insreg06;		/* 0xa8 */
+	volatile unsigned int insreg07;		/* 0xac */
+	volatile unsigned int insreg08;		/* 0xb0 */
+} *pEhci;
+
+struct ulpi_regs {
+	/* Vendor ID and Product ID: 0x00 - 0x03 Read-only */
+	volatile unsigned char	vendor_id_low;
+	volatile unsigned char	vendor_id_high;
+	volatile unsigned char	product_id_low;
+	volatile unsigned char	product_id_high;
+	/* Function Control: 0x04 - 0x06 Read */
+	volatile unsigned char	function_ctrl;		/* 0x04 Write */
+	volatile unsigned char	function_ctrl_set;	/* 0x05 Set */
+	volatile unsigned char	function_ctrl_clear;	/* 0x06 Clear */
+	/* Interface Control: 0x07 - 0x09 Read */
+	volatile unsigned char	iface_ctrl;		/* 0x07 Write */
+	volatile unsigned char	iface_ctrl_set;		/* 0x08 Set */
+	volatile unsigned char	iface_ctrl_clear;	/* 0x09 Clear */
+	/* OTG Control: 0x0A - 0x0C Read */
+	volatile unsigned char	otg_ctrl;		/* 0x0A Write */
+	volatile unsigned char	otg_ctrl_set;		/* 0x0B Set */
+	volatile unsigned char	otg_ctrl_clear;		/* 0x0C Clear */
+	/* USB Interrupt Enable Rising: 0x0D - 0x0F Read */
+	volatile unsigned char	usb_ie_rising;		/* 0x0D Write */
+	volatile unsigned char	usb_ie_rising_set;	/* 0x0E Set */
+	volatile unsigned char	usb_ie_rising_clear;	/* 0x0F Clear */
+	/* USB Interrupt Enable Falling: 0x10 - 0x12 Read */
+	volatile unsigned char	usb_ie_falling;		/* 0x10 Write */
+	volatile unsigned char	usb_ie_falling_set;	/* 0x11 Set */
+	volatile unsigned char	usb_ie_falling_clear;	/* 0x12 Clear */
+	/* USB Interrupt Status: 0x13 Read-only */
+	volatile unsigned char	usb_int_status;
+	/* USB Interrupt Latch: 0x14 Read-only with auto-clear */
+	volatile unsigned char	usb_int_latch;
+	/* Debug: 0x15 Read-only */
+	volatile unsigned char	debug;
+	/* Scratch Register: 0x16 - 0x18 Read */
+	volatile unsigned char	scratch;		/* 0x16 Write */
+	volatile unsigned char	scratch_set;		/* 0x17 Set */
+	volatile unsigned char	scratch_clear;		/* 0x18 Clear */
+	/*
+	 * Optional Carkit registers:
+	 * Carkit Control: 0x19 - 0x1B Read
+	 */
+	volatile unsigned char	carkit_ctrl;		/* 0x19 Write */
+	volatile unsigned char	carkit_ctrl_set;	/* 0x1A Set */
+	volatile unsigned char	carkit_ctrl_clear;	/* 0x1B Clear */
+	/* Carkit Interrupt Delay: 0x1C Read, Write */
+	volatile unsigned char	carkit_int_delay;
+	/* Carkit Interrupt Enable: 0x1D - 0x1F Read */
+	volatile unsigned char	carkit_ie;		/* 0x1D Write */
+	volatile unsigned char	carkit_ie_set;		/* 0x1E Set */
+	volatile unsigned char	carkit_ie_clear;	/* 0x1F Clear */
+	/* Carkit Interrupt Status: 0x20 Read-only */
+	volatile unsigned char	carkit_int_status;
+	/* Carkit Interrupt Latch: 0x21 Read-only with auto-clear */
+	volatile unsigned char	carkit_int_latch;
+	/* Carkit Pulse Control: 0x22 - 0x24 Read */
+	volatile unsigned char	carkit_pulse_ctrl;		/* 0x22 Write */
+	volatile unsigned char	carkit_pulse_ctrl_set;		/* 0x23 Set */
+	volatile unsigned char	carkit_pulse_ctrl_clear;	/* 0x24 Clear */
+	/*
+	 * Other optional registers:
+	 * Transmit Positive Width: 0x25 Read, Write
+	 */
+	volatile unsigned char	transmit_pos_width;
+	/* Transmit Negative Width: 0x26 Read, Write */
+	volatile unsigned char	transmit_neg_width;
+	/* Receive Polarity Recovery: 0x27 Read, Write */
+	volatile unsigned char	recv_pol_recovery;
+	/*
+	 * Addresses 0x28 - 0x2E are reserved, so we use offsets
+	 * for immediate registers with higher addresses
+	 */
+};
+
+#if 0
+int ulpi_wait(unsigned int mask)
+{
+	PrinterUart<PL011> p;
+	p << __FUNCTION__ << " mask " << mask << "\n";
+	while (1) {
+		p << __FUNCTION__ << " " << pEhci->insreg05_utmi_ulpi << "\n";
+		if ((pEhci->insreg05_utmi_ulpi & mask))
+		{
+			p << __FUNCTION__ << " " << pEhci->insreg05_utmi_ulpi << " out\n";
+			return 0;
+		}
+	}
+
+	return 1 << 8;
+}
+
+int ulpi_wakeup(void)
+{
+	int err;
+
+	PrinterUart<PL011> p;
+	p << __FUNCTION__ << " " << pEhci->insreg05_utmi_ulpi << "\n";
+
+	if (pEhci->insreg05_utmi_ulpi & (1 << 31))
+	{
+		p << __FUNCTION__ << " already awake\n";
+		return 0; /* already awake */
+	}
+
+	p << __FUNCTION__ << " not awake\n";
+	pEhci->insreg05_utmi_ulpi = 1 << 31;
+
+	err = ulpi_wait(1 << 31);
+	ASSERT(!err);
+
+	return err;
+}
+
+int ulpi_request(unsigned int value)
+{
+	int err;
+
+	PrinterUart<PL011> p;
+	p << __FUNCTION__ << " value " << value << "\n";
+
+	err = ulpi_wakeup();
+	if (err)
+	{
+		p << __FUNCTION__ << " wakeup error\n";
+		return err;
+	}
+
+	pEhci->insreg05_utmi_ulpi = value;
+
+	err = ulpi_wait(1 << 31);
+	ASSERT(!err);
+
+	return err;
+}
+#endif
+
+int ulpi_write(unsigned int reg, unsigned int value)
+{
+	/*PrinterUart<PL011> p;
+	p << __FUNCTION__ << " reg " << reg << " value " << value << "\n";
+
+	unsigned int val = (1 << 24) |
+			(2 << 22) | (reg << 16) | (value & 0xff);
+
+	return ulpi_request(val);*/
+
+	PrinterUart<PL011> p;
+
+	unsigned int val = (1 << 31) | (1 << 24) | (2 << 22) | (reg << 16);
+	pEhci->insreg05_utmi_ulpi = val;
+
+	while (pEhci->insreg05_utmi_ulpi & (1 << 31));
+
+	return pEhci->insreg05_utmi_ulpi & 0xff;
+}
+
+unsigned int ulpi_read(unsigned int reg)
+{
+	/*int err;
+
+	PrinterUart<PL011> p;
+	p << __FUNCTION__ << " reg " << reg << "\n";
+
+	unsigned int val = (1 << 24) |
+			 (3 << 22) | (reg << 16);
+
+	err = ulpi_request(val);
+	if (err)
+	{
+		p << __FUNCTION__ << " request error\n";
+		return err;
+	}
+
+	p << __FUNCTION__ << " insreg05_utmi_ulpi " << pEhci->insreg05_utmi_ulpi << "\n";
+	return pEhci->insreg05_utmi_ulpi & 0xff;*/
+
+	PrinterUart<PL011> p;
+
+	unsigned int val = (1 << 31) | (1 << 24) | (3 << 22) | (reg << 16);
+	pEhci->insreg05_utmi_ulpi = val;
+
+	while (pEhci->insreg05_utmi_ulpi & (1 << 31));
+
+	return pEhci->insreg05_utmi_ulpi & 0xff;
+}
+
+int ulpi_reset_wait(void)
+{
+	unsigned int val;
+
+	PrinterUart<PL011> p;
+	p << __FUNCTION__ << "\n";
+
+	/* Wait for the RESET bit to become zero */
+	while (1) {
+		/*
+		 * This function is generic and suppose to work
+		 * with any viewport, so we cheat here and don't check
+		 * for the error of ulpi_read(), if there is one, then
+		 * there will be a timeout.
+		 */
+		val = ulpi_read(offsetof(ulpi_regs, function_ctrl));
+		p << __FUNCTION__ << " val " << val << "\n";
+		if (!(val & (1 << 5)))
+		{
+			p << __FUNCTION__ << " val " << val << " out\n";
+			return 0;
+		}
+	}
+
+	p << __FUNCTION__ << " error...!\n";
+	return 1 << 8;
+}
+
 extern "C" void Setup(unsigned int entryPoint)
 {
 	v7_invalidate_l1();
@@ -343,121 +607,6 @@ extern "C" void Setup(unsigned int entryPoint)
 	g.Attach();
 #endif
 
-#if 0
-	extern unsigned int m3_magic;
-	p << "magic " << m3_magic << "\n";
-
-//	m3_entry();
-
-	volatile unsigned int *CM_MPU_M3_CLKSTCTRL = (volatile unsigned int *)0x4a008900;		//930
-	volatile unsigned int *CM_MPU_M3_MPU_M3_CLKCTRL = (volatile unsigned int *)0x4a008920;	//933
-	volatile unsigned int *RM_MPU_M3_RSTCTRL = (volatile unsigned int *)0x4a306910;		//630
-	volatile unsigned int *MMU_CNTL = (volatile unsigned int *)0x55082044;		//4464
-	volatile unsigned int *MMU_TTB = (volatile unsigned int *)0x5508204c;		//4465
-
-	void *phys_entry = PhysPages::FindMultiplePages(256, 8);
-	if (!VirtMem::MapPhysToVirt(phys_entry, (void *)0x10000000, 1048576,
-    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kShareableDevice, 0))
-		ASSERT(0);
-
-	p << " phys entry " << (unsigned int)phys_entry << "\n";
-
-	memcpy((void *)0x10000000, (const void *)((unsigned int)&m3_entry & ~1), 4096);
-
-	p << "filling table\n";
-	union
-	{
-		TranslationTable::Section s;
-		unsigned int i;
-	} combined;
-
-	combined.s.Init(phys_entry, TranslationTable::kRwRw, TranslationTable::kExec,
-			TranslationTable::kShareableDevice, 0);
-
-	for (int count = 0; count < 4096; count++)
-		TTB_virt[count] = combined.i;
-
-	combined.s.Init((void *)(0x480 * 1048576),
-    		TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
-	TTB_virt[0x480] = combined.i;
-
-	asm volatile ("dsb");
-
-	//sequence 375
-//	p << __LINE__ << " " << *CM_MPU_M3_MPU_M3_CLKCTRL << "\n";
-	*CM_MPU_M3_MPU_M3_CLKCTRL = 1;
-//	p << __LINE__ << " " << *CM_MPU_M3_MPU_M3_CLKCTRL << "\n";
-
-	asm volatile ("dsb");
-
-//	p << __LINE__ << " " << *CM_MPU_M3_CLKSTCTRL << "\n";
-	*CM_MPU_M3_CLKSTCTRL = 2;
-//	p << __LINE__ << " " << *CM_MPU_M3_CLKSTCTRL << "\n";
-
-	asm volatile ("dsb");
-
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-	*RM_MPU_M3_RSTCTRL = 0;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-	*RM_MPU_M3_RSTCTRL = 2;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-	*RM_MPU_M3_RSTCTRL = 7;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-	*RM_MPU_M3_RSTCTRL = 3;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-
-//	p << __LINE__ << " " << *MMU_TTB << "\n";
-	*MMU_TTB = (unsigned int)TTB_phys;
-//	p << __LINE__ << " " << *MMU_TTB << "\n";
-
-	asm volatile ("dsb");
-
-//	p << __LINE__ << " " << *MMU_CNTL << "\n";
-	*MMU_CNTL = 6;
-//	p << __LINE__ << " " << *MMU_CNTL << "\n";
-
-	asm volatile ("dsb");
-	*RM_MPU_M3_RSTCTRL = 2;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-//	*RM_MPU_M3_RSTCTRL = 0;
-//	p << __LINE__ << " " << *RM_MPU_M3_RSTCTRL << "\n";
-
-	asm volatile ("dsb");
-
-//	*CM_MPU_M3_MPU_M3_CLKCTRL = 0x01;
-//	*CM_MPU_M3_CLKSTCTRL = 0x02;
-//	*RM_MPU_M3_RSTCTRL &= ~0x4;
-//	*MMU_TTB = (unsigned int)TTB_phys;
-//	*MMU_CNTL = 0x6;
-//	*RM_MPU_M3_RSTCTRL &= ~1;
-
-	DelaySecond();
-
-	for (int count = 0; count < 10; count++)
-		p << count << " " << *(volatile unsigned int *)(0x10000000 + count * 4) << "\n";
-
-	/*for (int count = 0; count < 10; count++)
-	{
-		for (int inner = 0; inner < 100; inner++)
-			DelayMillisecond();
-		p << "magic " << *(volatile unsigned int *)0x1000000c << "\n";
-	}*/
-
-	while(1);
-#endif
-
 
 	p << "enabling interrupts\n";
 
@@ -508,7 +657,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 #endif
 
-#if 1
+#ifdef PBES
 	p << "registering interrupts\n";
 	pPic->RegisterInterrupt(*dss, InterruptController::kIrq);
 	dss->OnInterrupt([](InterruptSource &)
@@ -522,21 +671,78 @@ extern "C" void Setup(unsigned int entryPoint)
 //	pTimer1->EnableInterrupt(true);
 
 
-	/*//enable port clocks
-	*(volatile unsigned int *)0xe0209358 |= (1 << 24);
-	p << "port clocks " << *(volatile unsigned int *)0xe0209358;
+	//enable port clocks
+	volatile unsigned int * const pCM_L3INIT_HSUSBHOST_CLKCTRL = &IoSpace::GetDefaultIoSpace()->Get("CM2")[0x1358 >> 2];
+	volatile unsigned int * const pCM_L3INIT_HSUSBTLL_CLKCTRL = &IoSpace::GetDefaultIoSpace()->Get("CM2")[0x1368 >> 2];
+	*pCM_L3INIT_HSUSBHOST_CLKCTRL |= (1 << 24) | 2;
+	*pCM_L3INIT_HSUSBTLL_CLKCTRL |= 1;
+	p << "port clocks " << *pCM_L3INIT_HSUSBHOST_CLKCTRL << "\n";
 
 	//put the phy in reset
 	gpio1.Write(false);
 	gpio62.Write(false);
 	for (int count = 0; count < 10; count++)
 		DelayMillisecond();
-*/
-	/*while(1)
+
+	omap_uhh *pUhh = (omap_uhh *)(volatile unsigned int *)IoSpace::GetDefaultIoSpace()->Get("HSUSBHOST");
+	omap_usbtll *pUsbTll = (omap_usbtll *)(volatile unsigned int *)IoSpace::GetDefaultIoSpace()->Get("HSUSBTLL");
+	pEhci = (omap_ehci *)(volatile unsigned int *)&IoSpace::GetDefaultIoSpace()->Get("HSUSBHOST")[0xc00 >> 2];
+
+	p << "uhh revision " << pUhh->rev << "\n";
+
+	p << "resetting uhh\n";
+	//soft reset of uhh
+	pUhh->sysc = 1;
+	p << pUhh->sysc << "\n";
+	while (!(pUhh->syss & (1 << 2)));
+
+	p << "resetting tll\n";
+
+	//soft reset of tll
+	pUsbTll->sysc = 1 << 1;
+	while (!(pUsbTll->syss & 1));
+
+	p << "reset done\n";
+
+	/*writel(OMAP_USBTLL_SYSCONFIG_ENAWAKEUP |
+		OMAP_USBTLL_SYSCONFIG_SIDLEMODE |
+		OMAP_USBTLL_SYSCONFIG_CACTIVITY, &usbtll->sysc);*/
+	pUsbTll->sysc |= (1 << 2) | (1 << 3) | (1 << 8);
+
+	/* Put UHH in NoIdle/NoStandby mode
+	writel(OMAP_UHH_SYSCONFIG_VAL, &uhh->sysc);*/
+	pUhh->sysc |= (1 << 2) | (1 << 4);
+
+	//set burst and phy for 1/2, start clock on ohci suspend
+	pUhh->hostconfig = (pUhh->hostconfig & ~((3 << 16) | (3 << 18) | (1 << 5))) | (1 << 4) | (1 << 3) | (1 << 2) | (1 << 31);
+	p << "hostconfig is " << pUhh->hostconfig << "\n";
+
+	//put the phy in reset
+	for (int count = 0; count < 10; count++)
+		DelayMillisecond();
+	gpio1.Write(true);
+	gpio62.Write(true);
+
+	//"undocumented feature"
+	pEhci->insreg04 = 1 << 5;
+
+	//reset each port
+	if (ulpi_write(offsetof(ulpi_regs, function_ctrl_set), 1 << 5))
+		ASSERT(0);
+
+	ulpi_reset_wait();
+
+	p << "vendor low " << ulpi_read(offsetof(ulpi_regs, vendor_id_low)) << "\n";
+	p << "vendor high " << ulpi_read(offsetof(ulpi_regs, vendor_id_high)) << "\n";
+	p << "product low " << ulpi_read(offsetof(ulpi_regs, product_id_low)) << "\n";
+	p << "product high" << ulpi_read(offsetof(ulpi_regs, product_id_high)) << "\n";
+
+	while(1)
 	{
 		p << "waiting\n";
+		p << "hostconfig is " << pUhh->hostconfig << "\n";
 		DelaySecond();
-	}*/
+	}
 #endif
 
 

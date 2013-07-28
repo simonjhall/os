@@ -127,4 +127,10 @@ void VersatilePb::VersIoSpace::Fill(void)
 	m_all.push_back(Entry("Timer modules 0 and 1 interface", 0, (volatile unsigned int *)0x101E2000, 4096));
 	m_all.push_back(Entry("Timer modules 2 and 3 interface", 0, (volatile unsigned int *)0x101E3000, 4096));
 
+
+	/* add in sysbus_create_simple("exynos4210-ehci-usb", 0x20000000, pic[31]);
+	 * -usb -usbdevice disk:/home/simon/git/os/bare_metal/filesystem
+	 */
+	m_all.push_back(Entry("EHCI", 0, (volatile unsigned int *)0x20000000, 4096));
+
 }
