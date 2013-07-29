@@ -21,6 +21,7 @@
 #include "Modeline.h"
 #include "DSS.h"
 #include "IoSpace.h"
+#include "Ehci.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -743,6 +744,9 @@ extern "C" void Setup(unsigned int entryPoint)
 		p << "hostconfig is " << pUhh->hostconfig << "\n";
 		DelaySecond();
 	}
+#else
+	Ehci e(IoSpace::GetDefaultIoSpace()->Get("EHCI"));
+	e.Initialise();
 #endif
 
 
