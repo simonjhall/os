@@ -58,6 +58,8 @@ Ehci::~Ehci()
 
 void Ehci::Initialise(void)
 {
+	PrinterUart<PL011> p;
+
 	//reset the controller
 	ASSERT(((m_pOps->m_usbSts >> 12) & 1) == 1);
 	m_pOps->m_usbCmd = 1 << 1;
@@ -81,11 +83,28 @@ void Ehci::Initialise(void)
 
 	m_pOps->m_periodicListBase = pPhysPFL;
 
+	//clear async park
+	m_pOps->m_usbCmd &= ~(1 << 11);
 	//turn on the controller
-	m_pOps->m_usbCmd = 1;
+	m_pOps->m_usbCmd |= 1;
 
 	//make all ports be owned by this controller (ehci)
 	m_pOps->m_configFlag = 1;
+
+	for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
+
+	//turn on power to all ports (if available)
+	if ((m_pCaps->m_hcsParams >> 4) & 1)
+		for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+			m_pOps->m_portsSc[count] |= (1 << 12);
+
+	while (1)
+	{
+		for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
+		DelaySecond();
+	}
 }
 
 Ehci::FrameListElement::FrameListElement(void)

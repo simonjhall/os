@@ -738,16 +738,12 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "product low " << ulpi_read(offsetof(ulpi_regs, product_id_low)) << "\n";
 	p << "product high" << ulpi_read(offsetof(ulpi_regs, product_id_high)) << "\n";
 
-	while(1)
-	{
-		p << "waiting\n";
-		p << "hostconfig is " << pUhh->hostconfig << "\n";
-		DelaySecond();
-	}
+
+	Ehci e((volatile unsigned int *)&IoSpace::GetDefaultIoSpace()->Get("HSUSBHOST")[0xc00 >> 2]);
 #else
 	Ehci e(IoSpace::GetDefaultIoSpace()->Get("EHCI"));
-	e.Initialise();
 #endif
+	e.Initialise();
 
 
 //	{

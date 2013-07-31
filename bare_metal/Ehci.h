@@ -96,7 +96,7 @@ protected:
 		volatile unsigned int m_asyncListAddr;
 		volatile unsigned int m_reserved[0x24 >> 2];
 		volatile unsigned int m_configFlag;
-		volatile unsigned int m_portsSc;
+		volatile unsigned int m_portsSc[];
 	};
 #pragma pack(pop)
 
