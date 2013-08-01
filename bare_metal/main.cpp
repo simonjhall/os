@@ -739,9 +739,9 @@ extern "C" void Setup(unsigned int entryPoint)
 	p << "product high" << ulpi_read(offsetof(ulpi_regs, product_id_high)) << "\n";
 
 
-	Ehci e((volatile unsigned int *)&IoSpace::GetDefaultIoSpace()->Get("HSUSBHOST")[0xc00 >> 2]);
+	USB::Ehci e((volatile unsigned int *)&IoSpace::GetDefaultIoSpace()->Get("HSUSBHOST")[0xc00 >> 2]);
 #else
-	Ehci e(IoSpace::GetDefaultIoSpace()->Get("EHCI"));
+	USB::Ehci e(IoSpace::GetDefaultIoSpace()->Get("EHCI"));
 #endif
 	e.Initialise();
 

@@ -10,6 +10,9 @@
 #include "common.h"
 #include "virt_memory.h"
 
+namespace USB
+{
+
 Ehci::Ehci(volatile void *pBase)
 {
 	PrinterUart<PL011> p;
@@ -33,7 +36,7 @@ Ehci::Ehci(volatile void *pBase)
 
 	unsigned int v = 0xb0000000;
 
-	if (!VirtMem::AllocAndMapVirtContig((void *)v, 5, true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
+	if (!VirtMem::AllocAndMapVirtContig((void *)v, 6, true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
 		ASSERT(0);
 
 	m_pPeriodicFrameList = (FrameListElement *)v;
@@ -49,6 +52,10 @@ Ehci::Ehci(volatile void *pBase)
 	v += 4096;
 
 	m_fstnAllocator.Init((FSTN *)v);
+	v += 4096;
+
+	m_qtdAllocator.Init((QTD *)v);
+	v += 4096;
 }
 
 Ehci::~Ehci()
@@ -91,76 +98,207 @@ void Ehci::Initialise(void)
 	//make all ports be owned by this controller (ehci)
 	m_pOps->m_configFlag = 1;
 
-	for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+	for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
 			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
 
 	//turn on power to all ports (if available)
 	if ((m_pCaps->m_hcsParams >> 4) & 1)
-		for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
 			m_pOps->m_portsSc[count] |= (1 << 12);
 
 	while (1)
 	{
-		for (int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
 			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
 		DelaySecond();
 	}
 }
 
-Ehci::FrameListElement::FrameListElement(void)
+FrameListElement::FrameListElement(void)
 {
 	//t bit
 	m_word = 1;
 }
 
-Ehci::FrameListElement::FrameListElement(ITD *p)
+FrameListElement::FrameListElement(ITD *p)
 {
 	ASSERT(((unsigned int)p & 31) == 0);
 	m_word = (unsigned int)p | (unsigned int)kIsochronousTransferDescriptor << 1;
 }
 
-Ehci::FrameListElement::FrameListElement(QH *p)
+FrameListElement::FrameListElement(QH *p)
 {
 	ASSERT(((unsigned int)p & 31) == 0);
 	m_word = (unsigned int)p | (unsigned int)kQueueHead << 1;
 }
 
-Ehci::FrameListElement::FrameListElement(SITD *p)
+FrameListElement::FrameListElement(SITD *p)
 {
 	ASSERT(((unsigned int)p & 31) == 0);
 	m_word = (unsigned int)p | (unsigned int)kSplitTransationIsochronousTransferDescriptor << 1;
 }
 
-Ehci::FrameListElement::FrameListElement(FSTN *p)
+FrameListElement::FrameListElement(FSTN *p)
 {
 	ASSERT(((unsigned int)p & 31) == 0);
 	m_word = (unsigned int)p | (unsigned int)kFrameSpanTraversalNode << 1;
 }
 
-Ehci::FrameListElement::operator ITD*() const
+FrameListElement::operator ITD*() const
 {
 	ASSERT((m_word & 1) == 0);
 	ASSERT((Type)((m_word >> 1) & 3) == kIsochronousTransferDescriptor);
 	return (ITD *)(m_word & ~31);
 }
 
-Ehci::FrameListElement::operator QH*() const
+FrameListElement::operator QH*() const
 {
 	ASSERT((m_word & 1) == 0);
 	ASSERT((Type)((m_word >> 1) & 3) == kQueueHead);
 	return (QH *)(m_word & ~31);
 }
 
-Ehci::FrameListElement::operator SITD*() const
+FrameListElement::operator SITD*() const
 {
 	ASSERT((m_word & 1) == 0);
 	ASSERT((Type)((m_word >> 1) & 3) == kSplitTransationIsochronousTransferDescriptor);
 	return (SITD *)(m_word & ~31);
 }
 
-Ehci::FrameListElement::operator FSTN*() const
+FrameListElement::operator FSTN*() const
 {
 	ASSERT((m_word & 1) == 0);
 	ASSERT((Type)((m_word >> 1) & 3) == kFrameSpanTraversalNode);
 	return (FSTN *)(m_word & ~31);
+}
+
+void Ehci::EnableAsync(bool e)
+{
+	if (e)
+	{
+		if (!(m_pOps->m_usbCmd & (1 << 5)))
+			m_pOps->m_usbCmd |= (1 << 5);			//enable it
+
+		//wait for it to come up
+		while (!(m_pOps->m_usbSts & (1 << 15)));
+	}
+	else
+	{
+		if (m_pOps->m_usbCmd & (1 << 5))
+			m_pOps->m_usbCmd &= ~(1 << 5);			//disable it
+
+		//wait for it to stop
+		while (m_pOps->m_usbSts & (1 << 15));
+	}
+}
+
+void Ehci::EnablePeriodic(bool e)
+{
+	if (e)
+	{
+		if (!(m_pOps->m_usbCmd & (1 << 4)))
+			m_pOps->m_usbCmd |= (1 << 4);			//enable it
+
+		//wait for it to come up
+		while (!(m_pOps->m_usbSts & (1 << 14)));
+	}
+	else
+	{
+		if (m_pOps->m_usbCmd & (1 << 4))
+			m_pOps->m_usbCmd &= ~(1 << 4);			//disable it
+
+		//wait for it to stop
+		while (m_pOps->m_usbSts & (1 << 14));
+	}
+}
+
+QTD::QTD(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTerm,
+		bool dataToggle, unsigned int totalBytes, bool interruptOnComplete,
+		unsigned int currentPage, unsigned int errorCounter, Pid pid,
+		unsigned int status, void* pVirtBuffer, unsigned int bufferLength)
+{
+	QTD *pPhysNext, *pPhysAltNext;
+
+	//virt to phys on the qtd pointers
+	if (pVirtNext)
+	{
+		ASSERT(((unsigned int)pVirtNext & 31) == 0);
+		if (!VirtMem::VirtToPhys(pVirtNext, &pPhysNext))
+			ASSERT(0);
+		ASSERT(!nextTerm);
+	}
+	else
+	{
+		pPhysNext = 0;
+		ASSERT(nextTerm);
+	}
+
+	if (pVirtAltNext)
+	{
+		ASSERT(((unsigned int)pVirtAltNext & 31) == 0);
+		if (!VirtMem::VirtToPhys(pVirtAltNext, &pPhysAltNext))
+			ASSERT(0);
+		ASSERT(!altNextTerm);
+	}
+	else
+	{
+		pPhysAltNext = 0;
+		ASSERT(altNextTerm);
+	}
+
+	ASSERT((totalBytes - ((unsigned int)pVirtBuffer & 4095)) <= 0x5000);
+	ASSERT(currentPage <= 4);
+	ASSERT(errorCounter <= 3);
+	ASSERT(status <= 0xff);
+
+	unsigned int pidCode = 0;
+	switch (pid)
+	{
+	case kOut: pidCode = 0; break;
+	case kIn: pidCode = 1; break;
+	case kSetup: pidCode = 2; break;
+	default: ASSERT(0);
+	}
+
+	m_words[0] = (unsigned int)pPhysNext | (unsigned int)nextTerm;
+	m_words[1] = (unsigned int)pPhysAltNext | (unsigned int)altNextTerm;
+	m_words[2] = ((unsigned int)dataToggle << 31) | (totalBytes << 16) | ((unsigned int)interruptOnComplete << 15) | (currentPage << 12)
+			| (errorCounter << 10) | (pidCode << 8) | status;
+
+	//zero the buffer slots
+	for (int count = 0; count < 5; count++)
+		m_words[3 + count] = 0;
+
+	//fill in the misalignment
+	m_words[3] = (unsigned int)pVirtBuffer & 4095;
+
+	//convert the buffer virtual address to physical page addresses
+	char *pVirtAlignedBuffer = (char *)((unsigned int)pVirtBuffer & ~4095);
+
+	//for each whole page, rounded up
+	for (unsigned int page = 0; page < ((totalBytes + 4095) & ~4095); page++)
+	{
+		char *pPhys;
+		if (!VirtMem::VirtToPhys(&pVirtAlignedBuffer[page * 4096], &pPhys))
+			ASSERT(0);
+
+		m_words[3 + page] |= (unsigned int)pPhys;
+	}
+}
+
+unsigned int QTD::GetBytesToTransfer(void)
+{
+	return (m_words[2] >> 16) & 0x7fff;
+}
+
+unsigned int QTD::GetErrorCount(void)
+{
+	return (m_words[2] >> 10) & 3;
+}
+
+unsigned int QTD::GetStatus(void)
+{
+	return m_words[2] & 0xff;
+}
+
 }

@@ -10,6 +10,116 @@
 
 #include "fixed_size_allocator.h"
 
+namespace USB
+{
+
+enum Pid
+{
+	//token
+	kOut = 1,
+	kIn = 9,
+	kSof = 5,
+	kSetup = 13,
+	//data
+	kData0 = 3,
+	kData1 = 11,
+	kData2 = 7,
+	kMdata = 15,
+	//handshake
+	kAck = 2,
+	kNak = 10,
+	kStall = 14,
+	kNyet = 6,
+	//special
+	kPre = 12,
+	kErr = 12,
+	kSplit = 8,
+	kPing = 4,
+};
+
+enum Speed
+{
+	kLowSpeed,
+	kFullSpeed,
+	kHighSpeed,
+};
+
+struct ITD;
+struct QH;
+struct SITD;
+struct FSTN;
+
+struct QTD;
+
+struct FrameListElement
+{
+	enum Type
+	{
+		kIsochronousTransferDescriptor = 0,
+		kQueueHead = 1,
+		kSplitTransationIsochronousTransferDescriptor = 2,
+		kFrameSpanTraversalNode = 3,
+	};
+
+	unsigned int m_word;
+
+	FrameListElement(void);
+	FrameListElement(ITD *);
+	FrameListElement(QH *);
+	FrameListElement(SITD *);
+	FrameListElement(FSTN *);
+
+	operator ITD *() const;
+	operator QH *() const;
+	operator SITD *() const;
+	operator FSTN *() const;
+};
+
+
+struct ITD
+{
+	FrameListElement m_fle;
+	unsigned int m_words[15];
+};
+
+struct QH
+{
+	FrameListElement m_fle;
+	unsigned int m_words[11];
+};
+
+struct SITD
+{
+	FrameListElement m_fle;
+	unsigned int m_words[6];
+};
+
+struct FSTN
+{
+	FrameListElement m_nple;
+	FrameListElement m_bple;
+};
+
+struct QTD
+{
+	QTD(QTD *pVirtNext, bool nextTerm,
+			QTD *pVirtAltNext, bool altNextTerm,
+			bool dataToggle,
+			unsigned int totalBytes,
+			bool interruptOnComplete,
+			unsigned int currentPage,
+			unsigned int errorCounter,
+			Pid pid,
+			unsigned int status,
+			void *pVirtBuffer, unsigned int bufferLength);
+
+	unsigned int GetBytesToTransfer(void);
+	unsigned int GetErrorCount(void);
+	unsigned int GetStatus(void);
+
+	volatile unsigned int m_words[8];
+};
+
 class Ehci
 {
 public:
@@ -18,60 +128,10 @@ public:
 
 	void Initialise(void);
 
+	void EnableAsync(bool e);
+	void EnablePeriodic(bool e);
+
 protected:
-	struct ITD;
-	struct QH;
-	struct SITD;
-	struct FSTN;
-
-	struct FrameListElement
-	{
-		enum Type
-		{
-			kIsochronousTransferDescriptor = 0,
-			kQueueHead = 1,
-			kSplitTransationIsochronousTransferDescriptor = 2,
-			kFrameSpanTraversalNode = 3,
-		};
-
-		unsigned int m_word;
-
-		FrameListElement(void);
-		FrameListElement(ITD *);
-		FrameListElement(QH *);
-		FrameListElement(SITD *);
-		FrameListElement(FSTN *);
-
-		operator ITD *() const;
-		operator QH *() const;
-		operator SITD *() const;
-		operator FSTN *() const;
-	};
-
-
-	struct ITD
-	{
-		FrameListElement m_fle;
-		unsigned int m_words[15];
-	};
-
-	struct QH
-	{
-		FrameListElement m_fle;
-		unsigned int m_words[11];
-	};
-
-	struct SITD
-	{
-		FrameListElement m_fle;
-		unsigned int m_words[6];
-	};
-
-	struct FSTN
-	{
-		FrameListElement m_nple;
-		FrameListElement m_bple;
-	};
 
 #pragma pack(push)
 #pragma pack(1)
@@ -109,6 +169,10 @@ protected:
 	FixedSizeAllocator<QH, 4096 / sizeof(QH)> m_qhAllocator;
 	FixedSizeAllocator<SITD, 4096 / sizeof(SITD)> m_sitdAllocator;
 	FixedSizeAllocator<FSTN, 4096 / sizeof(FSTN)> m_fstnAllocator;
+
+	FixedSizeAllocator<QTD, 4096 / sizeof(QTD)> m_qtdAllocator;
 };
+
+}
 
 #endif /* EHCI_H_ */
