@@ -10,6 +10,8 @@
 #include "common.h"
 #include "virt_memory.h"
 
+#include <string.h>
+
 namespace USB
 {
 
@@ -99,19 +101,152 @@ void Ehci::Initialise(void)
 	m_pOps->m_configFlag = 1;
 
 	for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
-			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
+		p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
 
 	//turn on power to all ports (if available)
 	if ((m_pCaps->m_hcsParams >> 4) & 1)
 		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
 			m_pOps->m_portsSc[count] |= (1 << 12);
 
-	while (1)
+	for (int count = 0; count < 50; count++)
+		DelayMillisecond();
+
+	//reset connected ports and discover one at a time
+	for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
+		if (m_pOps->m_portsSc[count] & 1)
+		{
+			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
+			PortReset(count);
+			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
+
+			DeviceDescriptor *dd = (DeviceDescriptor *)new char[64];
+			GetDescriptor(dd, kDevice, 0);
+			p << "port " << count << "\n";
+			p << "device\nusb version " << dd->m_usbVersion << " class "
+					<< dd->m_deviceClass << " sub " << dd->m_deviceSubClass
+					<< " prot " << dd->m_deviceProtocol << " max packet " << dd->m_maxPacketSize0
+					<< " vendor " << dd->m_idVendor << " product " << dd->m_idProduct << "\n";
+
+			for (unsigned int count = 0; count < dd->m_numConfigurations; count++)
+			{
+				ConfigurationDescriptor *cd = (ConfigurationDescriptor *)new char[64];
+				GetDescriptor(cd, kConfiguration, count);
+
+				p << "\tconfiguration " << count << "\n";
+				p << "\tinterfaces " << cd->m_numInterfaces << "\n";
+
+				for (unsigned int count = 0; count < cd->m_numInterfaces; count++)
+				{
+					InterfaceDescriptor *id = (InterfaceDescriptor *)new char[64];
+					GetDescriptor(id, kInterface, count + 1);
+
+					p << "\t\tinterface " << count << "\n";
+					p << "\t\tendpoints " << id->m_numEndpoints << " class " << id->m_interfaceClass << " sub " << id->m_interfaceSubclass << " prot " << id->m_interfaceProtocol << "\n";
+
+					for (unsigned int count = 0; count < id->m_numEndpoints; count++)
+					{
+						EndpointDescriptor *ed = (EndpointDescriptor *)new char[64];
+						GetDescriptor(ed, kEndpoint, count);
+
+						p << "\t\t\tendpoint " << count << "\n";
+						p << "\t\t\taddr " << ed->m_endpointAddress << " attributes " << ed->m_attributes << " max packet " << ed->m_maxPacketSize << " interval " << ed->m_interval << "\n";
+					}
+
+					delete[] id;
+				}
+
+				delete[] cd;
+			}
+
+			delete[] dd;
+		}
+
+	/*while (1)
 	{
 		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
 			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
 		DelaySecond();
-	}
+	}*/
+}
+
+void Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
+{
+	//http://www.usbmadesimple.co.uk/ums_4.htm
+	SetupPacket packet(0x80, 6, ((unsigned int )t << 8) | index, 0, 64);
+	QH *pQh, *pPhysQh;
+	QTD *pQtdSetup, *pQtdData;
+
+	if (!m_qhAllocator.Allocate(&pQh))
+		ASSERT(0);
+
+	if (!VirtMem::VirtToPhys(pQh, &pPhysQh))
+		ASSERT(0);
+
+	if (!m_qtdAllocator.Allocate(&pQtdSetup))
+		ASSERT(0);
+	if (!m_qtdAllocator.Allocate(&pQtdData))
+		ASSERT(0);
+
+	pQh->Init(FrameListElement(pQh, FrameListElement::kQueueHead),
+			0, false,		//high-speed? then false
+			64,
+			true,			//head of reclamation
+			true,			//data toggle from incoming qtd
+			kHighSpeed,
+			0,
+			false,			//cannot be true in async queue
+			0,
+			1,				//multiplier must be at least one, but is ignored in async
+			0, 0, 0,		//ignored
+			0,				//zero on async
+			pQtdSetup);
+
+	ASSERT(pBuffer);
+	memset(pBuffer, 0, 64);
+
+	pQtdSetup->Init(pQtdData, false, 0, true,
+			false,				//data0
+			sizeof(SetupPacket),
+			false,
+			0,
+			1,					//1 error max
+			kSetup,
+			1 << 7,				//active status
+			&packet);
+
+	pQtdData->Init(0, true, 0, true,
+			true,				//data1
+			64,
+			false,
+			0,
+			1,					//1 error max
+			kIn,
+			1 << 7,				//active status
+			pBuffer);
+
+	EnableAsync(false);
+
+	m_pOps->m_asyncListAddr = (unsigned int)pPhysQh;
+
+	EnableAsync(true);
+	EnableAsync(false);
+
+	m_qtdAllocator.Free(pQtdData);
+	m_qtdAllocator.Free(pQtdSetup);
+	m_qhAllocator.Free(pQh);
+}
+
+void Ehci::PortReset(unsigned int p)
+{
+	m_pOps->m_portsSc[p] |= (1 << 8);
+
+	for (int i = 0; i < 50; i++)
+		DelayMillisecond();
+
+	m_pOps->m_portsSc[p] &= ~(1 << 8);
+
+	for (int i = 0; i < 50; i++)
+		DelayMillisecond();
 }
 
 FrameListElement::FrameListElement(void)
@@ -120,56 +255,13 @@ FrameListElement::FrameListElement(void)
 	m_word = 1;
 }
 
-FrameListElement::FrameListElement(ITD *p)
+FrameListElement::FrameListElement(void *p, Type t)
 {
 	ASSERT(((unsigned int)p & 31) == 0);
-	m_word = (unsigned int)p | (unsigned int)kIsochronousTransferDescriptor << 1;
-}
-
-FrameListElement::FrameListElement(QH *p)
-{
-	ASSERT(((unsigned int)p & 31) == 0);
-	m_word = (unsigned int)p | (unsigned int)kQueueHead << 1;
-}
-
-FrameListElement::FrameListElement(SITD *p)
-{
-	ASSERT(((unsigned int)p & 31) == 0);
-	m_word = (unsigned int)p | (unsigned int)kSplitTransationIsochronousTransferDescriptor << 1;
-}
-
-FrameListElement::FrameListElement(FSTN *p)
-{
-	ASSERT(((unsigned int)p & 31) == 0);
-	m_word = (unsigned int)p | (unsigned int)kFrameSpanTraversalNode << 1;
-}
-
-FrameListElement::operator ITD*() const
-{
-	ASSERT((m_word & 1) == 0);
-	ASSERT((Type)((m_word >> 1) & 3) == kIsochronousTransferDescriptor);
-	return (ITD *)(m_word & ~31);
-}
-
-FrameListElement::operator QH*() const
-{
-	ASSERT((m_word & 1) == 0);
-	ASSERT((Type)((m_word >> 1) & 3) == kQueueHead);
-	return (QH *)(m_word & ~31);
-}
-
-FrameListElement::operator SITD*() const
-{
-	ASSERT((m_word & 1) == 0);
-	ASSERT((Type)((m_word >> 1) & 3) == kSplitTransationIsochronousTransferDescriptor);
-	return (SITD *)(m_word & ~31);
-}
-
-FrameListElement::operator FSTN*() const
-{
-	ASSERT((m_word & 1) == 0);
-	ASSERT((Type)((m_word >> 1) & 3) == kFrameSpanTraversalNode);
-	return (FSTN *)(m_word & ~31);
+	void *phys;
+	if (!VirtMem::VirtToPhys(p, &phys))
+		ASSERT(0);
+	m_word = (unsigned int)phys | (unsigned int)t << 1;
 }
 
 void Ehci::EnableAsync(bool e)
@@ -215,7 +307,16 @@ void Ehci::EnablePeriodic(bool e)
 QTD::QTD(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTerm,
 		bool dataToggle, unsigned int totalBytes, bool interruptOnComplete,
 		unsigned int currentPage, unsigned int errorCounter, Pid pid,
-		unsigned int status, void* pVirtBuffer, unsigned int bufferLength)
+		unsigned int status, void* pVirtBuffer)
+{
+	Init(pVirtNext, nextTerm, pVirtAltNext, altNextTerm, dataToggle, totalBytes, interruptOnComplete,
+			currentPage, errorCounter, pid, status, pVirtBuffer);
+}
+
+void QTD::Init(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTerm,
+		bool dataToggle, unsigned int totalBytes, bool interruptOnComplete,
+		unsigned int currentPage, unsigned int errorCounter, Pid pid,
+		unsigned int status, void* pVirtBuffer)
 {
 	QTD *pPhysNext, *pPhysAltNext;
 
@@ -246,7 +347,7 @@ QTD::QTD(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTerm,
 		ASSERT(altNextTerm);
 	}
 
-	ASSERT((totalBytes - ((unsigned int)pVirtBuffer & 4095)) <= 0x5000);
+	ASSERT((totalBytes <= 0x5000 - ((unsigned int)pVirtBuffer & 4095)));
 	ASSERT(currentPage <= 4);
 	ASSERT(errorCounter <= 3);
 	ASSERT(status <= 0xff);
@@ -276,7 +377,7 @@ QTD::QTD(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTerm,
 	char *pVirtAlignedBuffer = (char *)((unsigned int)pVirtBuffer & ~4095);
 
 	//for each whole page, rounded up
-	for (unsigned int page = 0; page < ((totalBytes + 4095) & ~4095); page++)
+	for (unsigned int page = 0; page < (((totalBytes + 4095) & ~4095) >> 12); page++)
 	{
 		char *pPhys;
 		if (!VirtMem::VirtToPhys(&pVirtAlignedBuffer[page * 4096], &pPhys))
@@ -296,9 +397,68 @@ unsigned int QTD::GetErrorCount(void)
 	return (m_words[2] >> 10) & 3;
 }
 
+QTD::QTD(void)
+{
+	ASSERT(sizeof(m_words) == sizeof(int) * 8);
+	for (int count = 0; count < 8; count++)
+		m_words[count] = 0;
+}
+
 unsigned int QTD::GetStatus(void)
 {
 	return m_words[2] & 0xff;
+}
+
+QH::QH(FrameListElement link, unsigned int nakReload, bool controlEndpoint,
+		unsigned int maxPacketLength, bool headOfList, bool dataToggleControl,
+		Speed eps, unsigned int endPt, bool inactiveOnNext,
+		unsigned int deviceAddr, unsigned int multiplier,
+		unsigned int portNumber, unsigned int hubAddr,
+		unsigned int splitCompletionMask, unsigned int interruptSchedMask,
+		volatile QTD* pCurrent)
+{
+	Init(link, nakReload, controlEndpoint, maxPacketLength, headOfList, dataToggleControl,
+			eps, endPt, inactiveOnNext, deviceAddr, multiplier, portNumber, hubAddr,
+			splitCompletionMask, interruptSchedMask, pCurrent);
+}
+
+void QH::Init(FrameListElement link, unsigned int nakReload, bool controlEndpoint,
+		unsigned int maxPacketLength, bool headOfList, bool dataToggleControl,
+		Speed eps, unsigned int endPt, bool inactiveOnNext,
+		unsigned int deviceAddr, unsigned int multiplier,
+		unsigned int portNumber, unsigned int hubAddr,
+		unsigned int splitCompletionMask, unsigned int interruptSchedMask,
+		volatile QTD* pCurrent)
+{
+	m_fle = link;
+	memset((void *)&m_overlay, 0, sizeof(m_overlay));
+
+	m_words[0] = (nakReload << 28) | ((unsigned int)controlEndpoint << 27) | (maxPacketLength << 16) | ((unsigned int)headOfList << 15)
+			| ((unsigned int)dataToggleControl << 14) | (endPt << 8) | ((unsigned int)inactiveOnNext << 7) | deviceAddr;
+	switch (eps)
+	{
+	case kFullSpeed:
+		break;
+	case kLowSpeed:
+		m_words[0] |= (1 << 12); break;
+	case kHighSpeed:
+		m_words[0] |= (2 << 12); break;
+	default:
+		ASSERT(0);
+	}
+	ASSERT(multiplier != 0);
+	m_words[1] = (multiplier << 30) | (portNumber << 23) | (hubAddr << 16) | (splitCompletionMask << 8) | interruptSchedMask;
+
+	ASSERT(pCurrent);
+
+	volatile QTD *pPhysCurrent;
+
+	ASSERT(((unsigned int)pCurrent & 31) == 0);
+	if (!VirtMem::VirtToPhys(pCurrent, &pPhysCurrent))
+		ASSERT(0);
+
+	m_pCurrent = 0;
+	m_overlay.m_words[0] = (unsigned int)pPhysCurrent;
 }
 
 }
