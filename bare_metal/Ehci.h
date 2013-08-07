@@ -224,7 +224,7 @@ struct QH
 	FrameListElement m_fle;
 	unsigned int m_words[2];
 	volatile QTD *m_pCurrent;
-	volatile QTD m_overlay;
+	/*volatile */QTD m_overlay;
 };
 #pragma pack(pop)
 
@@ -241,7 +241,9 @@ public:
 
 	void PortReset(unsigned int p);
 
-	void GetDescriptor(void *p, DescriptorType t, unsigned int index);
+	bool GetDescriptor(void *p, DescriptorType t, unsigned int index);
+	void SetAddress(unsigned int addr);
+	void SetConfiguration(unsigned int addr, unsigned int conf);
 
 protected:
 

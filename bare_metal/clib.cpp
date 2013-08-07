@@ -1909,7 +1909,7 @@ static mspace s_pool;
 bool InitMempool(void *pBase, unsigned int numPages)
 {
 	if (VirtMem::AllocAndMapVirtContig(pBase, numPages, true,
-			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
 	{
 		s_pool = create_mspace_with_base(pBase, numPages << 12, 0);
 		return true;

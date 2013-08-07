@@ -745,6 +745,8 @@ extern "C" void Setup(unsigned int entryPoint)
 #endif
 	e.Initialise();
 
+	while(1);
+
 
 //	{
 #ifdef PBES
