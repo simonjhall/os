@@ -15,6 +15,9 @@ namespace USB
 
 struct EndPoint
 {
+	EndPoint(unsigned int maxSize);			//EP zero
+	EndPoint(EndpointDescriptor &rOther);
+
 	EndpointDescriptor m_descriptor;
 };
 

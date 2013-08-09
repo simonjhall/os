@@ -13,9 +13,19 @@ namespace USB
 
 class Hcd;
 class UsbDevice;
+class Hub;
+class Port;
+
 struct EndPoint;
 struct Interface;
 struct Configuration;
+
+enum Speed
+{
+	kLowSpeed,
+	kFullSpeed,
+	kHighSpeed,
+};
 
 #pragma pack(push)
 #pragma pack(1)
