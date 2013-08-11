@@ -22,3 +22,11 @@ Hub::~Hub()
 }
 
 } /* namespace USB */
+
+USB::Port::Port()
+{
+}
+
+USB::Port::~Port()
+{
+}

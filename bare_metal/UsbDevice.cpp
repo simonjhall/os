@@ -5,6 +5,9 @@
  *      Author: simon
  */
 
+#include <string.h>
+#include <stdlib.h>
+
 #include "UsbDevice.h"
 #include "Hcd.h"
 
@@ -15,15 +18,18 @@
 #include "Hub.h"
 
 #include "common.h"
+#include "print_uart.h"
 
 namespace USB
 {
 
 UsbDevice::UsbDevice(Hcd &rHostController, Port &rPort)
-: m_endPointZero(8),
+: m_endPointZero(64),
+  m_pCurrentConfiguration(0),
   m_address(-1),
   m_rHostController(rHostController),
-  m_rPort(rPort)
+  m_rPort(rPort),
+  m_speed(m_rPort.GetPortSpeed())
 {
 }
 
@@ -31,6 +37,7 @@ UsbDevice::UsbDevice(UsbDevice& rOther)
 : m_endPointZero(rOther.m_endPointZero),
   m_deviceDescriptor(rOther.m_deviceDescriptor),
   m_configurations(rOther.m_configurations),
+  m_pCurrentConfiguration(0),
   m_address(rOther.m_address),
   m_rHostController(rOther.m_rHostController),
   m_rPort(rOther.m_rPort),
@@ -50,27 +57,36 @@ UsbDevice::UsbDevice(UsbDevice& rOther)
 UsbDevice::~UsbDevice()
 {
 	if (Valid())
+	{
 		m_rHostController.ReleaseBusAddress(m_address);
+		//device is still programmed to respond on this address though
+		//let's reset the port and get it back to zero
+		m_rPort.Reset();
+	}
 }
 
 bool UsbDevice::BasicInit(int address)
 {
+	PrinterUart<PL011> p;
 	if (!m_rPort.Reset())
+	{
+		p << "port reset failed\n";
 		return false;
+	}
 
 	if (!ReadDescriptors())
+	{
+		p << "read descriptors failed\n";
 		return false;
+	}
 
 	m_endPointZero.m_descriptor.m_maxPacketSize = m_deviceDescriptor.m_maxPacketSize0;
 
-	if (!m_rPort.Reset())
-		return false;
-
-	if (!ReadDescriptors())
-		return false;
-
 	if (!SetAddress(address))
+	{
+		p << "set address failed\n";
 		return false;
+	}
 
 	return true;
 }
@@ -115,6 +131,117 @@ bool UsbDevice::SetAddress(int address)
 
 bool UsbDevice::ReadDescriptors(void)
 {
+	PrinterUart<PL011> p;
+
+	char buffer[64];
+	memset(buffer, 0, sizeof(buffer));
+	DeviceDescriptor *dd = (DeviceDescriptor *)buffer;
+	ConfigurationDescriptor *cd = (ConfigurationDescriptor *)buffer;
+
+	//get the device descriptor
+	SetupPacket packet(sm_reqTypeDeviceToHost | sm_reqTypeStandard | sm_reqTypeDevice,
+			sm_reqGetDescriptor, 1 << 8, 0, 64);
+
+	if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
+	{
+		p << "failed to get device descriptor\n";
+		return false;
+	}
+
+	if (dd->m_descriptorType != 1)
+	{
+		p << "device descriptor type value not expected\n";
+		return false;
+	}
+
+	if (dd->m_length != sizeof(DeviceDescriptor))
+	{
+		p << "device descriptor length value not expected\n";
+		return false;
+	}
+
+	memcpy(&m_deviceDescriptor, dd, sizeof(DeviceDescriptor));
+
+	//get each configuration descriptor
+	for (unsigned int con = 0; con < m_deviceDescriptor.m_numConfigurations; con++)
+	{
+		memset(buffer, 0, sizeof(buffer));
+
+		ASSERT(con < 256);
+		packet.m_value = (2 << 8) | con;
+
+		if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
+		{
+			p << "failed to read configuration " << con << "\n";
+			return false;
+		}
+
+		if (cd->m_descriptorType != 2)
+		{
+			p << "configuration " << con << " type mismatch\n";
+			return false;
+		}
+
+		if (cd->m_length != sizeof(ConfigurationDescriptor))
+		{
+			p << "configuration " << con << " length mismatch\n";
+			return false;
+		}
+
+		Configuration c;
+		memcpy(&c.m_descriptor, cd, sizeof(ConfigurationDescriptor));
+
+		char *pWalking = (char *)cd + cd->m_length;
+
+		for (unsigned int count = 0; count < c.m_descriptor.m_numInterfaces; count++)
+		{
+			InterfaceDescriptor *id = (InterfaceDescriptor *)pWalking;
+
+			if (id->m_descriptorType != 4)
+			{
+				p << "interface " << con << "/" << count <<" type mismatch\n";
+				return false;
+			}
+
+			if (id->m_length != sizeof(InterfaceDescriptor))
+			{
+				p << "interface " << con << "/" << count <<" length mismatch\n";
+				return false;
+			}
+
+			pWalking += id->m_length;
+
+			Interface in;
+			memcpy(&in.m_descriptor, id, sizeof(InterfaceDescriptor));
+
+			for (unsigned int count = 0; count < id->m_numEndpoints; count++)
+			{
+				EndpointDescriptor *ed = (EndpointDescriptor *)pWalking;
+
+				if (ed->m_descriptorType != 5)
+				{
+					p << "endpoint type mismatch\n";
+					return false;
+				}
+
+				if (ed->m_length != sizeof(EndpointDescriptor))
+				{
+					p << "endpoint length mismatch\n";
+					return false;
+				}
+
+				pWalking += ed->m_length;
+
+				EndPoint end(*ed);
+				in.m_endPoints.push_back(end);
+			}
+
+			c.m_interfaces.push_back(in);
+		}
+		m_configurations.push_back(c);
+	}
+
+	return true;
 }
 
 bool UsbDevice::Valid(void)
@@ -123,6 +250,55 @@ bool UsbDevice::Valid(void)
 		return true;
 	else
 		return false;
+}
+
+Speed UsbDevice::GetSpeed(void)
+{
+	return m_speed;
+}
+
+int UsbDevice::GetAddress(void)
+{
+	if (Valid())
+		return m_address;
+
+	return 0;
+}
+
+void UsbDevice::DumpDescriptors(Printer& p)
+{
+	p << "descriptor dump for " << this << "\n";
+
+	if (!Valid())
+	{
+		p << "\tdevice not valid at this stage\n";
+		return;
+	}
+
+	p << "\tdevice descriptor\n";
+	m_deviceDescriptor.Print(p, 2);
+	p << "\n";
+
+	for (auto cit = m_configurations.begin(); cit != m_configurations.end(); cit++)
+	{
+		p << "\t\tconfiguration\n";
+		cit->m_descriptor.Print(p, 3);
+		p << "\n";
+
+		for (auto iit = cit->m_interfaces.begin(); iit != cit->m_interfaces.end(); iit++)
+		{
+			p << "\t\t\tinterface\n";
+			iit->m_descriptor.Print(p, 4);
+			p << "\n";
+
+			for (auto eit = iit->m_endPoints.begin(); eit != iit->m_endPoints.end(); eit++)
+			{
+				p << "\t\t\t\tendpoint\n";
+				eit->m_descriptor.Print(p, 5);
+				p << "\n";
+			}
+		}
+	}
 }
 
 bool UsbDevice::SetConfiguration(unsigned int c)
@@ -135,6 +311,20 @@ bool UsbDevice::SetConfiguration(unsigned int c)
 
 	if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, 0, 0, packet))
 		return false;
+
+	m_pCurrentConfiguration = 0;
+
+	unsigned int count = 0;
+	for (auto it = m_configurations.begin(); it != m_configurations.end(); it++)
+		if (count == c)
+		{
+			m_pCurrentConfiguration = &(*it);
+			break;
+		}
+
+	ASSERT(m_pCurrentConfiguration);
+
+	return true;
 }
 
 } /* namespace USB */

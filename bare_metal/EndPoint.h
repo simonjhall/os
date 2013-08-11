@@ -18,7 +18,7 @@ struct EndPoint
 	EndPoint(unsigned int maxSize);			//EP zero
 	EndPoint(EndpointDescriptor &rOther);
 
-	EndpointDescriptor m_descriptor;
+	EndpointDescriptor m_descriptor __attribute__ ((aligned (8)));
 };
 
 } /* namespace USB */

@@ -183,7 +183,8 @@ EnableIrqFiqForMode:
 .global InsertPageTableLoAndFlush
 .func InsertPageTableLoAndFlush
 InsertPageTableLoAndFlush:
-	push {lr, r0}
+	push {lr}
+	push {r0}
 
 	bl v7_flush_icache_all
 	bl v7_flush_dcache_all
@@ -227,6 +228,28 @@ OmapSmc:
 	pop {r4-r12, pc}
 .endfunc
 .size OmapSmc, .-OmapSmc
+
+.global DelaySecond
+.func DelaySecond
+DelaySecond:
+	ldr r0, =333333333
+1:
+	subs r0, #1
+	bne 1b
+	bx lr
+.endfunc
+.size DelaySecond, .-DelaySecond
+
+.global DelayMillisecond
+.func DelayMillisecond
+DelayMillisecond:
+	ldr r0, =333333
+1:
+	subs r0, #1
+	bne 1b
+	bx lr
+.endfunc
+.size DelayMillisecond, .-DelayMillisecond
 
 
 /***************************************/

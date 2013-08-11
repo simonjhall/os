@@ -111,7 +111,7 @@ EnableCaches:
 	mrc p15, 0, r2, c1, c0, 0
 	orr r2, #(1 << 12)			/* icache enable */
 	orr r2, #(1 << 11)			/* branch prediction enable */
-	orr r2, #(1 << 2)				/* dcache enable */
+	/*orr r2, #(1 << 2)	*/			/* dcache enable */
 	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
 
 	bx lr

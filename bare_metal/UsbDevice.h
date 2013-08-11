@@ -10,6 +10,7 @@
 
 #include "Usb.h"
 #include "EndPoint.h"
+#include "print.h"
 
 #include <list>
 
@@ -26,7 +27,10 @@ public:
 	virtual bool Valid(void);
 	virtual bool BasicInit(int address);
 	virtual bool Identify(unsigned short &rVendor, unsigned short &rProduct, unsigned short &rVersion);
+	virtual Speed GetSpeed(void);
+	virtual int GetAddress(void);
 
+	virtual void DumpDescriptors(Printer &p);
 protected:
 	virtual bool Cloned(void);
 	virtual bool SetAddress(int address);
@@ -34,7 +38,7 @@ protected:
 	virtual bool SetConfiguration(unsigned int c);
 
 	EndPoint m_endPointZero;
-	DeviceDescriptor m_deviceDescriptor;
+	DeviceDescriptor m_deviceDescriptor __attribute__ ((aligned (8)));
 	std::list<Configuration> m_configurations;
 
 	Configuration *m_pCurrentConfiguration;

@@ -22,6 +22,7 @@
 #include "DSS.h"
 #include "IoSpace.h"
 #include "Ehci.h"
+#include "UsbDevice.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -520,7 +521,7 @@ extern "C" void Setup(unsigned int entryPoint)
 	unsigned int r0, r1;
 	r0 = 1;
 	r1 = 0;
-	VirtMem::OMAP4460::OmapSmc(&r0, &r1, VirtMem::OMAP4460::kL2EnableDisableCache);
+//	VirtMem::OMAP4460::OmapSmc(&r0, &r1, VirtMem::OMAP4460::kL2EnableDisableCache);
 
 	p << pl310[0] << "\n";
 	p << pl310[4 >> 2] << "\n";
@@ -745,6 +746,53 @@ extern "C" void Setup(unsigned int entryPoint)
 #endif
 	e.Initialise();
 
+	/*int s = 0;
+	while(1)
+	{
+		p << "second " << s << "\n";
+		DelaySecond();
+		s++;
+	}*/
+
+	std::list<USB::UsbDevice *> devices;
+	USB::Hub &h = e.GetRootHub();
+	for (unsigned int count = 0; count < h.GetNumPorts(); count++)
+	{
+		int addr = e.AllocateBusAddress();
+		if (addr <= 0)
+			break;		//no spare addresses
+
+		h.GetPort(count)->PowerOn(true);
+
+		if (h.GetPort(count) && h.GetPort(count)->IsDeviceAttached())
+		{
+			p << "found device root port " << count << "\n";
+			USB::UsbDevice dev(e, *h.GetPort(count));
+			if (dev.BasicInit(addr) == false)
+			{
+				p << "BasicInit failed\n";
+				h.GetPort(count)->PowerOn(false);
+				continue;
+			}
+
+			unsigned short vendor, product, version;
+			if (!dev.Identify(vendor, product, version))
+			{
+				p << "Identify failed\n";
+				h.GetPort(count)->PowerOn(false);
+				continue;
+			}
+
+			p << "vendor " << vendor << " product " << product << " version " << version << "\n";
+			dev.DumpDescriptors(p);
+
+			devices.push_back(new USB::UsbDevice(dev));
+		}
+		else
+			e.ReleaseBusAddress(addr);
+	}
+
+	p << "done\n";
 	while(1);
 
 

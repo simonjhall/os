@@ -6,6 +6,8 @@
  */
 
 #include "Ehci.h"
+#include "UsbDevice.h"
+
 #include "print_uart.h"
 #include "common.h"
 #include "virt_memory.h"
@@ -16,11 +18,11 @@ namespace USB
 {
 
 Ehci::Ehci(volatile void *pBase)
+: m_pCaps((volatile Caps *)pBase),
+  m_pOps((volatile Ops *)((unsigned int)pBase + m_pCaps->m_capLength)),
+  m_rootHub(*this)
 {
 	PrinterUart<PL011> p;
-
-	m_pCaps = (volatile Caps *)pBase;
-	m_pOps = (volatile Ops *)((unsigned int)pBase + m_pCaps->m_capLength);
 
 	p << "cap length " << m_pCaps->m_capLength << "\n";
 	p << "hci version " << m_pCaps->m_hciVersion << "\n";
@@ -65,7 +67,7 @@ Ehci::~Ehci()
 	//needs to free memory
 }
 
-void Ehci::Initialise(void)
+bool Ehci::Initialise(void)
 {
 	PrinterUart<PL011> p;
 
@@ -100,97 +102,17 @@ void Ehci::Initialise(void)
 	//make all ports be owned by this controller (ehci)
 	m_pOps->m_configFlag = 1;
 
-	for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
-		p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
-
-	//turn on power to all ports (if available)
-	if ((m_pCaps->m_hcsParams >> 4) & 1)
-		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
-			m_pOps->m_portsSc[count] |= (1 << 12);
-
-	for (int count = 0; count < 50; count++)
-		DelayMillisecond();
-
-	int address = 1;
-
-	//reset connected ports and discover one at a time
-	for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
-		if (m_pOps->m_portsSc[count] & 1)
-		{
-			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
-			PortReset(count);
-			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
-
-			while (1)
-			{
-				DeviceDescriptor *dd = (DeviceDescriptor *)new char[64];
-				memset(dd, 0, 64);
-				if (!GetDescriptor(dd, kDevice, 0))
-					break;
-				ASSERT(dd->m_descriptorType == kDevice);
-
-				p << "port " << count << "\n";
-				p << "device\nusb version " << dd->m_usbVersion << " class "
-						<< dd->m_deviceClass << " sub " << dd->m_deviceSubClass
-						<< " prot " << dd->m_deviceProtocol << " max packet " << dd->m_maxPacketSize0
-						<< " vendor " << dd->m_idVendor << " product " << dd->m_idProduct << "\n";
-
-				for (unsigned int con = 0; con < dd->m_numConfigurations; con++)
-				{
-					ConfigurationDescriptor *cd = (ConfigurationDescriptor *)new char[64];
-					GetDescriptor(cd, kConfiguration, con);
-					ASSERT(cd->m_descriptorType == kConfiguration);
-
-					char *pWalking = (char *)cd + cd->m_length;
-
-					p << "\tconfiguration " << count << "\n";
-					p << "\tinterfaces " << cd->m_numInterfaces << "\n";
-
-					for (unsigned int count = 0; count < cd->m_numInterfaces; count++)
-					{
-						InterfaceDescriptor *id = (InterfaceDescriptor *)pWalking;
-						ASSERT(id->m_descriptorType == kInterface);
-						pWalking += id->m_length;
-
-						p << "\t\tinterface " << count << "\n";
-						p << "\t\tendpoints " << id->m_numEndpoints << " class " << id->m_interfaceClass << " sub " << id->m_interfaceSubclass << " prot " << id->m_interfaceProtocol << "\n";
-
-						for (unsigned int count = 0; count < id->m_numEndpoints; count++)
-						{
-							EndpointDescriptor *ed = (EndpointDescriptor *)pWalking;
-							ASSERT(ed->m_descriptorType == kEndpoint);
-							pWalking += ed->m_length;
-
-							p << "\t\t\tendpoint " << count << "\n";
-							p << "\t\t\taddr " << ed->m_endpointAddress << " attributes " << ed->m_attributes << " max packet " << ed->m_maxPacketSize << " interval " << ed->m_interval << "\n";
-						}
-					}
-
-					delete[] cd;
-				}
-
-				delete[] dd;
-
-				SetAddress(address);
-				SetConfiguration(address, 1);
-				address++;
-
-//				DelaySecond();
-			}
-		}
-
-	/*while (1)
-	{
-		for (unsigned int count = 0; count < ((m_pCaps->m_hcsParams >> 0) & 0xf); count++)
-			p << "port " << count << " " << m_pOps->m_portsSc[count] << "\n";
-		DelaySecond();
-	}*/
+	return true;
 }
 
-bool Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
+void Ehci::Shutdown(void)
+{
+}
+
+bool Ehci::SubmitControlMessage(EndPoint& rEndPoint, UsbDevice& rDevice,
+		void* pBuffer, unsigned int length, SetupPacket setupPacket)
 {
 	//http://www.usbmadesimple.co.uk/ums_4.htm
-	SetupPacket packet(0x80, 6, ((unsigned int )t << 8) | index, 0, 64);
 	QH *pQh, *pPhysQh;
 	QTD *pQtdSetup, *pQtdData;
 
@@ -205,22 +127,26 @@ bool Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
 	if (!m_qtdAllocator.Allocate(&pQtdData))
 		ASSERT(0);
 
+	ASSERT(rDevice.GetSpeed() == kHighSpeed);
+
+	PrinterUart<PL011> p;
+//
+//	p << "endpoint size " << rEndPoint.m_descriptor.m_maxPacketSize << " addr " <<
+//			rEndPoint.m_descriptor.m_endpointAddress << " dev addr " << rDevice.GetAddress() << "\n";
+
 	pQh->Init(FrameListElement(pQh, FrameListElement::kQueueHead),
 			0, false,		//high-speed? then false
-			64,
+			rEndPoint.m_descriptor.m_maxPacketSize,
 			true,			//head of reclamation
 			true,			//data toggle from incoming qtd
 			kHighSpeed,
-			0,
+			rEndPoint.m_descriptor.m_endpointAddress,
 			false,			//cannot be true in async queue
-			0,
+			rDevice.GetAddress(),
 			1,				//multiplier must be at least one, but is ignored in async
 			0, 0, 0,		//ignored
 			0,				//zero on async
 			pQtdSetup);
-
-	ASSERT(pBuffer);
-	memset(pBuffer, 0x7f, 64);
 
 	pQtdSetup->Init(pQtdData, false, 0, true,
 			false,				//data0
@@ -230,11 +156,11 @@ bool Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
 			1,					//1 error max
 			kSetup,
 			1 << 7,				//active status
-			&packet);
+			&setupPacket);
 
 	pQtdData->Init(0, true, 0, true,
 			true,				//data1
-			64,
+			length,
 			false,
 			0,
 			1,					//1 error max
@@ -252,7 +178,12 @@ bool Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
 	bool failed = false;
 
 	if ((pQtdSetup->GetStatus() & (1 << 6)) || (pQtdData->GetStatus() & (1 << 6)))
+	{
+		p << "qtd setup status " << pQtdSetup->GetStatus() << "\n";
+		p << "qtd data status " << pQtdData->GetStatus() << "\n";
+
 		failed = true;
+	}
 
 	m_qtdAllocator.Free(pQtdData);
 	m_qtdAllocator.Free(pQtdSetup);
@@ -261,130 +192,38 @@ bool Ehci::GetDescriptor(void *pBuffer, DescriptorType t, unsigned int index)
 	return !failed;
 }
 
-void Ehci::SetAddress(unsigned int addr)
+Hub& Ehci::GetRootHub(void)
 {
-	SetupPacket packet(0, 5, addr, 0, 0);
-	QH *pQh, *pPhysQh;
-	QTD *pQtdSetup, *pQtdData;
-
-	if (!m_qhAllocator.Allocate(&pQh))
-		ASSERT(0);
-
-	if (!VirtMem::VirtToPhys(pQh, &pPhysQh))
-		ASSERT(0);
-
-	if (!m_qtdAllocator.Allocate(&pQtdSetup))
-		ASSERT(0);
-	if (!m_qtdAllocator.Allocate(&pQtdData))
-		ASSERT(0);
-
-	pQh->Init(FrameListElement(pQh, FrameListElement::kQueueHead),
-			0, false,		//high-speed? then false
-			64,
-			true,			//head of reclamation
-			true,			//data toggle from incoming qtd
-			kHighSpeed,
-			0,
-			false,			//cannot be true in async queue
-			0,
-			1,				//multiplier must be at least one, but is ignored in async
-			0, 0, 0,		//ignored
-			0,				//zero on async
-			pQtdSetup);
-
-	pQtdSetup->Init(pQtdData, false, 0, true,
-			false,				//data0
-			sizeof(SetupPacket),
-			false,
-			0,
-			1,					//1 error max
-			kSetup,
-			1 << 7,				//active status
-			&packet);
-
-	pQtdData->Init(0, true, 0, true,
-			true,				//data1
-			0,
-			false,
-			0,
-			1,					//1 error max
-			kIn,
-			1 << 7,				//active status
-			0);
-
-	EnableAsync(false);
-
-	m_pOps->m_asyncListAddr = (unsigned int)pPhysQh;
-
-	EnableAsync(true);
-	EnableAsync(false);
-
-	m_qtdAllocator.Free(pQtdData);
-	m_qtdAllocator.Free(pQtdSetup);
-	m_qhAllocator.Free(pQh);
+	return m_rootHub;
 }
 
-void Ehci::SetConfiguration(unsigned int addr, unsigned int conf)
+void Ehci::PortPower(unsigned int p, bool o)
 {
-	SetupPacket packet(0, 9, conf, 0, 0);
-	QH *pQh, *pPhysQh;
-	QTD *pQtdSetup, *pQtdData;
+	if (!((m_pCaps->m_hcsParams >> 4) & 1))
+		return;			//no port power
 
-	if (!m_qhAllocator.Allocate(&pQh))
-		ASSERT(0);
+	if (o)
+	{
+		m_pOps->m_portsSc[p] |= (1 << 12);
 
-	if (!VirtMem::VirtToPhys(pQh, &pPhysQh))
-		ASSERT(0);
+		for (int count = 0; count < 50; count++)
+			DelayMillisecond();
+	}
+	else
+		m_pOps->m_portsSc[p] &= ~(1 << 12);
+}
 
-	if (!m_qtdAllocator.Allocate(&pQtdSetup))
-		ASSERT(0);
-	if (!m_qtdAllocator.Allocate(&pQtdData))
-		ASSERT(0);
+bool Ehci::IsPortPowered(unsigned int p)
+{
+	if (!((m_pCaps->m_hcsParams >> 4) & 1))
+		return true;			//no port power
 
-	pQh->Init(FrameListElement(pQh, FrameListElement::kQueueHead),
-			0, false,		//high-speed? then false
-			64,
-			true,			//head of reclamation
-			true,			//data toggle from incoming qtd
-			kHighSpeed,
-			0,
-			false,			//cannot be true in async queue
-			addr,
-			1,				//multiplier must be at least one, but is ignored in async
-			0, 0, 0,		//ignored
-			0,				//zero on async
-			pQtdSetup);
+	return m_pOps->m_portsSc[p] & (1 << 12);
+}
 
-	pQtdSetup->Init(pQtdData, false, 0, true,
-			false,				//data0
-			sizeof(SetupPacket),
-			false,
-			0,
-			1,					//1 error max
-			kSetup,
-			1 << 7,				//active status
-			&packet);
-
-	pQtdData->Init(0, true, 0, true,
-			true,				//data1
-			0,
-			false,
-			0,
-			1,					//1 error max
-			kIn,
-			1 << 7,				//active status
-			0);
-
-	EnableAsync(false);
-
-	m_pOps->m_asyncListAddr = (unsigned int)pPhysQh;
-
-	EnableAsync(true);
-	EnableAsync(false);
-
-	m_qtdAllocator.Free(pQtdData);
-	m_qtdAllocator.Free(pQtdSetup);
-	m_qhAllocator.Free(pQh);
+bool Ehci::IsDeviceAttached(unsigned int p)
+{
+	return m_pOps->m_portsSc[p] & 1;
 }
 
 void Ehci::PortReset(unsigned int p)
@@ -527,15 +366,16 @@ void QTD::Init(QTD* pVirtNext, bool nextTerm, QTD* pVirtAltNext, bool altNextTer
 	//convert the buffer virtual address to physical page addresses
 	char *pVirtAlignedBuffer = (char *)((unsigned int)pVirtBuffer & ~4095);
 
-	//for each whole page, rounded up
-	for (unsigned int page = 0; page < (((totalBytes + 4095) & ~4095) >> 12); page++)
-	{
-		char *pPhys;
-		if (!VirtMem::VirtToPhys(&pVirtAlignedBuffer[page * 4096], &pPhys))
-			ASSERT(0);
+	if (totalBytes)
+		//for each whole page, rounded up
+		for (unsigned int page = 0; page < (((totalBytes + 4095) & ~4095) >> 12); page++)
+		{
+			char *pPhys;
+			if (!VirtMem::VirtToPhys(&pVirtAlignedBuffer[page * 4096], &pPhys))
+				ASSERT(0);
 
-		m_words[3 + page] |= (unsigned int)pPhys;
-	}
+			m_words[3 + page] |= (unsigned int)pPhys;
+		}
 }
 
 unsigned int QTD::GetBytesToTransfer(void)

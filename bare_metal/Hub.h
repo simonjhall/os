@@ -9,6 +9,7 @@
 #define HUB_H_
 
 #include <list>
+#include "Usb.h"
 
 namespace USB
 {
@@ -20,6 +21,10 @@ protected:
 	virtual ~Port();
 public:
 	virtual bool Reset(void) = 0;
+	virtual bool PowerOn(bool o) = 0;
+	virtual bool IsPoweredOn(void) = 0;
+	virtual bool IsDeviceAttached(void) = 0;
+	virtual Speed GetPortSpeed(void) = 0;
 };
 
 class Hub

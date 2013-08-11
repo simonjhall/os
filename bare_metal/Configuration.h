@@ -16,7 +16,7 @@ namespace USB
 
 struct Configuration
 {
-	ConfigurationDescriptor m_descriptor;
+	ConfigurationDescriptor m_descriptor __attribute__ ((aligned (8)));
 	std::list<Interface> m_interfaces;
 };
 

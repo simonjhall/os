@@ -16,7 +16,7 @@ namespace USB
 
 struct Interface
 {
-	InterfaceDescriptor m_descriptor;
+	InterfaceDescriptor m_descriptor __attribute__ ((aligned (8)));
 	std::list<EndPoint> m_endPoints;
 };
 

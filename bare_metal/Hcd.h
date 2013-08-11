@@ -19,11 +19,18 @@ protected:
 	Hcd();
 	virtual ~Hcd();
 
-public:
-	int AllocateBusAddress(void);
-	void ReleaseBusAddress(int);
+	bool m_used[128];
 
-	bool SubmitControlMessage(EndPoint &rEndPoint, UsbDevice &rDevice, void *pBuffer, unsigned int length, SetupPacket);
+public:
+	virtual bool Initialise(void) = 0;
+	virtual void Shutdown(void) = 0;
+
+	virtual int AllocateBusAddress(void);
+	virtual void ReleaseBusAddress(int);
+
+	virtual bool SubmitControlMessage(EndPoint &rEndPoint, UsbDevice &rDevice, void *pBuffer, unsigned int length, SetupPacket) = 0;
+
+	virtual Hub &GetRootHub(void) = 0;
 };
 
 } /* namespace USB */

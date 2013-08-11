@@ -8,6 +8,8 @@
 #ifndef USB_H_
 #define USB_H_
 
+#include "print.h"
+
 namespace USB
 {
 
@@ -25,6 +27,7 @@ enum Speed
 	kLowSpeed,
 	kFullSpeed,
 	kHighSpeed,
+	kInvalidSpeed,
 };
 
 #pragma pack(push)
@@ -65,6 +68,8 @@ struct DeviceDescriptor
 	unsigned char m_productIndex;
 	unsigned char m_serialIndex;
 	unsigned char m_numConfigurations;
+
+	void Print(Printer &p, int tab);
 };
 
 struct ConfigurationDescriptor
@@ -77,6 +82,8 @@ struct ConfigurationDescriptor
 	unsigned char m_configurationIndex;
 	unsigned char m_attributes;
 	unsigned char m_maxPower;
+
+	void Print(Printer &p, int tab);
 };
 
 struct InterfaceDescriptor
@@ -90,6 +97,8 @@ struct InterfaceDescriptor
 	unsigned char m_interfaceSubclass;
 	unsigned char m_interfaceProtocol;
 	unsigned char m_interfaceIndex;
+
+	void Print(Printer &p, int tab);
 };
 
 struct EndpointDescriptor
@@ -100,6 +109,32 @@ struct EndpointDescriptor
 	unsigned char m_attributes;
 	unsigned short m_maxPacketSize;
 	unsigned char m_interval;
+
+	void Print(Printer &p, int tab);
+};
+
+enum Pid
+{
+	//token
+	kOut = 1,
+	kIn = 9,
+	kSof = 5,
+	kSetup = 13,
+	//data
+	kData0 = 3,
+	kData1 = 11,
+	kData2 = 7,
+	kMdata = 15,
+	//handshake
+	kAck = 2,
+	kNak = 10,
+	kStall = 14,
+	kNyet = 6,
+	//special
+	kPre = 12,
+	kErr = 12,
+	kSplit = 8,
+	kPing = 4,
 };
 
 #pragma pack(pop)
