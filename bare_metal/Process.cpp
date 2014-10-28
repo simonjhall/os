@@ -358,7 +358,7 @@ void Process::SetHighZero(void *p)
 
 char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	has_tls = false;
 	char *pInterp = 0;
 
@@ -435,9 +435,13 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 
 Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 		unsigned int stackSizePages, int priority, unsigned int userStack)
-: m_pParent(pParent),
+: Nameable(),
+  m_pParent(pParent),
   m_isPriv(priv),
-  m_priority(priority)
+  m_priority(priority),
+  m_threadSwitches(0),
+  m_serviceSwitches(0),
+  m_pBlockedOn(0)
 {
 	ASSERT(stackSizePages == 1);
 
@@ -454,12 +458,17 @@ Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
 	{
 		if (!VirtMem::g_sysThreadStacks.Allocate(&m_pPrivStack))
 			ASSERT(0);
+		static_assert(sizeof(*m_pPrivStack) == 4096, "stack size not 4 KB");
 
-		m_pausedState.m_regs[13] = (unsigned int)m_pPrivStack;
+		m_stackLow = m_pPrivStack;
+		m_pausedState.m_regs[13] = (unsigned int)m_pPrivStack + 4096 - 8;
 		m_pausedState.m_spsr.m_mode = kSystem;
 	}
 	else
 	{
+		//round down to 4 KB page
+		m_stackLow = (void *)(userStack & ~4095);
+
 		m_pausedState.m_regs[13] = userStack;
 		m_pausedState.m_spsr.m_mode = kUser;
 	}
@@ -497,7 +506,15 @@ bool Thread::SetState(State target)
 		return false;
 
 	case kBlocked:
-		if (target == kDead)
+		if (target == kDead || target == kBlockedOnEq)
+		{
+			m_state = target;
+			return true;
+		}
+		return false;		//needs an unblock
+
+	case kBlockedOnEq:
+		if (target == kDead || target == kBlocked)
 		{
 			m_state = target;
 			return true;
@@ -549,6 +566,8 @@ bool Thread::Run(void)
 		VirtMem::SetL1TableLo(0);
 	}
 
+	m_threadSwitches++;
+
 	Resume(&m_pausedState);
 
 	return true;
@@ -569,11 +588,14 @@ bool Thread::RunAsHandler(Thread& rBlocked)
 	m_pausedState.m_regs[1] = (unsigned int)&rBlocked;
 	//interrupts are on
 
+	m_threadSwitches++;
+	rBlocked.m_serviceSwitches++;
+
 	Resume(&m_pausedState);
 	return true;
 }
 
-void Thread::SetName(const char *pName)
+void Nameable::SetName(const char *pName)
 {
 	if (!pName)
 		return;

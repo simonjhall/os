@@ -42,7 +42,7 @@ void *internal_mmap(void *addr, size_t length, int prot, int flags,
 
 	if ((isPriv && addr < (void *)0x80000000) || (!isPriv && addr >= (void *)0x80000000))
 	{
-		PrinterUart<PL011> p;
+		Printer &p = Printer::Get();
 		p << "illegal mmap\n";
 		p << addr << "\n";
 		p << length << "\n";

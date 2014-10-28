@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
 
 ssize_t WrappedFile::Read(void *pBuf, size_t count)
 {
@@ -69,6 +70,7 @@ off_t WrappedFile::Lseek(off_t offset, int whence)
 	return m_pos;
 }
 
+#ifdef __ARM_ARCH_7A__
 ssize_t WrappedFile::Writev(const struct iovec *pIov, int iovcnt)
 {
 	ASSERT(m_dupCount);
@@ -104,6 +106,7 @@ ssize_t WrappedFile::Readv(const struct iovec *pIov, int iovcnt)
 
 	return read;
 }
+#endif
 
 void WrappedFile::Close(void)
 {

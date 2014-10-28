@@ -1,0 +1,38 @@
+OUTPUT_FORMAT("elf32-littlearm")
+phys = 0x24002000;
+SECTIONS
+{
+	. = 0x24000000;
+	.entry : {
+	. = ALIGN(4);
+	*(.entry)
+	}
+	  . = 0x24001000;
+	.trampoline : {
+	*(.trampoline)
+	}
+	
+ 	.text phys : AT(phys) {
+ 		*(.text .text.*)
+ 		. = ALIGN(4096);
+ 	}
+	.rodata : {
+	*(.rodata .rodata.*)
+	}
+	
+	.data : {
+	*(.data .data.*)
+	}
+
+	__bss_start__ = .;
+	.bss : 
+	{
+		*(.bss)
+	}
+	__bss_end__ = .;
+
+	.note.gnu.build-id : {
+		note_gnu_build_id = .;
+	}
+	__end__ = .;
+}

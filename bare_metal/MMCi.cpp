@@ -28,7 +28,7 @@ MMCi::~MMCi()
 
 bool MMCi::Reset(void)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	volatile unsigned int *pPhys;
 	VirtMem::VirtToPhys(m_pBaseAddress, &pPhys);
 	p << "base address is " << m_pBaseAddress << " phys addr " << pPhys << "\n";
@@ -230,7 +230,7 @@ bool MMCi::Reset(void)
 
 void MMCi::Command(SdCommand c, ::Response wait, bool stream, unsigned int a)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	unsigned int w = 0;
 	switch (wait)
@@ -354,7 +354,7 @@ void MMCi::ClockFrequencyChange(int divider)
 {
 	ASSERT(divider >= 0 && divider <= 1023);
 
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	p << "sysctl was " << m_pBaseAddress[sm_sysctl] << "\n";
 
 	//disable the clock; set sysctl[2]=0

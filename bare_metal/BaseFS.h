@@ -9,7 +9,7 @@
 #define BASEFS_H_
 
 #include <vector>
-#include <sys/uio.h>
+#include <sys/types.h>
 
 struct linux_dirent64
 {
@@ -128,6 +128,7 @@ public:
 
 	virtual bool Attach(BaseFS &, const char *pTarget);
 	virtual bool Detach(const char *pTarget);
+	virtual BaseFS *IsAttachment(const Directory *);
 
 	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0) = 0;
 protected:

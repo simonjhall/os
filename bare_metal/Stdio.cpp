@@ -15,7 +15,7 @@ ssize_t Stdio::ReadFrom(void *pBuf, size_t count, off_t offset)
 	if (m_mode != kStdin)
 		return -1;
 
-	size_t original_count = count;
+//	size_t original_count = count;
 
 	unsigned char *pOut = (unsigned char *)pBuf;
 	unsigned int read_bytes = 0;

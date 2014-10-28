@@ -99,6 +99,13 @@ public:
 		return *this;
 	}
 
+	static inline Printer &Get(void)
+	{
+		return *sm_defaultPrinter;
+	}
+
+	static Printer *sm_defaultPrinter;
+
 private:
 	virtual char *NibbleToHexString(char *, unsigned int);
 };

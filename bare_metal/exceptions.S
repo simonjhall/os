@@ -1,3 +1,5 @@
+.if M3==0
+
 .global GetStackHigh
 
 .global UndefinedInstruction
@@ -24,6 +26,9 @@ Resume:
 	#turn off interrupts
 	cpsid i
 	cpsid f
+
+	#clear any lock
+	clrex
 
 	#change to a mode with banked registers and spsr (supervisor)
 	cps #19
@@ -63,6 +68,9 @@ Resume:
 .global \funcName
 .func \funcName
 \funcName:
+	#clear any exclusive lock
+	clrex
+
 	#IRQ is disable for all of this
 	#FIQ may still be enabled
 
@@ -167,3 +175,4 @@ _Fiq:
 	bx lr
 .endfunc
 .size  HandlerYield, .- HandlerYield
+.endif

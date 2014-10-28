@@ -14,6 +14,7 @@
 
 namespace OMAP4460
 {
+	unsigned int DSS_CTRL = 0x40;
 
 namespace Dispcc
 {
@@ -25,7 +26,7 @@ namespace Dispcc
 	unsigned int DISPC_CONTROL1  = 0x1040;
 	unsigned int DISPC_CONFIG1 = 0x1044;
 //	volatile unsigned int *DISPC_DEFAULT_COLOR0 = (volatile unsigned int *)0xFC00104C;
-//	volatile unsigned int *DISPC_DEFAULT_COLOR1 = (volatile unsigned int *)0xFC001050;
+	unsigned int DISPC_DEFAULT_COLOR1 = 0x1050;
 //	volatile unsigned int *DISPC_TRANS_COLOR0 = (volatile unsigned int *)0xFC001054;
 //	volatile unsigned int *DISPC_TRANS_COLOR1 = (volatile unsigned int *)0xFC001058;
 //	volatile unsigned int *DISPC_LINE_STATUS = (volatile unsigned int *)0xFC00105C;
@@ -35,7 +36,7 @@ namespace Dispcc
 //	volatile unsigned int *DISPC_POL_FREQ1 = (volatile unsigned int *)0xFC00106C;
 //	volatile unsigned int *DISPC_DIVISOR1 = (volatile unsigned int *)0xFC001070;
 //	volatile unsigned int *DISPC_GLOBAL_ALPHA = (volatile unsigned int *)0xFC001074;
-//	volatile unsigned int *DISPC_SIZE_TV = (volatile unsigned int *)0xFC001078;
+	unsigned int DISPC_SIZE_TV = 0x1078;
 //	volatile unsigned int *DISPC_SIZE_LCD1 = (volatile unsigned int *)0xFC00107C;
 //
 	unsigned int DISPC_GFX_BA_0 = (0x1080 + 4 * 0);
@@ -45,8 +46,8 @@ namespace Dispcc
 	unsigned int DISPC_GFX_ATTRIBUTES = 0x10A0;
 //	volatile unsigned int *DISPC_GFX_BUF_THRESHOLD = (volatile unsigned int *)0xFC0010A4;
 //	volatile unsigned int *DISPC_GFX_BUF_SIZE_STATUS = (volatile unsigned int *)0xFC0010A8;
-//	volatile unsigned int *DISPC_GFX_ROW_INC = (volatile unsigned int *)0xFC0010AC;
-//	volatile unsigned int *DISPC_GFX_PIXEL_INC = (volatile unsigned int *)0xFC0010B0;
+	unsigned int DISPC_GFX_ROW_INC = 0x10AC;
+	unsigned int DISPC_GFX_PIXEL_INC = 0x10B0;
 	unsigned int DISPC_GFX_TABLE_BA = 0x10B8;
 //
 //	volatile unsigned int *DISPC_VID1_BA_0 = (volatile unsigned int *)(0xFC0010BC + 4 * 0);
@@ -191,22 +192,23 @@ namespace Dispcc
 
 DSS::DSS()
 : InterruptSource(),
-  pPhysGammaTable(0),
+  m_pPhysGammaTable(0),
   m_interruptMask(0),
   m_interruptsEnabled(false)
 {
 	FillTimingsList();
-	pPhysGammaTable = PhysPages::FindPage();
+	m_pPhysGammaTable = PhysPages::FindPage();
+	ASSERT(m_pPhysGammaTable != (void *)-1);
 }
 
 DSS::~DSS()
 {
-	PhysPages::ReleasePage((unsigned int)pPhysGammaTable >> 12);
+	PhysPages::ReleasePage((unsigned int)m_pPhysGammaTable >> 12);
 }
 
 bool DSS::EnableDisplay(Modeline mode)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	volatile unsigned int * const pCM_DIV_M5_DPLL_PER = &IoSpace::GetDefaultIoSpace()->Get("CM2")[0x15c >> 2];
 
@@ -219,7 +221,7 @@ bool DSS::EnableDisplay(Modeline mode)
 	{
 		havekHz = it->m_pclk / 1000;
 
-		if (havekHz > wantkHz)
+		if (havekHz >= wantkHz)
 		{
 			changed_clocks = true;
 
@@ -238,8 +240,6 @@ bool DSS::EnableDisplay(Modeline mode)
 		}
 	}
 
-	p << "here\n";
-
 	if (!changed_clocks)
 	{
 		p << "failed to change clock\n";
@@ -248,15 +248,16 @@ bool DSS::EnableDisplay(Modeline mode)
 
 	p << "trying mode fit\n";
 	//now up the mode until it fits the pixel clock
-	Modeline new_mode = mode.AdjustToFitPixClk(havekHz);
+//	Modeline new_mode = mode.AdjustToFitPixClk(havekHz);
+	Modeline new_mode = mode;
 
 	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONFIG1 >> 2] |= (1 << 3);					//lut as gamma table
-	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_TABLE_BA >> 2] = (unsigned int)pPhysGammaTable;
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_TABLE_BA >> 2] = (unsigned int)m_pPhysGammaTable;
 
 	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL2 >> 2] |= (3 << 8);				//24-bit display
-	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL2 >> 2] |= (1 << 5);				//golcd 2
+//	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL2 >> 2] |= (1 << 5);				//golcd 2
 
-	//something to do with gpio - not sure why needed
+	//select rfbi bypass mode
 	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL1 >> 2] |= (1 << 14) | (1 << 15);
 
 	//lcd2 panel background colour,
@@ -275,6 +276,27 @@ bool DSS::EnableDisplay(Modeline mode)
 
 	return true;
 }
+/*
+bool DSS::EnableTv(Modeline mode)
+{
+	PrinterUart<PL011> p;
+
+	p << "dss ctrl " << IoSpace::GetDefaultIoSpace()->Get("DSS")[DSS_CTRL >> 2] << "\n";
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[DSS_CTRL >> 2] |= (1 << 15);
+
+	//tv background colour,
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_DEFAULT_COLOR1 >> 2] = 0x7f7f7f7f;
+
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL1 >> 2] |= (0 << 17);						//hold time 0
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_SIZE_TV >> 2] = 0x02CF04FF;						//dims
+
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL1 >> 2] |= (1 << 6);						//gotv
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL1 >> 2] |= (1 << 1);						//tvenable
+
+	p << "control 1 " << IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_CONTROL1 >> 2] << "\n";
+
+	return true;
+}*/
 
 void DSS::SpinWaitForVsyncAndClear(void)
 {
@@ -351,6 +373,12 @@ void DSS::FillTimingsList(void)
 	}
 
 	std::sort(m_pclks.begin(), m_pclks.end(), ClockCombo::comp_func);
+
+//	PrinterUart<PL011> p;
+//	for (auto it = m_pclks.begin(); it != m_pclks.end(); it++)
+//	{
+//		p.PrintDec(it->m_pclk, false); p << ", "; p.PrintDec(it->m_f, false); p << " "; p.PrintDec(it->m_l, false); p << " "; p.PrintDec(it->m_p, false); p << "\n";
+//	}
 }
 
 } /* namespace OMAP4460 */
@@ -389,8 +417,10 @@ void OMAP4460::Gfx::Attach(void)
 	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_POSITION >> 2] = m_posX | (m_posY << 16);
 
 	//dma increment
-	ASSERT(m_rowSkip == 1);
-	ASSERT(m_pixSkip == 1);
+	ASSERT(m_pixSkip < 256 && m_pixSkip > 0);
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_PIXEL_INC >> 2] = m_pixSkip;
+	ASSERT(m_rowSkip < 256 && m_rowSkip > 0);
+	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_ROW_INC >> 2] = m_rowSkip;
 
 	//channelout2, for lcd2
 	IoSpace::GetDefaultIoSpace()->Get("DSS")[Dispcc::DISPC_GFX_ATTRIBUTES >> 2] |= (1 << 30);

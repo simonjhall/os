@@ -17,7 +17,7 @@ FatFS::FatFS(BlockDevice &rDevice)
 	ReadBpb();
 	ReadEbr();
 
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	p << "bpb and ebr read\n";
 
 	p << "BPB\n";
@@ -253,7 +253,7 @@ bool FatDirectory::Fstat(struct stat64 &rBuf)
 
 int FatDirectory::FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t &rChild)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	int written = 0;
 	int base_size = sizeof(linux_dirent64);
@@ -403,7 +403,7 @@ void FatFS::BuildDirectoryStructure(void)
 
 void FatFS::ListDirectory(FatDirectory &rDir)
 {
-//	PrinterUart<PL011> p;
+//	Printer &p = Printer::Get();
 
 	unsigned int cluster = rDir.GetStartCluster();
 

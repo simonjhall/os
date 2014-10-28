@@ -8,26 +8,61 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#include "print_uart.h"
+//#include "print_uart.h"
+#include "print.h"
+//#include "UART.h"
+#include "malloc.h"
 
 #include <sys/types.h>
 
 class BaseDirent;
 
-static inline void assert_func(void)
-{
-	volatile bool wait = false;
-	while (wait == false);
-}
+extern "C" void EnableIrq(bool);
+extern "C" void EnableFiq(bool);
+extern "C" bool IsIrqEnabled(void);
+extern "C" void InvokeSyscall(unsigned int r7, unsigned int r0 = 0, unsigned int r1 = 0, unsigned int r2 = 0);
 
-#define ASSERT(x) { if (!(x)) {PrinterUart<PL011> p;p.PrintString("assert ");p.PrintString(__FILE__);p.PrintString(" ");p.PrintDec(__LINE__, true);assert_func();} }
+extern "C" void assert_func(void);
+
+#ifdef __ARM_ARCH_7A__
+#define ASSERT(x) \
+	{\
+		if (!(x))\
+		{\
+			Printer &p = Printer::Get();\
+			p.PrintString("A9 assert ");\
+			p.PrintString(__FILE__);\
+			p.PrintString(" ");\
+			p.PrintDec(__LINE__, true);\
+			assert_func();\
+		}\
+	}
+#endif
+
+#ifdef __ARM_ARCH_7M__
+//#define ASSERT(x) { if (!(x)) {OMAP4460::UART p((volatile unsigned int *)0x48020000);p.PrintString("M3 assert ");p.PrintString(__FILE__);p.PrintString(" ");p.PrintDec(__LINE__, true);assert_func();} }
+#define ASSERT(x) \
+	{\
+		if (!(x))\
+		{\
+			Printer &p = Printer::Get();\
+			p.PrintString("A7 assert ");\
+			p.PrintString(__FILE__);\
+			p.PrintString(" ");\
+			p.PrintDec(__LINE__, true);\
+			assert_func();\
+		}\
+	}
+#endif
+
+//#define ASSERT(x)
 
 //caches
 extern "C" void v7_invalidate_l1(void);
 extern "C" void v7_flush_icache_all(void);
 extern "C" void v7_flush_dcache_all(void);
 
-bool InitMempool(void *pBase, unsigned int numPages);
+bool InitMempool(void *pBase, unsigned int numPages, bool phys, mspace *pPool = 0);
 
 void *internal_mmap(void *addr, size_t length, int prot, int flags,
                   BaseDirent *f, off_t offset, bool isPriv);

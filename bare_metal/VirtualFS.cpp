@@ -60,7 +60,7 @@ bool VirtualFS::Lstat(const char *pFilename, struct stat &rBuf)
 bool VirtualFS::Mkdir(const char *pFilePath, const char *pFilename)
 {
 	BaseDirent *mp = Locate(pFilePath, 0);
-	if (!mp->IsDirectory())
+	if (!mp || !mp->IsDirectory())
 		return false;
 
 	VirtualDirectory *d = new VirtualDirectory(pFilename, (VirtualDirectory *)mp, *this);

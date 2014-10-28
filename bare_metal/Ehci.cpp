@@ -22,7 +22,7 @@ Ehci::Ehci(volatile void *pBase)
   m_pOps((volatile Ops *)((unsigned int)pBase + m_pCaps->m_capLength)),
   m_rootHub(*this)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	p << "cap length " << m_pCaps->m_capLength << "\n";
 	p << "hci version " << m_pCaps->m_hciVersion << "\n";
@@ -69,8 +69,6 @@ Ehci::~Ehci()
 
 bool Ehci::Initialise(void)
 {
-	PrinterUart<PL011> p;
-
 	//reset the controller
 	ASSERT(((m_pOps->m_usbSts >> 12) & 1) == 1);
 	m_pOps->m_usbCmd = 1 << 1;
@@ -127,9 +125,11 @@ bool Ehci::SubmitControlMessage(EndPoint& rEndPoint, UsbDevice& rDevice,
 	if (!m_qtdAllocator.Allocate(&pQtdData))
 		ASSERT(0);
 
-	ASSERT(rDevice.GetSpeed() == kHighSpeed);
+	Printer &p = Printer::Get();
+	if (rDevice.GetSpeed() != kHighSpeed)
+		p << "device speed is " << rDevice.GetSpeed() << "\n";
 
-	PrinterUart<PL011> p;
+	ASSERT(rDevice.GetSpeed() == kHighSpeed);
 //
 //	p << "endpoint size " << rEndPoint.m_descriptor.m_maxPacketSize << " addr " <<
 //			rEndPoint.m_descriptor.m_endpointAddress << " dev addr " << rDevice.GetAddress() << "\n";
@@ -179,6 +179,7 @@ bool Ehci::SubmitControlMessage(EndPoint& rEndPoint, UsbDevice& rDevice,
 
 	if ((pQtdSetup->GetStatus() & (1 << 6)) || (pQtdData->GetStatus() & (1 << 6)))
 	{
+		p << "qtd error for device " << rDevice.GetAddress() << "\n";
 		p << "qtd setup status " << pQtdSetup->GetStatus() << "\n";
 		p << "qtd data status " << pQtdData->GetStatus() << "\n";
 
@@ -206,7 +207,7 @@ void Ehci::PortPower(unsigned int p, bool o)
 	{
 		m_pOps->m_portsSc[p] |= (1 << 12);
 
-		for (int count = 0; count < 50; count++)
+		for (int count = 0; count < 64; count++)
 			DelayMillisecond();
 	}
 	else
@@ -230,12 +231,12 @@ void Ehci::PortReset(unsigned int p)
 {
 	m_pOps->m_portsSc[p] |= (1 << 8);
 
-	for (int i = 0; i < 50; i++)
+	for (int i = 0; i < 64; i++)
 		DelayMillisecond();
 
 	m_pOps->m_portsSc[p] &= ~(1 << 8);
 
-	for (int i = 0; i < 50; i++)
+	for (int i = 0; i < 64; i++)
 		DelayMillisecond();
 }
 

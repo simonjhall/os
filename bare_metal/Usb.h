@@ -30,6 +30,30 @@ enum Speed
 	kInvalidSpeed,
 };
 
+enum ClassCode
+{
+	kClassInvalid = -1,
+	kClassPerInterface = 0,
+	kClassAudio,
+	kClassComms,
+	kClassHid,
+	kClassPhysical = 5,
+	kClassStillImage,
+	kClassPrinter,
+	kClassMassStorage,
+	kClassHub,
+	kClassCdcData,
+	kClassSmartCard,
+	kClassContentSecurity = 0xd,
+	kClassVideo,
+	kClassPersonalHealthCare,
+	kClassAvDevice,
+	kClassWirelessController = 0xe0,
+	kClassMisc = 0xef,
+	kClassAppSpec = 0xfe,
+	kClassVendorSpec = 0xff
+};
+
 #pragma pack(push)
 #pragma pack(1)
 struct SetupPacket

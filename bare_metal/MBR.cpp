@@ -14,7 +14,7 @@ const unsigned int MBR::sm_partitionOffsets[4] = {0x1be, 0x1ce, 0x1de, 0x1ee};
 MBR::MBR(BlockDevice &rRoot)
 : m_rRoot(rRoot), m_numPartitions(0)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	unsigned char head[512];
 	bool ok = m_rRoot.ReadDataFromLogicalAddress(0, head, 512);

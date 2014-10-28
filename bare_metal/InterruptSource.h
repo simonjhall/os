@@ -33,10 +33,15 @@ public:
 		m_pHandler = pFunc;
 	}
 
-	virtual void HandleInterrupt(void)
+	virtual bool HandleInterrupt(void)
 	{
 		if (m_pHandler)
+		{
 			(*m_pHandler)(*this);
+			return true;
+		}
+		else
+			return false;
 	}
 
 	virtual volatile unsigned int *GetFiqClearAddress(void)

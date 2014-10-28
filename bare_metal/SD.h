@@ -52,6 +52,8 @@ public:
 	SD();
 	virtual ~SD();
 
+	virtual bool Reset(void);
+
 	virtual void GoIdleState(void) = 0;
 	virtual bool GoReadyState(void) = 0;
 	virtual bool GoIdentificationState(void) = 0;

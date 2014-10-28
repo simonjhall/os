@@ -202,7 +202,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 				ASSERT((int)current_fault + (int)current_pagetable + (int)current_section == 1);
 
 				//map the whole thing
-				if (to_map == 1048576)
+				if (to_map == 1048576 && (physStart & 1048575) == 0)
 				{
 					//map the section
 					if (commit)
@@ -423,7 +423,7 @@ bool RemovePageTable(void *pVirtual, bool hi, bool flush)
 
 void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault, bool hi)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	TranslationTable::TableEntryL1 *pL1Virt = VirtMem::GetL1TableVirt(hi);
 	TranslationTable::TableEntryL1 *pL1Phys = VirtMem::GetL1TablePhys(hi);
 	TranslationTable::TableEntryL1 *pActualPhys = 0;

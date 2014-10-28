@@ -90,6 +90,7 @@ public:
 	virtual ~DSS();
 
 	bool EnableDisplay(Modeline mode);
+	bool EnableTv(Modeline mode);
 	void SpinWaitForVsyncAndClear(void);
 
 	virtual void EnableInterrupt(bool e);
@@ -101,6 +102,8 @@ public:
 	unsigned int GetInterruptMask(void);
 
 	unsigned int RawIrqStatus(void);
+
+	inline void *GetPhysTable(void) { return m_pPhysGammaTable; };
 
 	static const unsigned int sm_frameDone1			= 1 << 0;
 	static const unsigned int sm_vSync1				= 1 << 1;
@@ -163,7 +166,7 @@ private:
 
 	std::vector<ClockCombo> m_pclks;
 
-	void *pPhysGammaTable;
+	void *m_pPhysGammaTable;
 	unsigned int m_interruptMask;
 	bool m_interruptsEnabled;
 };

@@ -7,6 +7,8 @@
 
 #include "phys_memory.h"
 
+#ifdef __ARM_ARCH_7A__
+
 namespace PhysPages
 {
 
@@ -120,3 +122,23 @@ unsigned int PageUsedCount(void)
 
 
 
+#endif
+
+#ifdef __ARM_ARCH_7M__
+
+namespace PhysPages
+{
+
+void *FindPage(void)
+{
+	return (void *)-1;
+}
+
+void ReleasePage(unsigned int p)
+{
+	ASSERT(0);
+}
+
+}
+
+#endif

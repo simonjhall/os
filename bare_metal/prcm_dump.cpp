@@ -5,6 +5,8 @@
  *      Author: simon
  */
 
+#ifdef __ARM_ARCH_7A__
+
 #include "print.h"
 #include "common.h"
 
@@ -271,3 +273,4 @@ void PrcmDump(Printer &p)
 	u = 0xe010a51c; p << "0x" << conv_u(u) <<  " 0x" << *(volatile unsigned int *)u << "\n";
 }
 
+#endif

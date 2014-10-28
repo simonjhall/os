@@ -1,5 +1,7 @@
 .section .entry, "ax"
 
+.if M3==0
+
 .global Setup
 .global _start
 .global entry_maybe_misaligned
@@ -379,3 +381,63 @@ __Fiq:
 
 .global __trampoline_end__
 __trampoline_end__:
+
+.endif
+
+.if M3==1
+.syntax unified
+
+.global M3_Reset,M3_NMI,M3_HardFault,M3_MemManage,M3_BusFault,M3_UsageFault,M3_SVCall,M3_DebugMonitor,M3_PendSV,M3_SysTick,M3_ExtIntN
+
+//0
+.word 0
+//1
+/*.word 9
+	mov r0, 0
+	movt r0, 0x4802
+	mov r1, 'a'
+	str r1, [r0]
+loop:
+	b loop
+
+*/
+.word M3_Reset+1
+//2
+.word M3_NMI+1
+//3
+.word M3_HardFault+1
+//4
+.word M3_MemManage+1
+//5
+/*.word M3_BusFault+1*/
+.word BusFaultTramp+1
+//6
+/*.word M3_UsageFault+1*/
+.word UsageFaultTramp+1
+//7-10, reserved
+.word 0
+.word 0
+.word 0
+.word 0
+//11
+.word M3_SVCall+1
+//12
+.word M3_DebugMonitor+1
+//13, reserved
+.word 0
+//14
+.word M3_PendSV+1
+//15
+.word M3_SysTick+1
+//16+N
+.word M3_ExtIntN+1
+.fill 495, 4, 0xffffffff
+
+UsageFaultTramp:
+	mov r0, sp
+	b M3_UsageFault
+BusFaultTramp:
+	mov r0, sp
+	b M3_BusFault
+
+.endif

@@ -17,6 +17,11 @@ IoSpace::IoSpace(volatile unsigned int *pVirtBase)
 {
 }
 
+IoSpace::IoSpace(void)
+: m_pVirtBase(0)
+{
+}
+
 IoSpace::~IoSpace()
 {
 }
@@ -32,6 +37,7 @@ IoSpace::Entry &IoSpace::Get(const char* pName)
 
 void IoSpace::Map(void)
 {
+	ASSERT(m_pVirtBase);
 	volatile unsigned int *p = m_pVirtBase;
 
 	for (auto it = m_all.begin(); it != m_all.end(); it++)
@@ -40,9 +46,18 @@ void IoSpace::Map(void)
 		r.m_pVirt = p;
 		p += r.m_length >> 2;
 
-		VirtMem::MapPhysToVirt((void *)r.m_pPhys, (void *)r.m_pVirt, r.m_length, true,
-			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0);
+		if (!VirtMem::MapPhysToVirt((void *)r.m_pPhys, (void *)r.m_pVirt, r.m_length, true,
+			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
+			ASSERT(!"failed to map item into IoSpace\n");
 	}
+}
+
+void IoSpace::MapVirtAsPhys(void)
+{
+	ASSERT(!m_pVirtBase);
+
+	for (auto &it : m_all)
+		it.m_pVirt = it.m_pPhys;
 }
 
 void IoSpace::Fill(void)
@@ -52,6 +67,12 @@ void IoSpace::Fill(void)
 
 OMAP4460::OmapIoSpace::OmapIoSpace(volatile unsigned int* pVirtBase)
 : IoSpace(pVirtBase)
+{
+	Fill();
+}
+
+OMAP4460::OmapIoSpace::OmapIoSpace(void)
+: IoSpace()
 {
 	Fill();
 }
@@ -106,10 +127,23 @@ void OMAP4460::OmapIoSpace::Fill(void)
 	m_all.push_back(Entry("SCU/GIC_Proc_Interface/Timer", 0, (volatile unsigned int *)0x48240000, 4096));
 	m_all.push_back(Entry("GIC_Intr_Distributor", 0, (volatile unsigned int *)0x48241000, 4096));
 	m_all.push_back(Entry("PL310", 0, (volatile unsigned int *)0x48242000, 4096));
+
+	//page 1507
+	m_all.push_back(Entry("SCACHE_CONFIG", 0, (volatile unsigned int *)0x55080000, 4096));
+	//page 305
+	m_all.push_back(Entry("CORTEXM3_SCACHE_CFG_MMU", 0, (volatile unsigned int *)0x55080000, 4096));
+	//page 4425
+	m_all.push_back(Entry("CORTEXM3_L2MMU", 0, (volatile unsigned int *)0x55082000, 4096));
 }
 
 VersatilePb::VersIoSpace::VersIoSpace(volatile unsigned int* pVirtBase)
 : IoSpace(pVirtBase)
+{
+	Fill();
+}
+
+VersatilePb::VersIoSpace::VersIoSpace(void)
+: IoSpace(0)
 {
 	Fill();
 }

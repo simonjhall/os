@@ -19,6 +19,8 @@ public:
 		m_pBase = pBase;
 		m_used = 0;
 
+		ASSERT(pBase);
+
 		for (unsigned int count = 0; count < max; count++)
 			m_slot[count] = false;
 	}

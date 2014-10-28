@@ -39,6 +39,15 @@ bool BaseFS::Detach(const char *pTarget)
 	return false;
 }
 
+BaseFS *BaseFS::IsAttachment(const Directory *p)
+{
+	for (std::vector<Attachment *>::iterator it = m_attachments.begin(); it != m_attachments.end(); it++)
+		if ((*it)->m_pMountPoint == p)
+			return &(*it)->m_rFilesystem;
+
+	return 0;
+}
+
 BaseDirent *BaseFS::OpenByName(const char *pFilename, unsigned int flags)
 {
 	if (flags & O_CREAT)

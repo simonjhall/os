@@ -19,7 +19,7 @@ Modeline::~Modeline()
 
 Modeline Modeline::AdjustToFitPixClk(unsigned int targetPixkHz)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	unsigned int startkHz = ComputePixRatekHz();
 	ASSERT(startkHz <= targetPixkHz);
@@ -27,16 +27,21 @@ Modeline Modeline::AdjustToFitPixClk(unsigned int targetPixkHz)
 	Modeline best = *this;
 	int difference = targetPixkHz - startkHz;
 
-	p << "target " << targetPixkHz << "\n";
-	p << "start " << startkHz << "\n";
+	p << "target "; p.PrintDec(targetPixkHz, false); p << "\n";
+	p << "start "; p.PrintDec(startkHz, false); p << "\n";
 	p << "initial difference\n";
 	p.PrintDec(difference, false);
+	p << "\n";
 
 	Modeline working = *this;
+
+	int added = 0;
 
 	while (difference > 0)
 	{
 		working.m_vSync++;
+		added++;
+
 		int new_difference = targetPixkHz - working.ComputePixRatekHz();
 
 		if (new_difference > 0)
@@ -52,6 +57,7 @@ Modeline Modeline::AdjustToFitPixClk(unsigned int targetPixkHz)
 			break;
 	}
 
+	p << "added "; p.PrintDec(added, false); p << " rows\n";
 
 	return best;
 }
@@ -90,6 +96,10 @@ void Modeline::AddDefaultModes(void)
 			600, 601, 605, 628,
 			Modeline::kPositive, Modeline::kPositive));
 
+	pList->push_back(Modeline("720x480@60",
+			720, 480, 27027, 60, 62, 16, 60, 6, 9, 30,
+			Modeline::kNegative, Modeline::kNegative, Modeline::kTiHdmi));
+
 	pList->push_back(Modeline("1024x768@60", 65000, 60,
 			1024, 1048, 1184, 1344,
 			768, 771, 777, 806,
@@ -106,6 +116,16 @@ void Modeline::AddDefaultModes(void)
 			Modeline::kPositive, Modeline::kPositive));
 
 	pList->push_back(Modeline("1920x1080@60", 148350, 60,
+			1920, 2008, 2052, 2200,
+			1080, 1084, 1089, 1125,
+			Modeline::kPositive, Modeline::kPositive));
+
+	pList->push_back(Modeline("TV1280x720@60", 74250, 60,
+			1280, 1390, 1430, 1650,
+			720, 725, 730, 750,
+			Modeline::kPositive, Modeline::kPositive));
+
+	pList->push_back(Modeline("TV1920x1080@60", 148500, 60,
 			1920, 2008, 2052, 2200,
 			1080, 1084, 1089, 1125,
 			Modeline::kPositive, Modeline::kPositive));

@@ -19,6 +19,7 @@
 
 #include "common.h"
 #include "print_uart.h"
+#include "virt_memory.h"
 
 namespace USB
 {
@@ -29,33 +30,33 @@ UsbDevice::UsbDevice(Hcd &rHostController, Port &rPort)
   m_address(-1),
   m_rHostController(rHostController),
   m_rPort(rPort),
-  m_speed(m_rPort.GetPortSpeed())
+  m_speed(kInvalidSpeed)
 {
 }
 
 UsbDevice::UsbDevice(UsbDevice& rOther)
 : m_endPointZero(rOther.m_endPointZero),
-  m_deviceDescriptor(rOther.m_deviceDescriptor),
-  m_configurations(rOther.m_configurations),
+  m_deviceDescriptor(/*rOther.m_deviceDescriptor*/),
+  m_configurations(/*rOther.m_configurations*/),
   m_pCurrentConfiguration(0),
   m_address(rOther.m_address),
   m_rHostController(rOther.m_rHostController),
   m_rPort(rOther.m_rPort),
   m_speed(rOther.m_speed)
 {
-	if (rOther.Cloned())
+	if (!rOther.Valid())
 	{
-		if (!ReadDescriptors())
-			m_address = -1;
+		m_address = -1;
+		return;
 	}
-	else
-	{
-		ASSERT(0);			//two broken objects?
-	}
+
+	if (!ReadDescriptors())
+		m_address = -1;
 }
 
 UsbDevice::~UsbDevice()
 {
+	return;
 	if (Valid())
 	{
 		m_rHostController.ReleaseBusAddress(m_address);
@@ -67,12 +68,15 @@ UsbDevice::~UsbDevice()
 
 bool UsbDevice::BasicInit(int address)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	if (!m_rPort.Reset())
 	{
 		p << "port reset failed\n";
 		return false;
 	}
+
+	//set the speed AFTER the reset
+	m_speed = m_rPort.GetPortSpeed();
 
 	if (!ReadDescriptors())
 	{
@@ -91,7 +95,7 @@ bool UsbDevice::BasicInit(int address)
 	return true;
 }
 
-bool UsbDevice::Identify(unsigned short & rVendor, unsigned short & rProduct,
+bool UsbDevice::ProductIdentify(unsigned short & rVendor, unsigned short & rProduct,
 		unsigned short & rVersion)
 {
 	if (!Valid())
@@ -131,7 +135,7 @@ bool UsbDevice::SetAddress(int address)
 
 bool UsbDevice::ReadDescriptors(void)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 
 	char buffer[64];
 	memset(buffer, 0, sizeof(buffer));
@@ -142,22 +146,39 @@ bool UsbDevice::ReadDescriptors(void)
 	SetupPacket packet(sm_reqTypeDeviceToHost | sm_reqTypeStandard | sm_reqTypeDevice,
 			sm_reqGetDescriptor, 1 << 8, 0, 64);
 
-	if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
+	int retry = 5;
+
+	while (--retry)
 	{
-		p << "failed to get device descriptor\n";
+		if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
+		{
+			p << "failed to get device descriptor\n";
+			continue;
+		}
+
+		if (dd->m_descriptorType != 1)
+		{
+			p << "device descriptor type value not expected, " << retry << "\n";
+			VirtMem::DumpMem((unsigned int *)dd, sizeof(*dd) >> 2);
+			continue;
+		}
+
+		if (dd->m_length != sizeof(DeviceDescriptor))
+		{
+			p << "device descriptor length value not expected, " << retry << "\n";
+			continue;
+		}
+		break;
+	}
+	if (!retry)
+	{
+		p << "bailing out of read descriptors\n";
 		return false;
 	}
-
-	if (dd->m_descriptorType != 1)
+	else if (retry != 4)
 	{
-		p << "device descriptor type value not expected\n";
-		return false;
-	}
-
-	if (dd->m_length != sizeof(DeviceDescriptor))
-	{
-		p << "device descriptor length value not expected\n";
-		return false;
+		p << "got there in the end, " << retry << "\n";
+		VirtMem::DumpMem((unsigned int *)dd, sizeof(*dd) >> 2);
 	}
 
 	memcpy(&m_deviceDescriptor, dd, sizeof(DeviceDescriptor));
@@ -170,21 +191,32 @@ bool UsbDevice::ReadDescriptors(void)
 		ASSERT(con < 256);
 		packet.m_value = (2 << 8) | con;
 
-		if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
-		{
-			p << "failed to read configuration " << con << "\n";
-			return false;
-		}
+		retry = 5;
 
-		if (cd->m_descriptorType != 2)
+		while (--retry)
 		{
-			p << "configuration " << con << " type mismatch\n";
-			return false;
-		}
+			if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, buffer, 64, packet))
+			{
+				p << "failed to read configuration " << con << "\n";
+				continue;
+			}
 
-		if (cd->m_length != sizeof(ConfigurationDescriptor))
+			if (cd->m_descriptorType != 2)
+			{
+				p << "configuration " << con << " type mismatch\n";
+				continue;
+			}
+
+			if (cd->m_length != sizeof(ConfigurationDescriptor))
+			{
+				p << "configuration " << con << " length mismatch\n";
+				continue;
+			}
+			break;
+		}
+		if (!retry)
 		{
-			p << "configuration " << con << " length mismatch\n";
+			p << "bailing out of read configuration\n";
 			return false;
 		}
 
@@ -267,7 +299,7 @@ int UsbDevice::GetAddress(void)
 
 void UsbDevice::DumpDescriptors(Printer& p)
 {
-	p << "descriptor dump for " << this << "\n";
+	p << "device descriptor dump for " << this << ", device " << m_address << "\n";
 
 	if (!Valid())
 	{
@@ -306,12 +338,6 @@ bool UsbDevice::SetConfiguration(unsigned int c)
 	if (c >= m_configurations.size())
 		return false;
 
-	SetupPacket packet(sm_reqTypeHostToDevice | sm_reqTypeStandard | sm_reqTypeDevice,
-			sm_reqSetConfiguration, c, 0, 0);
-
-	if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, 0, 0, packet))
-		return false;
-
 	m_pCurrentConfiguration = 0;
 
 	unsigned int count = 0;
@@ -324,7 +350,25 @@ bool UsbDevice::SetConfiguration(unsigned int c)
 
 	ASSERT(m_pCurrentConfiguration);
 
+	SetupPacket packet(sm_reqTypeHostToDevice | sm_reqTypeStandard | sm_reqTypeDevice,
+			sm_reqSetConfiguration, m_pCurrentConfiguration->m_descriptor.m_configurationValue, 0, 0);
+
+	if (!m_rHostController.SubmitControlMessage(m_endPointZero, *this, 0, 0, packet))
+		return false;
+
 	return true;
+}
+
+bool UsbDevice::FullInit(void)
+{
+	ASSERT(0);			//should not be called
+	return false;
+}
+
+bool UsbDevice::CanConstruct(void)
+{
+	ASSERT(0);			//should not be called
+	return false;
 }
 
 } /* namespace USB */

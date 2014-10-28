@@ -1,14 +1,44 @@
+.global assert_func
+
+.func assert_func
+assert_func:
+1:
+	b 1b
+	bx lr
+.endfunc
+
+
+.if M3==0
+
 .global InvokeSyscall
 .global ChangeModeAndJump
 
 .global EnableIrq
 .global EnableFiq
 .global EnableIrqFiqForMode
+.global IsIrqEnabled
+.global ReadDFAR
+.global ReadDFSR
+
+.func ReadDFAR
+ReadDFAR:
+	mrc p15, 0, r0, c6, c0, 0
+	bx lr
+.endfunc
+
+.func ReadDFSR
+ReadDFSR:
+	mrc p15, 0, r0, c5, c0, 0
+	bx lr
+.endfunc
 
 .func InvokeSyscall
 InvokeSyscall:
 	push {r7}
 	mov r7, r0
+	mov r0, r1
+	mov r1, r2
+	mov r2, r3
 	swi 0
 	pop {r7}
 	bx lr
@@ -68,6 +98,17 @@ FlushTlb:
 	bx lr
 .endfunc
 .size FlushTlb, .-FlushTlb
+
+.func IsIrqEnabled
+IsIrqEnabled:
+	mrs r0, cpsr
+	mvn r0, r0
+	and r0, #128
+	lsr r0, #7
+	bx lr
+
+.endfunc
+.size IsIrqEnabled, .-IsIrqEnabled
 
 .func EnableIrq
 EnableIrq:
@@ -183,6 +224,10 @@ EnableIrqFiqForMode:
 .global InsertPageTableLoAndFlush
 .func InsertPageTableLoAndFlush
 InsertPageTableLoAndFlush:
+	mrc p15, 0, r1, c2, c0, 0
+	cmp r0, r1
+	bxeq lr
+
 	push {lr}
 	push {r0}
 
@@ -232,7 +277,7 @@ OmapSmc:
 .global DelaySecond
 .func DelaySecond
 DelaySecond:
-	ldr r0, =333333333
+	ldr r0, =555555555
 1:
 	subs r0, #1
 	bne 1b
@@ -243,13 +288,21 @@ DelaySecond:
 .global DelayMillisecond
 .func DelayMillisecond
 DelayMillisecond:
-	ldr r0, =333333
+	ldr r0, =555555
 1:
 	subs r0, #1
 	bne 1b
 	bx lr
 .endfunc
 .size DelayMillisecond, .-DelayMillisecond
+
+.global SemiHosting
+.func SemiHosting
+SemiHosting:
+	svc 0x123456
+	bx lr
+.endfunc
+.size SemiHosting, .-SemiHosting
 
 
 /***************************************/
@@ -267,3 +320,151 @@ GetTls:
 .size GetTls, .-GetTls
 TlsHigh:
 
+
+.endif
+
+.if M3==1
+
+.syntax unified
+
+.global SemiHosting
+.func SemiHosting
+SemiHosting:
+	bkpt 0xab
+	bx lr
+.endfunc
+.size SemiHosting, .-SemiHosting
+
+.global DelaySecond
+.func DelaySecond
+DelaySecond:
+	ldr r0, =555555555
+1:
+	subs r0, #1
+	bne 1b
+	bx lr
+.endfunc
+.size DelaySecond, .-DelaySecond
+
+.global DelayMillisecond
+.func DelayMillisecond
+DelayMillisecond:
+	ldr r0, =5555
+1:
+	subs r0, #1
+	bne 1b
+	bx lr
+.endfunc
+.size DelayMillisecond, .-DelayMillisecond
+
+.endif
+
+.global TimingTest
+TimingTest:
+	mov r0, #0
+	ldr r1, =0xee000000
+	str r1, [r1]
+1:
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+	ldr r1, [r1]
+	add r0, #1
+	b 1b
+
+.global TimingTestIssue
+TimingTestIssue:
+	mov r0, #0
+	ldr r1, =0xe000e010
+	ldr r2, =0x00010005
+
+	mov r0, #5
+	str r0, [r1]
+	ldr r3, [r1]
+
+	mov r0, #0
+1:
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+	add r0, #1
+
+
+	ldr r3, [r1]
+
+	cmp r3, r2
+	bne 1b
+	//mov r0, r3
+	bx lr
+
+.global FuncTest
+FuncTest:
+	ldr r0, =0x01020003
+	bx r0

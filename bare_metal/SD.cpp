@@ -20,3 +20,7 @@ SD::~SD()
 	// TODO Auto-generated destructor stub
 }
 
+bool SD::Reset(void)
+{
+	return true;
+}

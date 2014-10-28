@@ -19,6 +19,14 @@ struct EndPoint
 	EndPoint(EndpointDescriptor &rOther);
 
 	EndpointDescriptor m_descriptor __attribute__ ((aligned (8)));
+
+	enum TransferType
+	{
+		kControl = 0,
+		kIsochronous = 1,
+		kBulk = 2,
+		kInterrupt = 3,
+	};
 };
 
 } /* namespace USB */

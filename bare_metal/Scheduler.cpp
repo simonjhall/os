@@ -145,6 +145,9 @@ Thread* RoundRobin::PickNext(Thread **ppBlocked)
 			//add it again to the back
 			m_threadQueue.push_back(pNext);
 
+			//linker errors
+//			m_threadQueue.splice(m_threadQueue.end(), m_threadQueue, m_threadQueue.begin());
+
 			iterated++;
 
 			//try and make it runnable
@@ -202,7 +205,7 @@ Thread* RoundRobin::PickNext(Thread **ppBlocked)
 
 		if (!message)
 		{
-			PrinterUart<PL011> p;
+			Printer &p = Printer::Get();
 			p << "no threads to run, scheduling idle thread\n";
 			message = true;
 		}

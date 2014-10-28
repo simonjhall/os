@@ -32,7 +32,7 @@ public:
 		if (GetState() != kIdleState)
 			return false;
 
-		PrinterUart<PL011> p;
+		Printer &p = Printer::Get();
 
 		p << "doing voltage check\n";
 		Command(kVoltageCheck, k48bResponse, false, (1 << 8) | 0xaa);
@@ -121,7 +121,7 @@ public:
 
 	virtual bool GetCardRcaAndGoStandbyState(unsigned int &rRca)
 	{
-		PrinterUart<PL011> p;
+		Printer &p = Printer::Get();
 
 		if (!kIdentificationState)
 			return false;
@@ -139,7 +139,7 @@ public:
 	{
 		State current = GetState();
 
-		PrinterUart<PL011> p;
+//		Printer &p = Printer::Get();
 		/*p << "deselecting card\n";
 		SelectDeselectCard(0);
 		p << "done\n";*/
@@ -208,7 +208,7 @@ public:
 protected:
 	virtual unsigned int SendOcr(int a)
 	{
-		PrinterUart<PL011> p;
+		Printer &p = Printer::Get();
 //		Command(kSendOpCmd, k48bResponse, false);
 //		unsigned int resp = Response();
 //		p << "response is " << resp << "\n";
@@ -264,7 +264,7 @@ protected:
 
 	virtual void PumpBlock(void)
 	{
-		PrinterUart<PL011> p;
+//		Printer &p = Printer::Get();
 
 //		p << "pump block\n";
 
@@ -281,7 +281,7 @@ protected:
 
 				if (!timeout)
 				{
-					PrinterUart<PL011> p;
+					Printer &p = Printer::Get();
 					p << "data read timeout\n";
 					while(1);
 				}
@@ -296,7 +296,7 @@ protected:
 
 	virtual unsigned int ReadOutData(void *pDest, unsigned int byteCount, unsigned int bytesLeftInPump)
 	{
-		PrinterUart<PL011> p;
+		Printer &p = Printer::Get();
 
 		unsigned int outA = (unsigned int)pDest;
 		unsigned char *pBase = (unsigned char *)&m_pBaseAddress[sm_data];

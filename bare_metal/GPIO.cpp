@@ -150,6 +150,9 @@ unsigned int GPIO::GetInterruptNumber(void)
 
 OMAP4460::GPIO::Pin::Pin(void)
 : InterruptSource(),
+  m_pParent(0),
+  m_pin(0),
+  m_intType(kBoth),
   m_interruptEnabled (false)
 {
 }
@@ -204,6 +207,14 @@ bool OMAP4460::GPIO::Pin::Read(void)
 
 void OMAP4460::GPIO::Pin::Write(bool e)
 {
+//	PrinterUart<PL011> p;
+//	unsigned int inital_read = m_pParent->Read();
+//	DelaySecond();
+//	p << "initial value " << inital_read << "\n";
+//	DelaySecond();
+//	unsigned int to_write = (inital_read & ~(1 << m_pin)) | ((unsigned int)e << m_pin);
+//	p << "writing " << to_write << "\n";
+//	m_pParent->Write(to_write);
 	m_pParent->Write((m_pParent->Read() & ~(1 << m_pin)) | ((unsigned int)e << m_pin));
 }
 

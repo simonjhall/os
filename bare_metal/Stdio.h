@@ -9,7 +9,9 @@
 #define STDIO_H_
 
 #include "BaseFS.h"
-#include "print_uart.h"
+//#include "print_uart.h"
+//#include "PL011.h"
+#include "UART.h"
 
 class Stdio : public File
 {
@@ -20,7 +22,7 @@ public:
 		kStdout = 1,
 		kStderr = 2,
 	};
-	Stdio(Mode m, PL011 &rUart, BaseFS &fileSystem)
+	Stdio(Mode m, GenericByteTxRx &rUart, BaseFS &fileSystem)
 	: File(m == kStdin ? "stdin" : (m == kStdout ? "stdout" : "stderr"), 0, fileSystem),
 	  m_rUart(rUart),
 	  m_mode(m)
@@ -41,7 +43,7 @@ public:
 	virtual bool Reparent(Directory *pParent);
 
 protected:
-	PL011 &m_rUart;
+	GenericByteTxRx &m_rUart;
 	Mode m_mode;
 };
 

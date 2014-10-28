@@ -46,6 +46,8 @@ public:
 
 	virtual Port *GetPort(unsigned int);
 	virtual unsigned int GetNumPorts(void);
+
+	virtual bool IsRootHub(void);
 };
 
 } /* namespace USB */

@@ -52,6 +52,7 @@ public:
 
 	Entry &Get(const char *pName);
 	void Map(void);
+	void MapVirtAsPhys(void);
 
 	static void SetDefaultIoSpace(IoSpace *p)
 	{
@@ -65,6 +66,7 @@ public:
 
 protected:
 	IoSpace(volatile unsigned int *pVirtBase);
+	IoSpace();
 	virtual ~IoSpace();
 
 	virtual void Fill(void);
@@ -84,6 +86,7 @@ class OmapIoSpace : public IoSpace
 {
 public:
 	OmapIoSpace(volatile unsigned int *pVirtBase);
+	OmapIoSpace(void);
 	~OmapIoSpace(void);
 
 protected:
@@ -99,6 +102,7 @@ class VersIoSpace : public IoSpace
 {
 public:
 	VersIoSpace(volatile unsigned int *pVirtBase);
+	VersIoSpace(void);
 	~VersIoSpace(void);
 
 protected:

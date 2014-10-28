@@ -48,6 +48,7 @@ template <class T>
 bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned int numMb = 4096, int depth = 0);
 
 //translation of virtual to physical
+#ifdef __ARM_ARCH_7A__
 template <class T>
 bool VirtToPhys(T *pVirtual, T **ppPhysical)
 {
@@ -156,11 +157,38 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 	return false;
 }
 
+#endif
+
+#ifdef __ARM_ARCH_7M__
+template <class T>
+bool VirtToPhys(T *pVirtual, T **ppPhysical)
+{
+	return false;
+}
+
+template <class T>
+bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned int numMb = 4096, int depth = 0)
+{
+	return false;
+}
+
+inline bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+{
+	return false;
+}
+
+inline bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+{
+	return false;
+}
+#endif
 
 template <class T>
 void DumpMem(T *pVirtual, unsigned int len)
 {
-	PrinterUart<PL011> p;
+	Printer &p = Printer::Get();
 	for (unsigned int count = 0; count < len; count++)
 	{
 		p.PrintHex((unsigned int)pVirtual);

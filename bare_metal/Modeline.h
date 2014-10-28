@@ -20,14 +20,21 @@ public:
 		kNegative
 	};
 
+	enum Style
+	{
+		kX11,
+		kTiHdmi,
+	};
+
 	Modeline(void)
 	{
 	}
 
-	Modeline(const char *pName, unsigned int pixClkkHz, unsigned int idealVHz,
+	Modeline(const char *pName,
+			unsigned int pixClkkHz, unsigned int idealVHz,
 			unsigned int width, unsigned int widthPlusFp, unsigned int widthPlusFpPlusSync, unsigned int widthPlusFpPlusSyncPlusBp,
 			unsigned int height, unsigned int heightPlusFp, unsigned int heightPlusFpPlusSync, unsigned int heightPlusFpPlusSyncPlusBp,
-			Polarity hsync, Polarity vsync)
+			Polarity hsync, Polarity vsync)			//X11
 	: m_pName(pName),
 	  m_pixClkkHz(pixClkkHz),
 	  m_idealVHz(idealVHz),
@@ -41,6 +48,30 @@ public:
 	  m_vFp(heightPlusFp - height),
 	  m_vSync(heightPlusFpPlusSync - heightPlusFp),
 	  m_vBp(heightPlusFpPlusSyncPlusBp - heightPlusFpPlusSync),
+
+	  m_hsyncPol(hsync),
+	  m_vsyncPol(vsync)
+	{
+	}
+
+	Modeline(const char *pName,
+			unsigned int width, unsigned int height, unsigned int pixClkkHz, unsigned int idealVHz,
+			unsigned int hSync, unsigned int hFp, unsigned int hBp,
+			unsigned int vSync, unsigned int vFp, unsigned int vBp,
+			Polarity hsync, Polarity vsync, Style)
+	: m_pName(pName),
+	  m_pixClkkHz(pixClkkHz),
+	  m_idealVHz(idealVHz),
+
+	  m_width(width),
+	  m_hFp(hFp),
+	  m_hSync(hSync),
+	  m_hBp(hBp),
+
+	  m_height(height),
+	  m_vFp(vFp),
+	  m_vSync(vSync),
+	  m_vBp(vBp),
 
 	  m_hsyncPol(hsync),
 	  m_vsyncPol(vsync)

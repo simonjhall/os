@@ -11,7 +11,7 @@
 #include "common.h"
 #include "malloc.h"
 #include "virt_memory.h"
-#include "Process.h"
+//#include "Process.h"
 
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
@@ -176,6 +176,13 @@ extern void _wordcopy_bwd_dest_aligned (long int, long int, size_t);
 
 /* Threshold value for when to enter the unrolled loops.  */
 #define	OP_T_THRES	16
+
+extern "C" void *__memcpy_chk(void *dest, const void *src,
+size_t copy_amount, size_t dest_len)
+{
+	ASSERT (copy_amount <= dest_len);
+	return memcpy(dest, src, copy_amount);
+}
 
 extern "C" void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -847,7 +854,9 @@ extern "C" int strncmp (const char *s1, const char *s2, size_t n)
 #define AVAILABLE(h, h_l, j, n_l)			\
   (!memchr ((h) + (h_l), '\0', (j) + (n_l) - (h_l))	\
    && ((h_l) = (j) + (n_l)))
+#ifndef SIZE_MAX
 #  define SIZE_MAX		(4294967295U)
+#endif
 #define	MAX(a,b) (((a)>(b))?(a):(b))
 # define RET0_IF_0(a) /* nothing */
 #define CHAR_BIT __CHAR_BIT__
@@ -1246,7 +1255,10 @@ two_way_long_needle (const unsigned char *haystack, size_t haystack_len,
   return NULL;
 }
 
-const char *
+#ifdef __ARM_ARCH_7A__
+const
+#endif
+char *
 strstr (const char *haystack_start, const char *needle_start)
 {
   const char *haystack = haystack_start;
@@ -1286,10 +1298,10 @@ strstr (const char *haystack_start, const char *needle_start)
 			      (const unsigned char *) needle, needle_len);
 }
 
-extern "C" void abort(void)
+/*extern "C" void abort(void)
 {
 	ASSERT(0);
-}
+}*/
 
 extern "C" int raise (int sig)
 {
@@ -1601,7 +1613,10 @@ memcmp (const __ptr_t s1,
 }
 
 /* Search no more than N bytes of S for C.  */
-const __ptr_t memchr (const __ptr_t s, int c_in, size_t n)
+#ifdef __ARM_ARCH_7A__
+const
+#endif
+__ptr_t memchr (const __ptr_t s, int c_in, size_t n)
 {
   const unsigned char *char_ptr;
   const unsigned long int *longword_ptr;
@@ -1635,7 +1650,7 @@ const __ptr_t memchr (const __ptr_t s, int c_in, size_t n)
      The 0-bits provide holes for carries to fall into.  */
 
   if (sizeof (longword) != 4 && sizeof (longword) != 8)
-    abort ();
+    ASSERT(0);
 
 #if LONG_MAX <= LONG_MAX_32_BITS
   magic_bits = 0x7efefeff;
@@ -1743,7 +1758,10 @@ const __ptr_t memchr (const __ptr_t s, int c_in, size_t n)
   return 0;
 }
 
-const char * strchr (const char *s, int c_in)
+#ifdef __ARM_ARCH_7A__
+const
+#endif
+char * strchr (const char *s, int c_in)
 {
   const unsigned char *char_ptr;
   const unsigned long int *longword_ptr;
@@ -1758,7 +1776,7 @@ const char * strchr (const char *s, int c_in)
        ((unsigned long int) char_ptr & (sizeof (longword) - 1)) != 0;
        ++char_ptr)
     if (*char_ptr == c)
-      return (const char *) char_ptr;
+      return (char *) char_ptr;
     else if (*char_ptr == '\0')
       return NULL;
 
@@ -1781,7 +1799,7 @@ const char * strchr (const char *s, int c_in)
     case 4: magic_bits = 0x7efefeffL; break;
     case 8: magic_bits = ((0x7efefefeL << 16) << 16) | 0xfefefeffL; break;
     default:
-      abort ();
+      ASSERT(0);
     }
 
   /* Set up a longword, each of whose bytes is C.  */
@@ -1791,7 +1809,7 @@ const char * strchr (const char *s, int c_in)
     /* Do the shift in two steps to avoid a warning if long has 32 bits.  */
     charmask |= (charmask << 16) << 16;
   if (sizeof (longword) > 8)
-    abort ();
+    ASSERT(0);
 
   /* Instead of the traditional loop which tests each character,
      we will test a longword at a time.  The tricky part is testing
@@ -1905,13 +1923,20 @@ const char * strchr (const char *s, int c_in)
 
 
 static mspace s_pool;
+static bool s_poolInit = false;
 
-bool InitMempool(void *pBase, unsigned int numPages)
+bool InitMempool(void *pBase, unsigned int numPages, bool phys, mspace *pPool)
 {
-	if (VirtMem::AllocAndMapVirtContig(pBase, numPages, true,
-			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
+	if (!pPool)
+		pPool = &s_pool;
+
+	if (phys || VirtMem::AllocAndMapVirtContig(pBase, numPages, true,
+			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
 	{
-		s_pool = create_mspace_with_base(pBase, numPages << 12, 0);
+		*pPool = create_mspace_with_base(pBase, numPages << 12, 0);
+
+		if (pPool == &s_pool)
+			s_poolInit = true;
 		return true;
 	}
 	else
@@ -1932,7 +1957,19 @@ void *operator new( size_t stAllocateBlock ) {
 //	ASSERT(0);
 //	return 0;
 
-	return mspace_malloc(s_pool, stAllocateBlock);
+#ifdef __ARM_ARCH_7A__
+	//scope for problems here?
+	bool e = IsIrqEnabled();
+	EnableIrq(false);
+#endif
+
+	ASSERT(s_poolInit);
+	void *r = mspace_malloc(s_pool, stAllocateBlock);
+
+#ifdef __ARM_ARCH_7A__
+	EnableIrq(e);
+#endif
+	return r;
 }
 
 void *operator new[]( size_t stAllocateBlock ) {
@@ -1949,7 +1986,18 @@ void *operator new[]( size_t stAllocateBlock ) {
 //	ASSERT(0);
 //	return 0;
 
-	return mspace_malloc(s_pool, stAllocateBlock);
+#ifdef __ARM_ARCH_7A__
+	bool e = IsIrqEnabled();
+	EnableIrq(false);
+#endif
+
+	ASSERT(s_poolInit);
+	void *r = mspace_malloc(s_pool, stAllocateBlock);
+
+#ifdef __ARM_ARCH_7A__
+	EnableIrq(e);
+#endif
+	return r;
 }
 
 // User-defined operator delete.
@@ -1965,7 +2013,17 @@ void operator delete( void *pvMem ) {
 //   free( pvMem );
 //	ASSERT(0);
 
-	return mspace_free(s_pool, pvMem);
+#ifdef __ARM_ARCH_7A__
+	bool e = IsIrqEnabled();
+	EnableIrq(false);
+#endif
+
+	ASSERT(s_poolInit);
+	mspace_free(s_pool, pvMem);
+
+#ifdef __ARM_ARCH_7A__
+	EnableIrq(e);
+#endif
 }
 
 extern "C" void __cxa_pure_virtual()

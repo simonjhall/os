@@ -34,6 +34,8 @@ public:
 	virtual Port *GetPort(unsigned int) = 0;
 	virtual unsigned int GetNumPorts(void) = 0;
 
+	virtual bool IsRootHub(void);
+
 protected:
 	Hub();
 	virtual ~Hub();

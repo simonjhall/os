@@ -25,7 +25,7 @@ public:
 	InterruptController(void);
 	virtual ~InterruptController(void);
 
-	virtual bool RegisterInterrupt(InterruptSource &rSource, InterruptType type);
+	virtual bool RegisterInterrupt(InterruptSource &rSource, InterruptType type = kIrq);
 	virtual bool DeRegisterInterrupt(InterruptSource &rSource);
 
 	//auto clearing

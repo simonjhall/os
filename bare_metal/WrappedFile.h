@@ -32,8 +32,10 @@ public:
 
 	virtual ssize_t Read(void *pBuf, size_t count);
 	virtual ssize_t Write(const void *pBuf, size_t count);
+#ifdef __ARM_ARCH_7A__
 	virtual ssize_t Writev(const struct iovec *iov, int iovcnt);
 	virtual ssize_t Readv(const struct iovec *iov, int iovcnt);
+#endif
 
 	virtual off_t Lseek(off_t offset, int whence);
 	virtual int Getdents64(linux_dirent64 *pDir, unsigned int count);

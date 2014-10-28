@@ -45,9 +45,43 @@
 uid_t g_uid = 0;
 gid_t g_gid = 0;
 
-int SupervisorCall(Thread &rBlocked, Process *pParent)
+unsigned int Semaphore::WaitInternal(Thread &rBlocked, Thread::State &rNewState)
 {
-	PrinterUart<PL011> p;
+	//already attached, time to unblock
+	if (rBlocked.GetEqBlocker() == &m_eq)
+	{
+		ASSERT(!m_eq.Exists(rBlocked));
+		rBlocked.SetEqBlocker(0);
+
+		rNewState = Thread::kRunnable;
+		return 0;
+	}
+	else		//new attachment
+	{
+		m_value--;
+
+		if (m_value < 0)
+		{
+			m_eq.AddThread(rBlocked);
+			rBlocked.SetEqBlocker(&m_eq);
+
+			rNewState = Thread::kBlockedOnEq;
+		}
+		else
+			rNewState = Thread::kRunnable;
+
+		return (unsigned int)this;
+	}
+}
+
+void Semaphore::SignalInternal(void)
+{
+	SignalAtomic();
+}
+
+int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
+{
+	Printer &p = Printer::Get();
 	bool known = false;
 	const char *pName = 0;
 
@@ -59,8 +93,25 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 
 	unsigned int *pRegisters = rBlocked.m_pausedState.m_regs;
 
+
+	//http://lxr.free-electrons.com/source/include/uapi/asm-generic/unistd.h
 	switch (pRegisters[7])
 	{
+	case 0xf0000001:
+	{
+		Semaphore *pSem = (Semaphore *)pRegisters[0];
+
+		return pSem->WaitInternal(rBlocked, rNewState);
+	}
+	case 0xf0000002:
+	{
+		Semaphore *pSem = (Semaphore *)pRegisters[0];
+
+		pSem->SignalInternal();
+		return 0;
+	}
+
+
 	case 122:	//sys_newuname
 	{
 		static const int sLength = 64;
@@ -749,6 +800,9 @@ int SupervisorCall(Thread &rBlocked, Process *pParent)
 	case 40:		//rmdir
 		if (!pName)
 			pName = "rmdir";
+	case 36:	//sys_symlinkat
+		if (!pName)
+			pName = "symlinkat";
 	case 221:		//fcntl64
 		if (!pName)
 			pName = "fcntl64";

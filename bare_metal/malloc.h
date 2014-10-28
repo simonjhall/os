@@ -18,6 +18,8 @@ size_t destroy_mspace(mspace msp);
 mspace create_mspace_with_base(void* base, size_t capacity, int locked);
 void* mspace_malloc(mspace msp, size_t bytes);
 void mspace_free(mspace msp, void* mem);
+
+mspace GetUncachedPool(void);
 }
 
 #endif /* MALLOC_H_ */

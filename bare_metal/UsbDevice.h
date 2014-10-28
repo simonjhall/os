@@ -21,21 +21,26 @@ class UsbDevice
 {
 public:
 	UsbDevice(Hcd &rHostController, Port &rPort);
-	UsbDevice(UsbDevice &rOther);
 	virtual ~UsbDevice();
+	virtual bool Cloned(void);
 
 	virtual bool Valid(void);
 	virtual bool BasicInit(int address);
-	virtual bool Identify(unsigned short &rVendor, unsigned short &rProduct, unsigned short &rVersion);
+	virtual bool FullInit(void);
+
+	virtual bool ProductIdentify(unsigned short &rVendor, unsigned short &rProduct, unsigned short &rVersion);
 	virtual Speed GetSpeed(void);
 	virtual int GetAddress(void);
 
 	virtual void DumpDescriptors(Printer &p);
+
+	UsbDevice(UsbDevice &rOther);
 protected:
-	virtual bool Cloned(void);
+
 	virtual bool SetAddress(int address);
 	virtual bool ReadDescriptors(void);
 	virtual bool SetConfiguration(unsigned int c);
+	virtual bool CanConstruct(void);
 
 	EndPoint m_endPointZero;
 	DeviceDescriptor m_deviceDescriptor __attribute__ ((aligned (8)));

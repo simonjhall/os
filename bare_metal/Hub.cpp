@@ -16,6 +16,11 @@ Hub::Hub()
 
 }
 
+bool Hub::IsRootHub(void)
+{
+	return false;
+}
+
 Hub::~Hub()
 {
 	// TODO Auto-generated destructor stub
