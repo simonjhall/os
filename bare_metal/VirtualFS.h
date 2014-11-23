@@ -10,6 +10,8 @@
 
 #include "BaseFS.h"
 #include "common.h"
+
+#include <string.h>
 #include <vector>
 
 class VirtualFS;
@@ -27,6 +29,11 @@ public:
 		if (!p)
 			return false;
 
+		//check if it already exists
+		for (auto it = m_files.begin(); it != m_files.end(); it++)
+			if (strcmp((*it)->GetName(), p->GetName()) == 0)
+				return false;
+
 		m_files.push_back(p);
 		return true;
 	}
@@ -43,6 +50,8 @@ public:
 		else
 			return 0;
 	}
+
+	virtual bool Fstat(struct stat64 &rBuf);
 
 protected:
 	std::vector<BaseDirent *> m_files;
@@ -66,8 +75,7 @@ public:
 	virtual bool AddOrphanFile(const char *pFilePath, BaseDirent &rFile);
 
 protected:
-	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);
-
+	virtual Directory &GetRootDirectory(void);
 private:
 
 	VirtualDirectory *m_pRoot;

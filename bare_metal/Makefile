@@ -1,6 +1,7 @@
 SOURCE_A9_CPP = BaseFS.cpp \
 	BlockDevice.cpp \
 	clib.cpp \
+	CachedBlockDevice.cpp \
 	Configuration.cpp \
 	DSS.cpp \
 	Ehci.cpp \
@@ -43,6 +44,7 @@ SOURCE_A9_CPP = BaseFS.cpp \
 	SP804.cpp \
 	Stdio.cpp \
 	svc.cpp \
+	TimeFromBoot.cpp \
 	TTY.cpp \
 	UART.cpp \
 	UDP.cpp \
@@ -68,7 +70,9 @@ SOURCE_M3_CPP = clib.cpp \
 SOURCE_A9_S = asm.S \
 	cache.S \
 	entry.S \
-	exceptions.S
+	exceptions.S \
+	memcpy.S \
+	memset.S
 	
 SOURCE_M3_S = asm.S \
 	entry.S

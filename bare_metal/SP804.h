@@ -22,6 +22,7 @@ public:
 	virtual void Enable(bool e);
 	virtual bool IsEnabled(void);
 	virtual bool SetFrequencyInMicroseconds(unsigned int micros);
+	virtual unsigned int GetMicrosUntilFire(void);
 
 	virtual void EnableInterrupt(bool e);
 	virtual unsigned int GetInterruptNumber(void);

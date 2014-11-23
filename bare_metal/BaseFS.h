@@ -46,6 +46,7 @@ public:
 
 	//todo not so sure here
 	virtual bool Reparent(Directory *pParent);
+	inline bool IsOrphan(void) { return m_orphan; };
 
 protected:
 	BaseDirent(const char *pName, Directory *pParent, BaseFS &fileSystem,
@@ -98,10 +99,7 @@ public:
 	virtual unsigned int GetNumChildren(void) = 0;
 	virtual BaseDirent *GetChild(unsigned int) = 0;
 
-	virtual int FillLinuxDirent(linux_dirent64 *, unsigned int len, off_t &rChild)
-	{
-		return -1;
-	}
+	virtual int FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t &rChild);
 
 protected:
 	Directory(const char *pName, Directory *pParent, BaseFS &fileSystem)
@@ -130,10 +128,12 @@ public:
 	virtual bool Detach(const char *pTarget);
 	virtual BaseFS *IsAttachment(const Directory *);
 
-	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0) = 0;
+	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);
 protected:
 	BaseFS();
 	virtual ~BaseFS();
+
+	virtual Directory &GetRootDirectory(void) = 0;
 
 
 	struct Attachment

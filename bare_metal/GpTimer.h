@@ -22,6 +22,7 @@ public:
 	virtual void Enable(bool e);
 	virtual bool IsEnabled(void);
 	virtual bool SetFrequencyInMicroseconds(unsigned int micros);
+	virtual unsigned int GetMicrosUntilFire(void);
 
 	virtual void EnableInterrupt(bool e);
 	virtual unsigned int GetInterruptNumber(void);
@@ -32,6 +33,7 @@ public:
 
 private:
 	//1, 2, 10
+	static const unsigned int sm_tiocp_cfg_1ms = 0x10 >> 2;
 	static const unsigned int sm_tisr = 0x18 >> 2;
 	static const unsigned int sm_tier = 0x1c >> 2;
 	static const unsigned int sm_tclr = 0x24 >> 2;

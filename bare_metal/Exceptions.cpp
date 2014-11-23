@@ -20,6 +20,8 @@ extern ExceptionState __IrqState;
 
 extern "C" unsigned int ReadDFAR(void);
 extern "C" unsigned int ReadDFSR(void);
+extern "C" unsigned int ReadTPIDRURO(void);
+extern "C" void WriteTPIDRURO(unsigned int);
 
 enum DfarFaultType
 {
@@ -321,17 +323,25 @@ void Handler(unsigned int arg0, unsigned int arg1)
 			{
 			case kTransFaultL1:
 			case kTransFaultL2:
-				//do we just need to grow the stack down a page?
-				if (pBlocked->m_pausedState.m_dfar >= (unsigned int)pBlocked->GetStackLow() - 4096
+			{
+				unsigned int max_growth = 20 * 4096;
+
+				//do we just need to grow the stack down a few pages?
+				if (pBlocked->m_pausedState.m_dfar >= (unsigned int)pBlocked->GetStackLow() - max_growth
 						&& pBlocked->m_pausedState.m_dfar < (unsigned int)pBlocked->GetStackLow())
 				{
-					if (!VirtMem::AllocAndMapVirtContig((void *)((unsigned int)pBlocked->GetStackLow() - 4096), 1, false,
+					//compute the amount of pages we need
+					unsigned int bytes = (((unsigned int)pBlocked->GetStackLow() - pBlocked->m_pausedState.m_dfar) + 4095) & ~4095;
+					unsigned int pages = bytes >> 12;
+
+					if (!VirtMem::AllocAndMapVirtContig((void *)((unsigned int)pBlocked->GetStackLow() - bytes), pages, false,
 							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
 						ASSERT(0);
-					pBlocked->SetStackLow((void *)((unsigned int)pBlocked->GetStackLow() - 4096));
+					pBlocked->SetStackLow((void *)((unsigned int)pBlocked->GetStackLow() - bytes));
 
 					break;
 				}
+			}
 			default:
 				//completely invalid, the process needs to go
 				newState = Thread::kDead;

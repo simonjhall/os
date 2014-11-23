@@ -73,6 +73,11 @@ struct ExceptionState
 	//a capture of all the registers
 	unsigned int m_regs[15];
 
+	float m_floats[64];
+
+	//user read-only thread ID register TPIDRURO
+	unsigned int m_tpidruro;
+
 	//the pc of where we should finish once the event has been processed
 	unsigned int m_newPc;
 
@@ -347,7 +352,7 @@ protected:
 	ElfW(auxv_t) m_auxVec[sm_auxSize];
 
 private:
-	static char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr);
+	static char *LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr, unsigned int &phdr_vaddr);
 
 	std::list<char *> m_arguments;
 	char *m_pEnvironment;

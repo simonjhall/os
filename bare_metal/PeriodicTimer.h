@@ -26,6 +26,7 @@ public:
 	virtual void Enable(bool e) = 0;
 	virtual bool IsEnabled(void) = 0;
 	virtual bool SetFrequencyInMicroseconds(unsigned int micros) = 0;
+	virtual unsigned int GetMicrosUntilFire(void) = 0;
 
 protected:
 	volatile unsigned int *m_pBase;

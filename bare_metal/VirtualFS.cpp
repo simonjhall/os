@@ -63,9 +63,19 @@ bool VirtualFS::Mkdir(const char *pFilePath, const char *pFilename)
 	if (!mp || !mp->IsDirectory())
 		return false;
 
+	//change filesystem if necessary
+	if (&mp->GetFilesystem() != this)
+		return mp->GetFilesystem().Mkdir(pFilePath, pFilename);
+
 	VirtualDirectory *d = new VirtualDirectory(pFilename, (VirtualDirectory *)mp, *this);
 	if (!d)
 		return false;
+
+	if (d->IsOrphan())
+	{
+		delete d;
+		return false;
+	}
 
 	return true;
 }
@@ -93,72 +103,21 @@ bool VirtualFS::AddOrphanFile(const char *pFilePath, BaseDirent &rFile)
 	return true;
 }
 
-BaseDirent *VirtualFS::Locate(const char *pFilename, Directory *pParent)
+Directory &VirtualFS::GetRootDirectory(void)
 {
-	ASSERT(pFilename);
-
-	if (!pParent)
-		pParent = m_pRoot;
-
-	//we want this actual directory
-	if (pFilename[0] == 0)
-		return pParent;
-
-	//we want the root directory
-	if (pFilename[0] == '/')
-	{
-		if (pParent == m_pRoot)
-			return Locate(pFilename + 1, m_pRoot);
-		else
-			return Locate(pFilename + 1, pParent);
-	}
-
-	//check if there's a path in here or just a lone name
-	const char *slash = strstr(pFilename, "/");
-	unsigned int length = strlen(pFilename);
-
-	if (slash)
-		length = slash - pFilename;
-
-	if (strncmp(pFilename, ".", length) == 0)
-		return Locate(pFilename + 1, pParent);
-
-	if (strncmp(pFilename, "..", length) == 0)
-	{
-		ASSERT(pParent);
-		ASSERT(pParent->GetParent());
-		return Locate(pFilename + 1, pParent->GetParent());
-	}
-
-	BaseDirent *local = 0;
-	for (unsigned int count = 0; count < pParent->GetNumChildren(); count++)
-	{
-		BaseDirent *c = pParent->GetChild(count);
-		if (c && strncmp(c->GetName(), pFilename, length) == 0)
-		{
-			local = c;
-			break;
-		}
-	}
-
-	if (!local)
-		return 0;
-
-	if (slash)
-		ASSERT(local->IsDirectory());
-
-	if (!local->IsDirectory() || !slash)
-		return local;
-
-	//check attach points
-	for (std::vector<Attachment *>::iterator it = m_attachments.begin(); it != m_attachments.end(); it++)
-		if ((*it)->m_pMountPoint == local)
-		{
-			//change filesystem
-			return (*it)->m_rFilesystem.Locate(slash + 1);
-		}
-
-	//not a mount point
-	return Locate(slash + 1, (Directory *)local);
+	ASSERT(m_pRoot);
+	return *m_pRoot;
 }
 
+bool VirtualDirectory::Fstat(struct stat64& rBuf)
+{
+	memset(&rBuf, 0, sizeof(rBuf));
+	rBuf.st_dev = (dev_t)&m_rFileSystem;
+	rBuf.st_ino = (ino_t)this;
+	rBuf.st_size = 0;
+	rBuf.st_mode = S_IFDIR;
+	rBuf.st_rdev = (dev_t)1;
+	rBuf.st_blksize = 512;
+	rBuf.st_blocks = 1;
+	return true;
+}

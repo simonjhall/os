@@ -12,6 +12,7 @@
 #include "Stdio.h"
 #include "TTY.h"
 #include "MBR.h"
+#include "CachedBlockDevice.h"
 #include "SP804.h"
 #include "PL190.h"
 #include "GenericInterruptController.h"
@@ -36,6 +37,7 @@
 #include "ICMP.h"
 #include "UDP.h"
 #include "UdpPrinter.h"
+#include "TimeFromBoot.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -128,8 +130,9 @@ VirtualFS *vfs;
 SD *pSd;
 FatFS *pFat;
 MBR *pMbr;
+CachedBlockDevice *pCachedSd;
 
-mspace s_uncachedPool;
+mspace s_uncachedPool, s_blockCache;
 
 mspace GetUncachedPool(void)
 {
@@ -492,6 +495,10 @@ static void MapKernel(unsigned int physEntryPoint)
     if (!InitMempool((void *)0xa0000000, 256 * 5, false))		//5MB
 		ASSERT(0);
 
+    //block cache
+	if (!InitMempool((void *)0xa0700000, (1048576 * 10) >> 12, false, &s_blockCache))		//10 MB
+		ASSERT(0);
+
 #ifdef PBES
     IoSpace::SetDefaultIoSpace(new OMAP4460::OmapIoSpace((volatile unsigned int *)0xfc000000));
 #else
@@ -746,7 +753,37 @@ void MountSd(Printer *p)
 	ok = pSd->GoTransferState(rca);
 	ASSERT(ok);
 
-	pMbr = new MBR(*pSd);
+	pCachedSd = new CachedBlockDevice;
+	ASSERT(pCachedSd);
+	pCachedSd->Init(*pSd, s_blockCache, 512);
+
+	//speed test
+	if (1)
+	{
+		*p << "beginning reading\n";
+		unsigned long long start_time = TimeFromBoot::GetMicroseconds();
+		for (int count = 0; count < (1048576 >> 9); count++)
+		{
+			char buf[512];
+			pCachedSd->ReadDataFromLogicalAddress(count << 9, buf, 512);
+		}
+		unsigned long long end_time = TimeFromBoot::GetMicroseconds();
+		*p << "done in "; p->PrintDec((unsigned int)(end_time - start_time), false); *p << " us\n";
+	}
+	if (1)
+	{
+		*p << "beginning reading\n";
+		unsigned long long start_time = TimeFromBoot::GetMicroseconds();
+		for (int count = 0; count < (1048576 >> 9); count++)
+		{
+			char buf[512];
+			pCachedSd->ReadDataFromLogicalAddress(count << 9, buf, 512);
+		}
+		unsigned long long end_time = TimeFromBoot::GetMicroseconds();
+		*p << "done in "; p->PrintDec((unsigned int)(end_time - start_time), false); *p << " us\n";
+	}
+
+	pMbr = new MBR(*pCachedSd);
 
 	vfs->Mkdir("/Volumes", "sd");
 
@@ -755,7 +792,7 @@ void MountSd(Printer *p)
 #ifdef PBES
 	pFat = new FatFS(*pMbr->GetPartition(0));
 #else
-	pFat = new FatFS(*pSd);
+	pFat = new FatFS(*pCachedSd);
 #endif
 
 	*p << "attaching FAT\n";
@@ -960,13 +997,19 @@ extern "C" void Setup(unsigned int entryPoint)
 			IoSpace::GetDefaultIoSpace()->Get("GIC_Intr_Distributor"));
 
 	pTimer0 = new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER2"), 0, 2);
+
+	TimeFromBoot::Init(new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER1"), 0, 1), pPic);
+
 #else
 	pPic = new VersatilePb::PL190(IoSpace::GetDefaultIoSpace()->Get("Vectored Interrupt Controller"));
 	pTimer0 = new VersatilePb::SP804(IoSpace::GetDefaultIoSpace()->Get("Timer modules 0 and 1 interface"), 0);
+
+	TimeFromBoot::Init(new VersatilePb::SP804(IoSpace::GetDefaultIoSpace()->Get("Timer modules 0 and 1 interface"), 1), pPic);
 #endif
 
 	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
 	pPic->RegisterInterrupt(*pTimer0, InterruptController::kIrq);
+
 
 	//create vfs and attach the sd card
 	CreateVfs(p);
@@ -989,13 +1032,17 @@ extern "C" void Setup(unsigned int entryPoint)
 
 		for (int count = 0; count < 1; count++)
 		{
-			Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
-					"/bin/busybox", *vfs, *(File *)pLoader);
+//			Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
+//					"/bin/busybox_new", *vfs, *(File *)pLoader);
+			Process *pBusybox1 = new Process("/", "/",
+					"/Volumes/sd/minimal/bin/busybox_new", *vfs, *(File *)pLoader);
 			pBusybox1->SetDefaultStdio();
-			pBusybox1->SetEnvironment("LAD_DEBUG=all");
-			pBusybox1->AddArgument("httpd");
-			pBusybox1->AddArgument("-f");
-			pBusybox1->AddArgument("-v");
+//			pBusybox1->SetEnvironment("LD_BIND_NOW=yes");
+			pBusybox1->SetEnvironment("LD_DEBUG=all");
+			pBusybox1->AddArgument("ash");
+			pBusybox1->AddArgument("-i");
+//			pBusybox1->AddArgument("-f");
+//			pBusybox1->AddArgument("-v");
 //			pBusybox1->AddArgument("tftp");
 //			pBusybox1->AddArgument("-r");
 //			pBusybox1->AddArgument("uImage");

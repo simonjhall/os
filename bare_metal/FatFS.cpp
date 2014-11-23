@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <dirent.h>
 
 FatFS::FatFS(BlockDevice &rDevice)
 : m_rDevice (rDevice)
@@ -96,73 +95,10 @@ bool FatFS::Rmdir(const char *pFilename)
 	return false;
 }
 
-BaseDirent *FatFS::Locate(const char *pFilename, Directory *pParent)
+Directory &FatFS::GetRootDirectory(void)
 {
-	ASSERT(pFilename);
-
-	if (!pParent)
-		pParent = m_pRoot;
-
-	//we want this actual directory
-	if (pFilename[0] == 0)
-		return pParent;
-
-	//we want the root directory
-	if (pFilename[0] == '/')
-	{
-		if (pParent == m_pRoot)
-			return Locate(pFilename + 1, m_pRoot);
-		else
-			return Locate(pFilename + 1, pParent);
-	}
-
-	//check if there's a path in here or just a lone name
-	const char *slash = strstr(pFilename, "/");
-	unsigned int length = strlen(pFilename);
-
-	if (slash)
-		length = slash - pFilename;
-
-	if (strncmp(pFilename, ".", length) == 0)
-		return Locate(pFilename + 1, pParent);
-
-	if (strncmp(pFilename, "..", length) == 0)
-	{
-		ASSERT(pParent);
-		ASSERT(pParent->GetParent());
-		return Locate(pFilename + 1, pParent->GetParent());
-	}
-
-	BaseDirent *local = 0;
-	for (unsigned int count = 0; count < pParent->GetNumChildren(); count++)
-	{
-		BaseDirent *c = pParent->GetChild(count);
-		if (c && strncmp(c->GetName(), pFilename, length) == 0)
-		{
-			local = c;
-			break;
-		}
-	}
-
-	if (!local)
-		return 0;
-
-	if (slash)
-		ASSERT(local->IsDirectory());
-
-	if (!local->IsDirectory() || !slash)
-		return local;
-
-	//check attach points
-	for (std::vector<Attachment *>::iterator it = m_attachments.begin(); it != m_attachments.end(); it++)
-		if ((*it)->m_pMountPoint == local)
-		{
-			//change filesystem
-			return (*it)->m_rFilesystem.Locate(slash + 1);
-		}
-
-	//not a mount point
-	return Locate(slash + 1, (Directory *)local);
+	ASSERT(m_pRoot);
+	return *m_pRoot;
 }
 
 //stuff done on opened files
@@ -230,8 +166,15 @@ bool FatFile::Seekable(off_t o)
 bool FatFile::Fstat(struct stat64 &rBuf)
 {
 	memset(&rBuf, 0, sizeof(rBuf));
+
 	rBuf.st_dev = (dev_t)&m_rFileSystem;
 	rBuf.st_ino = (ino_t)this;
+
+	if (m_directory)
+		rBuf.st_mode = S_IFDIR;
+	else
+		rBuf.st_mode = S_IFREG;
+
 	rBuf.st_size = m_size;
 	rBuf.st_blksize = 512;			//get cluster size
 	rBuf.st_blocks = ((m_size + 511) & ~511) / 512;
@@ -249,60 +192,6 @@ bool FatDirectory::Fstat(struct stat64 &rBuf)
 	rBuf.st_blksize = 512;
 	rBuf.st_blocks = 1;
 	return true;
-}
-
-int FatDirectory::FillLinuxDirent(linux_dirent64 *pOut, unsigned int len, off_t &rChild)
-{
-	Printer &p = Printer::Get();
-
-	int written = 0;
-	int base_size = sizeof(linux_dirent64);
-	bool no_more_children = false;
-
-	ASSERT(pOut);
-
-	linux_dirent64 out;
-
-	while (len)
-	{
-		if (base_size >= len)
-			return -EINVAL;
-
-		BaseDirent *pChild = GetChild(rChild);
-		if (!pChild)
-		{
-			no_more_children = true;
-			break;
-		}
-
-		out.d_ino = (unsigned long long)pChild;
-		out.d_ino = out.d_ino & 0xffffffff;
-		out.d_off = rChild;
-		out.d_type = pChild->IsDirectory() ? DT_DIR : DT_REG;
-
-		size_t name_len = strlen(pChild->GetName()) + 1;
-
-		if (base_size + name_len > len)
-			break;
-
-		len -= base_size;
-		len -= name_len;
-
-		out.d_reclen = base_size + name_len;
-		written += out.d_reclen;
-
-		//copy in to avoid alignment faults, this is really bad
-		memcpy(pOut, &out, sizeof(linux_dirent64));
-		strcpy(pOut->d_name, pChild->GetName());
-
-		pOut = (linux_dirent64 *)((char *)pOut + pOut->d_reclen);
-		rChild++;
-	}
-
-	if (!written && !no_more_children)
-		return -EINVAL;
-	else
-		return written;
 }
 
 ///////////////////////////

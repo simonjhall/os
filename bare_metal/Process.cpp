@@ -118,12 +118,15 @@ Process::Process(const char *pRootFilename, const char *pInitialDirectory,
 	interpElf.Load(pInterpData, ld_stat.st_size);
 
 	bool has_tls = false;
-	unsigned int tls_memsize, tls_filesize, tls_vaddr;
+	unsigned int tls_memsize, tls_filesize, tls_vaddr, phdr_vaddr;
 
 	//prepare the memory map
-	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+	LoadElf(interpElf, 0x70000000, has_tls, tls_memsize, tls_filesize, tls_vaddr, phdr_vaddr);
 	ASSERT(has_tls == false);
-	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr);
+
+	char *pInterpName = LoadElf(startingElf, 0, has_tls, tls_memsize, tls_filesize, tls_vaddr, phdr_vaddr);
+	ASSERT(phdr_vaddr);
+
 	SetBrk((void *)0x10000000);
 	SetHighZero((void *)0x60000000);
 
@@ -134,7 +137,7 @@ Process::Process(const char *pRootFilename, const char *pInitialDirectory,
 
 	//prepare the aux vector
 	m_auxVec[0].a_type = AT_PHDR;
-	m_auxVec[0].a_un.a_val = 0x8000 + 52;
+	m_auxVec[0].a_un.a_val = phdr_vaddr;
 
 	m_auxVec[1].a_type = AT_PHNUM;
 	m_auxVec[1].a_un.a_val = startingElf.GetNumProgramHeaders();
@@ -356,11 +359,12 @@ void Process::SetHighZero(void *p)
 	m_pHighZero = p;
 }
 
-char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr)
+char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned int &tls_memsize, unsigned int &tls_filesize, unsigned int &tls_vaddr, unsigned int &phdr_vaddr)
 {
 	Printer &p = Printer::Get();
 	has_tls = false;
 	char *pInterp = 0;
+	phdr_vaddr = 0;
 
 	for (unsigned int count = 0; count < elf.GetNumProgramHeaders(); count++)
 	{
@@ -394,7 +398,7 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 
 		if (p_type == PT_INTERP)
 		{
-			p.PrintString("interpreter :");
+			p.PrintString("interpreter: ");
 			p.PrintString((char *)pData);
 			p.PrintString("\n");
 			pInterp = (char *)pData;
@@ -423,10 +427,11 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 			}
 
 			//copy in the file data
-			for (unsigned int c = 0; c < fileSize; c++)
-			{
-				((unsigned char *)vaddr)[c] = ((unsigned char *)pData)[c];
-			}
+			memcpy((void *)vaddr, (const void *)pData, fileSize);
+
+			//it's a loadable section which includes the elf header
+			if (pData == elf.GetWholeImage())
+				phdr_vaddr = vaddr + (unsigned int)elf.GetAllProgramHeaders() - (unsigned int)elf.GetWholeImage();
 		}
 	}
 

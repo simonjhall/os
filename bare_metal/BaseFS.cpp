@@ -9,6 +9,8 @@
 #include "common.h"
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <dirent.h>
 
 BaseFS::BaseFS()
 {
@@ -64,6 +66,89 @@ BaseDirent *BaseFS::OpenByName(const char *pFilename, unsigned int flags)
 		return f->GetFilesystem().OpenByHandle(*f, flags);
 }
 
+BaseDirent *BaseFS::Locate(const char *pFilename, Directory *pParent)
+{
+	ASSERT(pFilename);
+
+	Directory &rRoot = GetRootDirectory();
+
+	if (!pParent)
+		pParent = &rRoot;
+
+	//we want this actual directory
+	if (pFilename[0] == 0)
+		return pParent;
+
+	//we want the root directory
+	if (pFilename[0] == '/')
+	{
+		if (pParent == &rRoot)
+			return Locate(pFilename + 1, &rRoot);
+		else
+			return Locate(pFilename + 1, pParent);
+	}
+
+	//check if there's a path in here or just a lone name
+	const char *slash = strstr(pFilename, "/");
+	unsigned int length = strlen(pFilename);
+
+	if (slash)
+		length = slash - pFilename;
+
+	if (strncmp(pFilename, ".", length) == 0)
+		return Locate(pFilename + 1, pParent);
+
+	if (strncmp(pFilename, "..", length) == 0)
+	{
+		ASSERT(pParent);
+		ASSERT(pParent->GetParent());
+		return Locate(pFilename + 1, pParent->GetParent());
+	}
+
+	BaseDirent *local = 0;
+	for (unsigned int count = 0; count < pParent->GetNumChildren(); count++)
+	{
+		BaseDirent *c = pParent->GetChild(count);
+		const char *pOtherName = c->GetName();
+		ASSERT(pOtherName);
+
+		if (c && strlen(pOtherName) == length && strncmp(pOtherName, pFilename, length) == 0)
+		{
+			local = c;
+			break;
+		}
+	}
+
+	if (!local)
+		return 0;
+
+	if (slash)
+		ASSERT(local->IsDirectory());
+
+	if (!local->IsDirectory() || !slash)
+	{
+		//found what we're looking for, double check it's not an attach point
+		if (local->IsDirectory())
+		{
+			BaseFS *pMp = IsAttachment((Directory *)local);
+			if (pMp)
+				return &pMp->GetRootDirectory();
+		}
+
+		return local;
+	}
+
+	//check attach points
+	for (std::vector<Attachment *>::iterator it = m_attachments.begin(); it != m_attachments.end(); it++)
+		if ((*it)->m_pMountPoint == local)
+		{
+			//change filesystem
+			return (*it)->m_rFilesystem.Locate(slash + 1);
+		}
+
+	//not a mount point
+	return Locate(slash + 1, (Directory *)local);
+}
 
 //////////////////////////////////////////
 
@@ -143,4 +228,66 @@ void *File::Mmap2(void *addr, size_t length, int prot,
 bool File::Munmap(void *addr, size_t length)
 {
 	return internal_munmap(addr, length) ? true : false;
+}
+
+///////////////////////////////
+int Directory::FillLinuxDirent(linux_dirent64* pOut, unsigned int len,
+		off_t& rChild)
+{
+	Printer &p = Printer::Get();
+
+	int written = 0;
+	int base_size = sizeof(linux_dirent64);
+	bool no_more_children = false;
+
+	ASSERT(pOut);
+
+	linux_dirent64 out;
+
+	while (len)
+	{
+		if (base_size >= len)
+			return -EINVAL;
+
+		BaseDirent *pChild = GetChild(rChild);
+		if (!pChild)
+		{
+			no_more_children = true;
+			break;
+		}
+
+		out.d_ino = (unsigned long long)pChild;
+		out.d_ino = out.d_ino & 0xffffffff;
+		out.d_off = rChild;
+		out.d_type = pChild->IsDirectory() ? DT_DIR : DT_REG;
+
+		size_t name_len = strlen(pChild->GetName()) + 1;
+
+		if (base_size + name_len > len)
+			break;
+
+		len -= base_size;
+		len -= name_len;
+
+		//align the size up to a multiple of eight bytes for the ldrd which reads the d_ino
+		int align = ((base_size + name_len) + 7) & ~7;
+		align -= (base_size + name_len);
+
+		len -= align;
+
+		out.d_reclen = base_size + name_len + align;
+		written += out.d_reclen;
+
+		//copy in to avoid alignment faults, this is really bad
+		memcpy(pOut, &out, sizeof(linux_dirent64));
+		strcpy(pOut->d_name, pChild->GetName());
+
+		pOut = (linux_dirent64 *)((char *)pOut + pOut->d_reclen);
+		rChild++;
+	}
+
+	if (!written && !no_more_children)
+		return -EINVAL;
+	else
+		return written;
 }

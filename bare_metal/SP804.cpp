@@ -99,4 +99,9 @@ unsigned int SP804::GetCurrentValue(void)
 	return m_pBase[sm_timerValue];
 }
 
+unsigned int SP804::GetMicrosUntilFire(void)
+{
+	return GetCurrentValue();
+}
+
 } /* namespace VersatilePb */

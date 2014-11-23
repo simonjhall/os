@@ -46,13 +46,12 @@ public:
 			return 0;
 	}
 
+	virtual bool Fstat(struct stat64 &rBuf);
+
 	unsigned int GetStartCluster(void)
 	{
 		return m_cluster;
 	}
-
-	virtual bool Fstat(struct stat64 &rBuf);
-	virtual int FillLinuxDirent(linux_dirent64 *, unsigned int len, off_t &rChild);
 
 protected:
 	std::vector<BaseDirent *> m_files;
@@ -98,9 +97,8 @@ public:
 	virtual bool Rmdir(const char *pFilename);
 
 protected:
-	virtual BaseDirent *Locate(const char *pFilename, Directory *pParent = 0);
+	virtual Directory &GetRootDirectory(void);
 
-protected:
 	struct FATDirEnt;
 
 	//init

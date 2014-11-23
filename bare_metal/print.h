@@ -42,6 +42,9 @@ public:
 	virtual void PrintHex(unsigned int i);
 	virtual void PrintHex(int i) { PrintHex((unsigned int)i); };
 
+	virtual void PrintHex(unsigned long long i);
+	virtual void PrintHex(long long i) { PrintHex((unsigned long long)i); };
+
 	virtual void PrintDec(unsigned int i, bool leading);
 	virtual void PrintDec(int i, bool leading) { PrintDec((unsigned int)i, leading); };
 
@@ -60,6 +63,18 @@ public:
 	}
 
 	Printer &operator << (unsigned int i)
+	{
+		PrintHex(i);
+		return *this;
+	}
+
+	Printer &operator << (unsigned long long i)
+	{
+		PrintHex(i);
+		return *this;
+	}
+
+	Printer &operator << (long long i)
 	{
 		PrintHex(i);
 		return *this;

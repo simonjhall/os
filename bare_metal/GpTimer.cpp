@@ -19,6 +19,13 @@ GpTimer::GpTimer(volatile unsigned int* pBase,
 {
 	ASSERT(whichTimer == 1 || whichTimer == 2 || whichTimer == 10);
 
+	//reset it
+	m_pBase[sm_tiocp_cfg_1ms] = 2;
+	while (m_pBase[sm_tiocp_cfg_1ms] & 2);
+
+	//disable idling and clock activity
+	m_pBase[sm_tiocp_cfg_1ms] = (1 << 3) | (3 << 8);
+
 	unsigned int current = m_pBase[sm_tclr] & 0xffff8000;
 	//disable the timer [0]=0
 	//set autoreload mode [1]=1
@@ -54,9 +61,18 @@ bool GpTimer::IsEnabled(void)
 
 bool GpTimer::SetFrequencyInMicroseconds(unsigned int micros)
 {
-	//base clock is 38.4 MHz
-	//so one microsecond is a load value of 38.4
-	unsigned int load_value = 0xffffffff - (unsigned int)(micros * 38.4f);
+	unsigned int load_value;
+	if (m_whichTimer == 1)			//32.768 kHz
+	{
+		//a load value of one = 32.768 us
+		//1 us = 0.030517578 us
+		load_value = 0xffffffff - (unsigned int)(micros / 32.768f);
+	}
+	else
+		//base clock is 38.4 MHz
+		//so one microsecond is a load value of 38.4
+		load_value = 0xffffffff - (unsigned int)(micros * 38.4f);
+
 	if (load_value != 0xffffffff)
 	{
 		m_pBase[sm_tldr] = load_value;
@@ -89,6 +105,18 @@ void GpTimer::ClearInterrupt(void)
 unsigned int GpTimer::GetCurrentValue(void)
 {
 	return m_pBase[sm_tcrr];
+}
+
+unsigned int GpTimer::GetMicrosUntilFire(void)
+{
+	unsigned int current = 0xffffffff - GetCurrentValue();
+
+	if (m_whichTimer == 1)
+		//1/32.768 = 1 us
+		return (unsigned int)(current * 32.768f);
+	else
+		//38.4 = 1 us
+		return (unsigned int)(current / 38.4f);
 }
 
 } /* namespace OMAP4460 */

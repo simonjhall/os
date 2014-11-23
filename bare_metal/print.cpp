@@ -94,4 +94,22 @@ void Printer::PrintHex(unsigned int i)
 	PrintString(temp);
 }
 
+void Printer::PrintHex(unsigned long long i)
+{
+	char temp[17];
+
+	for (unsigned int count = 0; count < 8; count++)
+	{
+		unsigned int a = (i >> ((7 - count) * 8 + 4)) & 0xf;
+		NibbleToHexString(&temp[count * 2], a);
+
+		unsigned int b = (i >> ((7 - count) * 8)) & 0xf;
+		NibbleToHexString(&temp[count * 2 + 1], b);
+	}
+
+	temp[16] = 0;
+
+	PrintString(temp);
+}
+
 

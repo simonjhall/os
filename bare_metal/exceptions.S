@@ -39,10 +39,17 @@ Resume:
 
 	#reload all the registers and pc, switch in cpsr
 	add r0, #8
-	#ldm r0, {r0-r15}^
 	mov sp, r0
+	#load r0-r14
 	ldm sp, {r0-r14}^
+	#move up to d0
 	add sp, #(15 * 4)
+	vldmia sp!, {q0-q7}
+	vldmia sp!, {q8-q15}
+	#load the tpidruro
+	ldr lr, [sp], #4
+	mcr p15, 0, lr, c13, c0, 3
+	#reload pc
 	ldm sp, {r15}^
 .endfunc
 .size Resume, .-Resume
@@ -59,10 +66,16 @@ Resume:
 	.fill 1, 4, 0
 	#lr/14
 	.fill 1, 4, 0
+	#D0-D31
+	.fill 32, 8, 0
+	#tpidruro
+	.fill 1, 4, 0
 	#target pc
 	.fill 1, 4, 0
 	#exception type
 	.fill 1, 4, 0
+	#dfar, dfsr
+	.fill 2, 4, 0
 
 	/* will end up in system mode */
 .global \funcName
@@ -96,7 +109,15 @@ Resume:
 	mov r0, sp			/* keep a hold of the old output pointer for convenience */
 	cps #31			/* system, real sp and lr are live */
 
-	stm r0, {sp, lr}
+	stmia r0!, {sp, lr}
+
+	#store all adv simd
+	vstmia r0!, {q0-q7}
+	vstmia r0!, {q8-q15}
+
+	#store tpidruro
+	mrc p15, 0, r1, c13, c0, 3
+	str r1, [r0]
 
 	#get our proper stack
 	#everything is disabled here - except for fiq

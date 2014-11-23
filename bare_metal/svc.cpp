@@ -241,7 +241,8 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 	case 0xf0005:	//__ARM_NR_compat_set_tls
 	{
 		*(unsigned int *)(0xffff0fe0 - 4) = pRegisters[0];
-		asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (pRegisters[0]) : "cc");
+//		asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (pRegisters[0]) : "cc");
+		rBlocked.m_pausedState.m_tpidruro = pRegisters[0];
 		return 0;
 	}
 	case 4:			//write
@@ -331,7 +332,16 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 //		if (!pName)
 //			pName = "sys_exit";
 		p.PrintString("sys_exit");
-		ASSERT(0);
+		ASSERT(pParent);
+
+		//kill all threads
+		pParent->Deschedule(Scheduler::GetMasterScheduler());
+
+		delete pParent;
+		pParent = 0;
+
+		//do not use
+		rBlocked.m_pParent = 0;
 		return 0;
 	}
 	case 192:		//sys_mmap_pgoff
@@ -649,10 +659,12 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 
 		return 0;
 	}
+	case 201:		//sys_geteuid
 	case 199:		//getuid32
 	{
 		return g_uid;
 	}
+	case 202:		//getegid32
 	case 200:		//getgid32
 	{
 		return g_gid;
@@ -717,6 +729,46 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 
 		return -ENOENT;
 	}
+	case 39:		//mkdir
+	{
+		ASSERT(pParent);
+
+		char *pFilename = (char*)pRegisters[0];
+		int mode = (int)pRegisters[1];
+
+		static const int s_nameLength = 256;
+		char filename[s_nameLength];
+		memset(filename, 0, s_nameLength);
+
+		//make the file name and also try and open it
+		BaseDirent *f = pParent->m_rVfs.OpenByName(pParent->m_pfs.BuildFullPath(pFilename, filename, s_nameLength), O_RDONLY);
+
+		if (f)
+		{
+			pParent->m_rVfs.Close(*f);
+			return -EEXIST;
+		}
+
+		//split the new name away from the directory
+		char *pNewName = 0;
+
+		for (int count = s_nameLength - 1; count >= 0; count--)
+			if (filename[count] == '/')
+			{
+				filename[count] = 0;
+				pNewName = &filename[count + 1];
+				break;
+			}
+
+		ASSERT(pNewName);
+
+		//make the directory
+		bool ok = pParent->m_rVfs.Mkdir(filename, pNewName);
+		if (ok)
+			return 0;
+		else
+			return -EPERM;
+	}
 	case 64:		//getppid
 	{
 		return 0;
@@ -725,19 +777,29 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 	{
 		int signum = (int)pRegisters[0];
 		const struct sigaction *act = (const struct sigaction *)pRegisters[1];
-		const struct sigaction *oldact = (const struct sigaction *)pRegisters[2];
+		struct sigaction *oldact = ( struct sigaction *)pRegisters[2];
 
-		p << "sigaction for signal " << signum << " ";
-		if (act->sa_handler == SIG_ERR)
-			p << "ERROR";
-		else if (act->sa_handler == SIG_DFL)
-			p << "DEFAULT";
-		else if (act->sa_handler == SIG_IGN)
-			p << "IGNORE";
+		p << "sigaction for signal " << signum;
+		if (!act && oldact)
+		{
+			p << " called with NULL argument\n";
+			memset(oldact, 0, sizeof(struct sigaction));
+			oldact->sa_handler = SIG_DFL;
+		}
 		else
-			p << (unsigned int)act->sa_handler;
+		{
+			p << " ";
+			if (act->sa_handler == SIG_ERR)
+				p << "ERROR";
+			else if (act->sa_handler == SIG_DFL)
+				p << "DEFAULT";
+			else if (act->sa_handler == SIG_IGN)
+				p << "IGNORE";
+			else
+				p << (unsigned int)act->sa_handler;
 
-		p << "\n";
+			p << "\n";
+		}
 
 		return 0;
 	}
@@ -791,9 +853,21 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 
 		return 0;
 	}
-	case 120:		//clone
+	case 11:		//execve
+		if (!pName)
+			pName = "execve";
+	case 42:		//pipe
+		if (!pName)
+			pName = "pipe";
+	case 91:		//munmap
+		if (!pName)
+			pName = "munmap";
+	case 120:		//clone			http://lxr.free-electrons.com/source/arch/arm/kernel/sys_arm.c?v=3.2
 		if (!pName)
 			pName = "clone";
+	case 269:		//utimes
+		if (!pName)
+			pName = "utimes";
 	case 114:		//wait4
 		if (!pName)
 			pName = "wait4";
@@ -818,12 +892,6 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 	case 175:		//compat_sys_rt_sigprocmask
 		if (!pName)
 			pName = "compat_sys_rt_sigprocmask";
-	case 201:		//sys_geteuid
-		if (!pName)
-			pName = "sys_geteuid";
-	case 202:		//getegid32
-		if (!pName)
-			pName = "getegid32";
 	case 268:		//sys_tgkill
 		if (!pName)
 			pName = "sys_tgkill";

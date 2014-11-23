@@ -8,6 +8,7 @@
 #include "ipv4.h"
 #include "Scheduler.h"
 #include "ICMP.h"
+#include "print.h"
 
 namespace Net
 {
@@ -19,6 +20,7 @@ void InternetIntf::RegisterProtocol(Protocol& rProt)
 
 void InternetIntf::DemuxThreadFuncEntry(InternetIntf &rInetIntf)
 {
+	Printer::Get() << "IPv4 receive thread beginning\n";
 	rInetIntf.DemuxThreadFunc();
 }
 

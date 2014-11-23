@@ -80,7 +80,7 @@ __strncpy_chk (char *s1, const char *s2, size_t n, size_t s1len)
   return s;
 }
 
-
+#ifdef __ARM_ARCH_7M__
 extern "C" void *memset(void *s, int c, size_t n)
 {
 	char b = (char)c;
@@ -91,6 +91,7 @@ extern "C" void *memset(void *s, int c, size_t n)
 
 	return s;
 }
+#endif
 
 #define	op_t	unsigned long int
 #define OPSIZ	(sizeof(op_t))
@@ -184,6 +185,7 @@ size_t copy_amount, size_t dest_len)
 	return memcpy(dest, src, copy_amount);
 }
 
+#ifdef __ARM_ARCH_7M__
 extern "C" void *memcpy(void *dest, const void *src, size_t n)
 {
 	char *d = (char *)dest;
@@ -194,6 +196,7 @@ extern "C" void *memcpy(void *dest, const void *src, size_t n)
 
 	return dest;
 }
+#endif
 
 extern "C" void *memmove(void *dest, const void *src, size_t len)
 {

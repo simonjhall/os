@@ -19,6 +19,8 @@ assert_func:
 .global IsIrqEnabled
 .global ReadDFAR
 .global ReadDFSR
+.global ReadTPIDRURO
+.global WriteTPIDRURO
 
 .func ReadDFAR
 ReadDFAR:
@@ -29,6 +31,18 @@ ReadDFAR:
 .func ReadDFSR
 ReadDFSR:
 	mrc p15, 0, r0, c5, c0, 0
+	bx lr
+.endfunc
+
+.func ReadTPIDRURO
+ReadTPIDRURO:
+	mrc p15, 0, r0, c13, c0, 3
+	bx lr
+.endfunc
+
+.func WriteTPIDRURO
+WriteTPIDRURO:
+	mrc p15, 0, r0, c13, c0, 3
 	bx lr
 .endfunc
 

@@ -104,6 +104,7 @@ void OMAP4460::OmapIoSpace::Fill(void)
 
 	//page 299
 	m_all.push_back(Entry("GPIO1", 0, (volatile unsigned int *)0x4a310000, 4096));
+	m_all.push_back(Entry("GPTIMER1", 0, (volatile unsigned int *)0x4a318000, 4096));
 
 	//page 300
 	m_all.push_back(Entry("UART3", 0, (volatile unsigned int *)0x48020000, 4096));

@@ -145,6 +145,9 @@ bool MMCi::Reset(void)
 	//autoidle
 	m_pBaseAddress[sm_sysConfig] = m_pBaseAddress[sm_sysConfig] & ~1;
 
+	//set data timeout
+	m_pBaseAddress[sm_sysctl] |= (5 << 16);
+
 	m_pBaseAddress[sm_ie] = 1 | (1 << 1) | (1 << 4) | (1 << 5)
 			| (1 << 16) | (1 << 17) | (1 << 18)
 			| (1 << 19) | (1 << 20) | (1 << 21)
@@ -192,7 +195,7 @@ bool MMCi::Reset(void)
 		}
 	}
 
-	ClockFrequencyChange(/*sm_400kHzClock*/35);
+	ClockFrequencyChange(/*sm_400kHzClock*/5);
 
 	p << "going idle state\n";
 	GoIdleState();
