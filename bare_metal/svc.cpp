@@ -16,6 +16,7 @@
 #include "translation_table.h"
 #include "Process.h"
 #include "Scheduler.h"
+#include "TimeFromBoot.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -853,6 +854,14 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 
 		return 0;
 	}
+	case 78:		//compat_sys_gettimeofday
+	{
+		struct timeval *tv = (struct timeval *)pRegisters[0];
+		unsigned long long now = TimeFromBoot::GetMicroseconds();
+		tv->tv_sec = now / 1000000;
+		tv->tv_usec = now % 1000000;
+		return 0;
+	}
 	case 11:		//execve
 		if (!pName)
 			pName = "execve";
@@ -886,9 +895,6 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 	case 19:		//lseek
 		if (!pName)
 			pName = "lseek";
-	case 78:		//compat_sys_gettimeofday
-		if (!pName)
-			pName = "compat_sys_gettimeofday";
 	case 175:		//compat_sys_rt_sigprocmask
 		if (!pName)
 			pName = "compat_sys_rt_sigprocmask";

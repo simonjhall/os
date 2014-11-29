@@ -138,7 +138,7 @@ bool InitL1L2Allocators(void)
 }
 
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain, bool bulk)
 {
 	auto mapper = [pPhys, pVirt, length, perm, xn, type, domain, hi](bool commit)
 		{
@@ -327,13 +327,17 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 
 	if (mapper(false))
 	{
-		v7_flush_icache_all();
-		v7_flush_dcache_all();
+		if (!bulk)
+		{
+			v7_flush_icache_all();
+			v7_flush_dcache_all();
+		}
 
 		bool ok = mapper(true);
 		ASSERT(ok);
 
-		FlushTlb();
+		if (!bulk)
+			FlushTlb();
 		return ok;
 	}
 	else
@@ -483,12 +487,18 @@ bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
 
 		bool ok = VirtMem::MapPhysToVirt(pPhys, pMap, 4096, hi,
 				perm, xn, type,
-				domain);
+				domain,
+				true);			//bulk
 		if (!ok)
+		{
+			FlushTlb();
 			return false;
+		}
 
 		pMap += 4096;
 	}
+
+	FlushTlb();
 
 	return true;
 }

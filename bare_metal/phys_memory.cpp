@@ -15,17 +15,30 @@ namespace PhysPages
 //all the free 4k phys pages in the system
 struct Reservation
 {
-	unsigned int m_usageCount;
+	unsigned char m_usageCount;
 };
 
 Reservation g_usedPage [s_totalPages];
+static unsigned int s_lastAllocated = 0;
 
 //find one free physical page
 void *FindPage(void)
 {
+	//first check last allocated...
+	int to_check = s_lastAllocated + 1;
+	if (g_usedPage[to_check].m_usageCount == 0)
+	{
+		//sweet...
+		s_lastAllocated++;
+		g_usedPage[to_check].m_usageCount++;
+		return (void *)((to_check + s_startPage) * 4096);
+	}
+
+	//check from the beginning
 	for (unsigned int count = 0; count < s_totalPages; count++)
 		if (g_usedPage[count].m_usageCount == 0)
 		{
+			s_lastAllocated = count;
 			g_usedPage[count].m_usageCount++;
 			return (void *)((count + s_startPage) * 4096);
 		}

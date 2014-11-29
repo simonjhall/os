@@ -15,12 +15,13 @@ namespace PhysPages
 #ifdef PBES
 	static const unsigned int s_startAddr = 0x80000000;
 	static const unsigned int s_startPage = s_startAddr >> 12;
+	static const unsigned int s_totalPages = 512 * 256;
 #else
 	static const unsigned int s_startAddr = 0x00000000;
 	static const unsigned int s_startPage = s_startAddr >> 12;
+	static const unsigned int s_totalPages = 128 * 256;
 #endif
 
-	static const unsigned int s_totalPages = 128 * 256;
 
 	void BlankUsedPages(void);
 	void ReservePages(unsigned int start, unsigned int num);
