@@ -5,13 +5,13 @@
 .global Setup
 .global _start
 .global entry_maybe_misaligned
-.global initial_stack
+/*.global initial_stack
 .global initial_stack_end
+.global initial_stack_cpu2
+.global initial_stack_cpu2_end*/
 
 .global __bss_start__
 .global __bss_end__
-
-.global GetStackHigh
 
 .global master_tlb
 
@@ -293,15 +293,9 @@ bss_clear:
 done_clear:
 
 	cps #31
-	ldr sp, =initial_stack
-	ldr r0, =initial_stack_end
-	ldr r0, [r0]
-	mov sp, r0
+	ldr sp, =initial_stack_end
+	ldr sp, [sp]
 	sub sp, #8
-
-	mov r0, #0
-	blx GetStackHigh
-	mov sp, r0
 
 	mov r0, r4
 	blx Setup
@@ -317,6 +311,78 @@ wait_loop:
 	bx lr
 .endfunc
 .size entry_maybe_misaligned, .-entry_maybe_misaligned
+
+.global secondary_entry
+secondary_entry:
+.func secondary_entry
+	#get the current PA pc
+	bl 1f
+1:
+	sub lr, #4
+
+	#get the VA->PA offset
+	ldr r0, =secondary_entry
+	sub r0, lr
+
+	#compute the address of the master page table
+	ldr r1, =master_tlb
+	sub r1, r0
+
+	#round it down to the megabyte
+	mov r0, #1048576
+	sub r0, #1
+	bic r1, r0
+
+	#insert the page table into ttbr0 and 1
+	mcr p15, 0, r1, c2, c0, 0
+	mcr p15, 0, r1, c2, c0, 1
+
+	#change the domain to client
+	mov r2, #1
+	mcr p15, 0, r2, c3, c0, 0
+
+	#get ready to jump
+	ldr r3, =virt_entry_2
+
+	#ensure the write has gone through
+	dsb
+
+	#set ttbr0 and ttbr1 to have an even 2GB split
+	mrc p15, 0, r2, c2, c0, 2
+	orr r2, #1
+	mcr p15, 0, r2, c2, c0, 2
+
+	#turn on the mmu (sctlr)
+	#get the current value
+	mrc p15, 0, r2, c1, c0, 0
+	orr r2, #1					/* enable */
+	bic r2, #2					/* disable alignment fault checking */
+	orr r2, #(1 << 13)			/* remap high exception vector */
+	mcr p15, 0, r2, c1, c0, 0		/* turn on*/
+
+	#good to go
+	dsb
+	isb
+
+	bx r3
+
+virt_entry_2:
+	cps #31
+	ldr sp, =initial_stack_cpu2_end
+	ldr sp, [sp]
+	sub sp, #8
+
+123:
+	b 123b
+
+	ldr r3, =SetupSecondary
+	bx r3
+2:
+	b 2b
+
+.endfunc
+.size secondary_entry, .-secondary_entry
+
 
 .section .trampoline, "ax"
 

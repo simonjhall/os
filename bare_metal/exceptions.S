@@ -1,7 +1,5 @@
 .if M3==0
 
-.global GetStackHigh
-
 .global UndefinedInstruction
 .global SupervisorCall
 .global PrefetchAbort
@@ -54,10 +52,7 @@ Resume:
 .endfunc
 .size Resume, .-Resume
 
-.macro HANDLER exceptionId, funcName, handlerFunc, storeName
-
-.global \storeName
-\storeName:
+.macro STORAGE
 	#return address, spsr
 	.fill 2, 4, 0
 	#r0-r12
@@ -76,7 +71,14 @@ Resume:
 	.fill 1, 4, 0
 	#dfar, dfsr
 	.fill 2, 4, 0
+.endm
 
+.macro HANDLER exceptionId, funcName, handlerFunc, storeName
+
+.global \storeName
+\storeName:
+	STORAGE
+	STORAGE
 	/* will end up in system mode */
 .global \funcName
 .func \funcName
@@ -92,8 +94,20 @@ Resume:
 	only irq is an async event - which is turned off
 	could have a memory failure though, from data or pref abt
 	may have come from fiq...which would be fatal */
-	ldr sp, =\storeName
 
+	#get the cpu id, 0 or 1
+	mrc p15, 0, sp, c0, c0, 5
+	and sp, #1
+	lsl sp, #3			//0=0, 1=8
+
+	add pc, pc, sp		//0
+	nop				//4
+	ldr sp, =\storeName	//8		entry for cpu zero
+	b 1f				//c
+	ldr sp, =\storeName	//10		entry for cpu one
+	add sp, #(86*4)		//14
+
+1:
 	#store to-be-adjusted return address
 	#see page B1-1171 for offsets
 	str lr, [sp], #4
@@ -119,9 +133,14 @@ Resume:
 	mrc p15, 0, r1, c13, c0, 3
 	str r1, [r0]
 
+	#which cpu are we
+	mrc p15, 0, r1, c0, c0, 5
+	ands r1, #1					/* only support cpu 0 and 1 */
+
 	#get our proper stack
 	#everything is disabled here - except for fiq
-	ldr sp, =initial_stack_end
+	ldreq sp, =exception_stack_end
+	ldrne sp, =exception_stack_cpu2_end
 	ldr sp, [sp]
 	sub sp, #8
 

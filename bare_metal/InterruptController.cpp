@@ -21,7 +21,7 @@ bool InterruptController::RegisterInterrupt(InterruptSource& rSource,
 		InterruptType type)
 {
 	//enable that interrupt #
-	if (!Enable(type, rSource.GetInterruptNumber(), true))
+	if (!Enable(type, rSource.GetInterruptNumber(), true, kAllCpus, 0))
 		return false;
 
 	//check it doesn't exist
@@ -49,8 +49,8 @@ bool InterruptController::DeRegisterInterrupt(InterruptSource& rSource)
 	//if nothing in the list disable that entry
 	if (m_sources[rSource.GetInterruptNumber()].size() == 0)
 	{
-		Enable(kIrq, rSource.GetInterruptNumber(), false);
-		Enable(kFiq, rSource.GetInterruptNumber(), false);
+		Enable(kIrq, rSource.GetInterruptNumber(), false, kAllCpus, 0);
+		Enable(kFiq, rSource.GetInterruptNumber(), false, kAllCpus, 0);
 	}
 
 	return false;
@@ -86,7 +86,7 @@ InterruptSource *InterruptController::WhatHasFired(void)
 	return 0;
 }
 
-bool InterruptController::SoftwareInterrupt(unsigned int i)
+bool InterruptController::SoftwareInterrupt(unsigned int i, IntDestType type, unsigned destMask)
 {
 	return false;
 }

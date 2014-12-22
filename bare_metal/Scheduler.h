@@ -21,9 +21,9 @@ public:
 		kHandlerThread,
 	};
 
-	virtual Thread *PickNext(Thread **ppBlocked) = 0;
-	virtual Thread *WhatIsRunning(void);
-	virtual bool IsUninterruptableRunning(void);
+	virtual Thread *PickNext(Thread **ppBlocked, unsigned int cpu) = 0;
+	virtual Thread *WhatIsRunning(unsigned int cpu);
+	virtual bool IsUninterruptableRunning(unsigned int cpu);
 
 	virtual void AddThread(Thread &);
 	virtual bool AddSpecialThread(Thread &, SpecialType);
@@ -44,17 +44,19 @@ public:
 	}
 
 protected:
-	Scheduler();
+	Scheduler(unsigned int numCpus);
 	virtual ~Scheduler();
 
 	virtual void OnThreadAdd(Thread &, SpecialType);
 	virtual void OnThreadRemove(Thread &, SpecialType);
-	virtual void SetRunning(Thread *);
+	virtual void SetRunning(Thread *, unsigned int cpu);
 
 	std::list<Thread *> m_allNormalThreads;
-	Thread *m_pIdleThread, *m_pHandlerThread;
+	Thread **m_pIdleThreads, **m_pHandlerThreads;
+	Thread **m_pRunningThreads;
 
-	Thread *m_pRunningThread;
+	unsigned int m_numCpus;
+	RecursiveSpinLock m_lock;
 
 	static Scheduler *s_pMasterScheduler;
 };
@@ -62,10 +64,10 @@ protected:
 class RoundRobin : public Scheduler
 {
 public:
-	RoundRobin();
+	RoundRobin(unsigned int numCpus);
 	virtual ~RoundRobin();
 
-	virtual Thread *PickNext(Thread **ppBlocked);
+	virtual Thread *PickNext(Thread **ppBlocked, unsigned int cpu);
 	virtual void OnThreadBlock(Thread &);
 	virtual void OnThreadUnblock(Thread &);
 

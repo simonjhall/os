@@ -321,7 +321,7 @@ void Process::MakeRunnable(void)
 
 	//construct the thread
 	m_pMainThread = new Thread(m_entryPoint,
-		this, false, 1, 0, sp);
+		this, false, 1, 0, 0xffffffff, sp);
 
 	ASSERT(m_pMainThread);
 	m_threads.push_back(m_pMainThread);
@@ -439,16 +439,18 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 }
 
 Thread::Thread(unsigned int entryPoint, Process* pParent, bool priv,
-		unsigned int stackSizePages, int priority, unsigned int userStack)
+		unsigned int stackSizePages, int priority, unsigned int affinityMask, unsigned int userStack)
 : Nameable(),
   m_pParent(pParent),
   m_isPriv(priv),
   m_priority(priority),
+  m_affinityMask(affinityMask),
   m_threadSwitches(0),
   m_serviceSwitches(0),
   m_pBlockedOn(0)
 {
 	ASSERT(stackSizePages == 1);
+	ASSERT(affinityMask != 0);
 
 	memset(&m_pausedState, 0, sizeof(m_pausedState));
 

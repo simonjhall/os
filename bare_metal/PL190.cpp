@@ -6,6 +6,7 @@
  */
 
 #include "PL190.h"
+#include "common.h"
 
 namespace VersatilePb
 {
@@ -23,8 +24,10 @@ PL190::~PL190()
 	// TODO Auto-generated destructor stub
 }
 
-bool PL190::Enable(InterruptType interruptType, unsigned int i, bool e)
+bool PL190::Enable(InterruptType interruptType, unsigned int i, bool e, IntDestType type, unsigned int targetMask)
 {
+	ASSERT(type == kAllCpus);
+
 	if (i >= 32)
 		return false;
 

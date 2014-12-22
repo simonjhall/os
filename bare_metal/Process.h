@@ -116,7 +116,7 @@ public:
 	};
 
 	Thread(unsigned int entryPoint, Process *pParent, bool priv,
-			unsigned int stackSizePages, int priority, unsigned int userStack = 0);
+			unsigned int stackSizePages, int priority, unsigned int affinityMask, unsigned int userStack);
 
 	~Thread();
 
@@ -148,6 +148,9 @@ public:
 	bool Run(void);
 	bool RunAsHandler(Thread &rBlocked);
 
+	inline unsigned int GetPriority(void) { return m_priority; }
+	inline unsigned int GetAffinityMask(void) { return m_affinityMask; }
+
 	friend void Handler(unsigned int arg0, unsigned int arg1);
 	friend int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState);
 
@@ -164,6 +167,8 @@ protected:
 	State m_state;
 	//thread priority
 	int m_priority;
+	//thread cpu affinity mask
+	unsigned int m_affinityMask;
 
 	int m_threadSwitches;
 	int m_serviceSwitches;
@@ -285,6 +290,150 @@ public:
 	using Semaphore::SetName;
 	using Semaphore::GetName;
 };
+
+class SpinLock : public Nameable
+{
+public:
+	inline SpinLock(void)
+	{
+		SpinInitInternal(m_lock);
+	}
+
+	inline void Lock(void)
+	{
+		SpinLockInternal(m_lock);
+	}
+
+	inline void Unlock(void)
+	{
+		SpinUnlockInternal(m_lock);
+	}
+
+protected:
+	spinlock m_lock;
+};
+
+class RecursiveSpinLock : public Nameable
+{
+public:
+	inline RecursiveSpinLock(void)
+	{
+		SpinInitRecInternal(m_lock);
+	}
+
+	template <class T>
+	inline void Lock(T p)
+	{
+		static_assert(sizeof(p) == 4, "lock id needs to be 32-bits in size");
+		SpinLockRecInternal(m_lock, (void *)p);
+	}
+
+	template <class T>
+	inline void Unlock(T p)
+	{
+		static_assert(sizeof(p) == 4, "lock id needs to be 32-bits in size");
+		SpinUnlockRecInternal(m_lock, (void *)p);
+	}
+
+protected:
+	spinlockrec m_lock;
+};
+
+class InterruptDisable
+{
+public:
+	inline void Lock(void)
+	{
+		m_wasEnabled = IsIrqEnabled();
+
+		if (m_wasEnabled)
+			EnableIrq(false);
+	}
+
+	inline void Unlock(void)
+	{
+		if (m_wasEnabled)
+			EnableIrq(true);
+	}
+
+protected:
+	bool m_wasEnabled;
+};
+
+
+template <class T>
+class ScopedLock : public T
+{
+public:
+	inline ScopedLock(void)
+	: T()
+	{
+		T::Lock();
+	}
+
+	inline ~ScopedLock(void)
+	{
+		T::Unlock();
+	}
+};
+
+template <>
+class ScopedLock<RecursiveSpinLock> : public RecursiveSpinLock
+{
+public:
+	inline ScopedLock(void *p)
+	: RecursiveSpinLock(),
+	  m_pArg(p)
+	{
+		RecursiveSpinLock::Lock(p);
+	}
+
+	inline ~ScopedLock(void)
+	{
+		RecursiveSpinLock::Unlock(m_pArg);
+	}
+protected:
+	void *m_pArg;
+};
+
+template <class T>
+class WrappedScopedLock
+{
+public:
+	inline WrappedScopedLock(T &rLock)
+	: m_rLock(rLock)
+	{
+		rLock.Lock();
+	}
+
+	inline ~WrappedScopedLock(void)
+	{
+		m_rLock.Unlock();
+	}
+protected:
+	T &m_rLock;
+};
+
+template <>
+class WrappedScopedLock<RecursiveSpinLock>
+{
+public:
+	inline WrappedScopedLock(RecursiveSpinLock &rLock, void *p)
+	: m_rLock(rLock),
+	  m_pArg(p)
+	{
+		rLock.Lock(p);
+	}
+
+	inline ~WrappedScopedLock(void)
+	{
+		m_rLock.Unlock(m_pArg);
+	}
+protected:
+	RecursiveSpinLock &m_rLock;
+	void *m_pArg;
+};
+
 
 class Process
 {

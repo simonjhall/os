@@ -22,6 +22,14 @@ public:
 		kFiq,
 	};
 
+	enum IntDestType
+	{
+		kSelectedCpus,
+		kAllOtherCpus,
+		kThisCpu,
+		kAllCpus,
+	};
+
 	InterruptController(void);
 	virtual ~InterruptController(void);
 
@@ -31,10 +39,10 @@ public:
 	//auto clearing
 	virtual InterruptSource *WhatHasFired(void);
 
-	virtual bool SoftwareInterrupt(unsigned int i);
+	virtual bool SoftwareInterrupt(unsigned int i, IntDestType type, unsigned destMask = 0);
 
 protected:
-	virtual bool Enable(InterruptType, unsigned int, bool) = 0;
+	virtual bool Enable(InterruptType, unsigned int, bool e, IntDestType type, unsigned int targetMask) = 0;
 	virtual void Clear(unsigned int) = 0;
 	virtual int GetFiredId(void) = 0;
 

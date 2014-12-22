@@ -17,10 +17,19 @@ assert_func:
 .global EnableFiq
 .global EnableIrqFiqForMode
 .global IsIrqEnabled
+.global GetCpuId
 .global ReadDFAR
 .global ReadDFSR
 .global ReadTPIDRURO
 .global WriteTPIDRURO
+
+.global SpinLockInternal
+.global SpinUnlockInternal
+.global SpinInitInternal
+
+.global SpinLockRecInternal
+.global SpinUnlockRecInternal
+.global SpinInitRecInternal
 
 .func ReadDFAR
 ReadDFAR:
@@ -42,7 +51,7 @@ ReadTPIDRURO:
 
 .func WriteTPIDRURO
 WriteTPIDRURO:
-	mrc p15, 0, r0, c13, c0, 3
+	mcr p15, 0, r0, c13, c0, 3
 	bx lr
 .endfunc
 
@@ -57,6 +66,170 @@ InvokeSyscall:
 	pop {r7}
 	bx lr
 .endfunc
+.size InvokeSyscall, .-InvokeSyscall
+
+/////////////////////////////////
+
+.func SpinInitInternal
+SpinInitInternal:
+	dmb				//necessary?
+
+	mov r1, #0xff
+	str r1, [r0]
+
+	dsb				//necessary?
+	bx lr
+.endfunc
+.size SpinInitInternal, .-SpinInitInternal
+
+.func SpinUnlockInternal
+SpinUnlockInternal:
+	ldr r1, [r0]			//check it is locked
+	cmp r1, #0xff
+	bne 1f
+
+	dmb
+
+	mov r1, #0x0
+	str r1, [r0]
+
+	dsb
+	sev
+
+	bx lr
+1:
+	bkpt
+.endfunc
+.size SpinUnlockInternal, .-SpinUnlockInternal
+
+//http://stackoverflow.com/questions/16329123/use-of-strexeq-instead-of-strex-for-spinlock-implementation-in-arm
+
+//http://infocenter.arm.com/help/topic/com.arm.doc.ddi0344k/ch08s05s03.html
+//but the args for strex are in the wrong order
+.func SpinLockInternal
+SpinLockInternal:
+	mov r1, #0xff
+1:
+	ldrex r2, [r0]
+	cmp r2, #0				//0 = unlocked
+
+	wfene					//sleep on locked
+
+	strexeq r2, r1, [r0]
+	cmpeq r2, #0			//0 = success from strex
+	bne 1b
+
+	dmb
+	bx lr
+.endfunc
+.size SpinLockInternal, .-SpinLockInternal
+
+///////////////
+
+//r0 = lock addr
+.func SpinInitRecInternal
+SpinInitRecInternal:
+	ands r2, r0, #3			//check 8b alignment
+	bne 1f
+
+	dmb
+
+	mov r1, #0
+	str r1, [r0]
+	str r1, [r0, #4]
+
+	dsb
+
+	bx lr
+
+1:
+	bkpt
+.endfunc
+.size SpinInitRecInternal, .-SpinInitRecInternal
+
+//r0 = lock addr
+//r1 = thread id
+.func SpinUnlockRecInternal
+SpinUnlockRecInternal:
+	ldrd r2, r3, [r0]
+	cmp r2, r1				//check it is locked by this thread
+	bne 1f
+
+	cmp r3, #0				//check the lock count
+	beq 1f
+
+	cmp r3, #1
+
+	moveq r2, #0			//unlock the whole thing
+	moveq r3, #0
+
+	subne r3, #1			//dec ref count
+
+	dmb
+	strd r2, r3, [r0]
+	dsb
+	sev
+
+	bx lr
+
+1:
+	bkpt
+.endfunc
+.size SpinUnlockRecInternal, .-SpinUnlockRecInternal
+
+//r0 = lock addr
+//r1 = thread id
+.func SpinLockRecInternal
+SpinLockRecInternal:
+	push {r4}
+
+	/*
+	r0 lock addr
+	r1 curr thread id
+	r2 in-lock thread id
+	r3 in-lock count
+	r4 ex status
+	*/
+1:
+	ldrexd r2, r3, [r0]
+
+	cmp r3, #0				//0 = unlocked
+	beq 2f
+
+	cmp r2, r1				//already locked by this thread?
+	beq 3f
+
+	wfe					//sleep
+	b 1b					//keep trying
+
+2:	//new lock, write thread id and one
+	mov r2, r1
+	mov r3, #1
+
+	strexd r4, r2, r3, [r0]
+	cmp r4, #0			//0 = success from strex
+	bne 1b
+
+	dmb
+
+	pop {r4}
+	bx lr
+
+3:	//update existing lock
+	add r3, #1
+
+	strexd r4, r2, r3, [r0]
+	cmp r4, #0			//0 = success from strex
+	bne 1b
+
+	dmb
+
+	pop {r4}
+	bx lr
+
+.endfunc
+.size SpinLockRecInternal, .-SpinLockRecInternal
+
 
 .func ChangeModeAndJump
 ChangeModeAndJump:
@@ -101,7 +274,7 @@ FlushTlb:
 	#todo insert cache flush
 
 	#flush all tlb
-	mcr p15, 0, r0, c8, c7, 0
+	mcr p15, 0, r0, c8, c3, 0			//TLBIALLIS
 
 	#ensure flush is finished
 	dsb
@@ -153,6 +326,14 @@ EnableFiq:
 	bx lr
 .endfunc
 .size EnableFiq, .-EnableFiq
+
+.func GetCpuId
+GetCpuId:
+	mrc p15, 0, r0, c0, c0, 5
+	ands r0, #1					/* only support cpu 0 and 1 */
+	bx lr
+.endfunc
+.size GetCpuId, .-GetCpuId
 
 /* ChangeToMode(mode) */
 .func ChangeToMode
@@ -267,11 +448,13 @@ OmapSmc:
 	mov r12, r2
 
 	#r0
+	cmp r0, #0
 	mov r2, r0
-	ldr r0, [r2]
+	ldrne r0, [r2]
 	#r1
+	cmp r1, #0
 	mov r3, r1
-	ldr r1, [r3]
+	ldrne r1, [r3]
 
 	#call it
 	push {r2, r3}
@@ -279,10 +462,11 @@ OmapSmc:
 	pop {r2, r3}
 
 	#r0
-	str r0, [r2]
+	cmp r2, #0
+	strne r0, [r2]
 	#r1
-	str r1, [r3]
-
+	cmp r3, #0
+	strne r1, [r3]
 
 	pop {r4-r12, pc}
 .endfunc
@@ -375,9 +559,9 @@ DelayMillisecond:
 
 .global TimingTest
 TimingTest:
-	mov r0, #0
-	ldr r1, =0xee000000
-	str r1, [r1]
+	mov r1, r0
+	mov r0, #1024
+	lsl r0, #16
 1:
 	ldr r1, [r1]
 	ldr r1, [r1]
@@ -390,8 +574,9 @@ TimingTest:
 	ldr r1, [r1]
 	ldr r1, [r1]
 	ldr r1, [r1]
-	add r0, #1
-	b 1b
+	subs r0, #1
+	bne 1b
+	bx lr
 
 .global TimingTestIssue
 TimingTestIssue:

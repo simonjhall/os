@@ -55,12 +55,21 @@ const unsigned int initial_stack_size = 1024;
 unsigned int initial_stack[initial_stack_size];
 unsigned int initial_stack_end = (unsigned int)&initial_stack[initial_stack_size];
 
+unsigned int initial_stack_cpu2[initial_stack_size];
+unsigned int initial_stack_cpu2_end = (unsigned int)&initial_stack_cpu2[initial_stack_size];
+
+unsigned int exception_stack[initial_stack_size];
+unsigned int exception_stack_end = (unsigned int)&exception_stack[initial_stack_size];
+
+unsigned int exception_stack_cpu2[initial_stack_size];
+unsigned int exception_stack_cpu2_end = (unsigned int)&exception_stack_cpu2[initial_stack_size];
+
 PeriodicTimer *pTimer0 = 0;
 InterruptController *pPic = 0;
 extern unsigned int pMasterClockClear, masterClockClearValue, master_clock;
 
 /////////
-
+/*
 struct FixedStack
 {
 	static const unsigned int sm_size = 1024;
@@ -71,7 +80,7 @@ extern "C" unsigned int *GetStackHigh(VectorTable::ExceptionType e)
 {
 	ASSERT((unsigned int)e < 8);
 	return g_stacks[(unsigned int)e].m_stack + FixedStack::sm_size - 2;
-}
+}*/
 
 /////////////////////////////////////////////////
 extern "C" void _Und(void);
@@ -121,6 +130,9 @@ extern unsigned int __trampoline_start__;
 extern unsigned int __trampoline_end__;
 
 extern "C" void EnableFpu(bool);
+extern "C" void WriteTPIDRURO(unsigned int);
+
+extern "C" void secondary_entry(void);
 
 //unsigned int __attribute__((aligned(0x4000))) TTB[4096];
 unsigned int *TTB_virt;
@@ -529,6 +541,7 @@ static void MapKernel(unsigned int physEntryPoint)
     //set the emulation value
     *(unsigned int *)(0xffff0fe0 - 4) = 0;
     //set the register value
+    WriteTPIDRURO(0);
     asm volatile("mcr p15, 0, %0, c13, c0, 3" : : "r" (0) : "cc");
     VirtMem::FlushTlb();
 }
@@ -758,7 +771,7 @@ void MountSd(Printer *p)
 	pCachedSd->Init(*pSd, s_blockCache, 512);
 
 	//speed test
-	if (1)
+	if (0)
 	{
 		*p << "beginning reading\n";
 		unsigned long long start_time = TimeFromBoot::GetMicroseconds();
@@ -770,7 +783,7 @@ void MountSd(Printer *p)
 		unsigned long long end_time = TimeFromBoot::GetMicroseconds();
 		*p << "done in "; p->PrintDec((unsigned int)(end_time - start_time), false); *p << " us\n";
 	}
-	if (1)
+	if (0)
 	{
 		*p << "beginning reading\n";
 		unsigned long long start_time = TimeFromBoot::GetMicroseconds();
@@ -804,6 +817,7 @@ void DumpDir(Printer *p, Directory *d, int depth)
 	for (unsigned int count = 0; count < d->GetNumChildren(); count++)
 	{
 		BaseDirent *ent = d->GetChild(count);
+		ASSERT(ent);
 
 		for (int i = 0; i < depth; i++)
 			*p << "\t";
@@ -816,6 +830,7 @@ void DumpDir(Printer *p, Directory *d, int depth)
 			if (fs)
 			{
 				BaseDirent *next = fs->OpenByName("/", O_RDONLY);
+				ASSERT(next);
 				ASSERT(next->IsDirectory());
 				DumpDir(p, (Directory *)next, depth + 1);
 			}
@@ -835,9 +850,6 @@ UdpPrinter *g_udpPrinter;
 void SlipRecvThreadFunc(Slip::SlipLink &rLink)
 {
 	int packet_count = 0;
-
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
 
 	Net::MaxPacket *pBuffer = new Net::MaxPacket;
 	ASSERT(pBuffer);
@@ -862,9 +874,6 @@ void SlipSendThreadFunc(Slip::SlipLink &rLink)
 {
 	int packet_count = 0;
 
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
-
 	mspace pool = s_uncachedPool;
 
 	Net::MaxPacket *pBuffer;
@@ -885,9 +894,6 @@ void SlipSendThreadFunc(Slip::SlipLink &rLink)
 
 void PingReplyThreadFunc(Net::ICMP::LfRingType &rRecvRing)
 {
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
-
 	Net::ICMP::IcmpPacket *pInBE = new Net::ICMP::IcmpPacket;
 	ASSERT(pInBE);
 
@@ -911,12 +917,12 @@ void PingReplyThreadFunc(Net::ICMP::LfRingType &rRecvRing)
 
 PrinterFb *g_pFb;
 
-extern "C" void TimingTest(void);
+extern "C" void TimingTest(unsigned int *);
 
 extern "C" void Setup(unsigned int entryPoint)
 {
-//	volatile bool pause = true;
-//	while (pause);
+	volatile bool wait = true;
+	while (wait);
 
 	v7_invalidate_l1();
 	v7_flush_icache_all();
@@ -975,19 +981,27 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	//enable interrupts
 	EnableIrq(true);
-	EnableFiq(true);
+//	EnableFiq(true);
 
-	Scheduler::SetMasterScheduler(*new RoundRobin);
+	unsigned int numCpus = 1;
+#ifdef PBES
+	numCpus = 2;
+#endif
 
-	Thread *pHandler = new Thread((unsigned int)&Handler, 0, true, 1, 0);
-	ASSERT(pHandler);
-	pHandler->SetName("handler");
-	Scheduler::GetMasterScheduler().AddSpecialThread(*pHandler, Scheduler::kHandlerThread);
+	Scheduler::SetMasterScheduler(*new RoundRobin(numCpus));
 
-	Thread *pIdle = new Thread((unsigned int)&IdleThread, 0, true, 1, 0);
-	ASSERT(pIdle);
-	pIdle->SetName("idle");
-	Scheduler::GetMasterScheduler().AddSpecialThread(*pIdle, Scheduler::kIdleThread);
+	for (unsigned int count = 0; count < numCpus; count++)
+	{
+		Thread *pHandler = new Thread((unsigned int)&Handler, 0, true, 1, 0, 1 << count, 0);
+		ASSERT(pHandler);
+		pHandler->SetName("handler");
+		Scheduler::GetMasterScheduler().AddSpecialThread(*pHandler, Scheduler::kHandlerThread);
+
+		Thread *pIdle = new Thread((unsigned int)&IdleThread, 0, true, 1, 0, 1 << count, 0);
+		ASSERT(pIdle);
+		pIdle->SetName("idle");
+		Scheduler::GetMasterScheduler().AddSpecialThread(*pIdle, Scheduler::kIdleThread);
+	}
 
 	*p << "making timer and interrupt controller\n";
 
@@ -998,7 +1012,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 	pTimer0 = new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER2"), 0, 2);
 
-	TimeFromBoot::Init(new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER1"), 0, 1), pPic);
+	TimeFromBoot::Init(/*new OMAP4460::GpTimer(IoSpace::GetDefaultIoSpace()->Get("GPTIMER1"), 0, 1)*/pTimer0, pPic);
 
 #else
 	pPic = new VersatilePb::PL190(IoSpace::GetDefaultIoSpace()->Get("Vectored Interrupt Controller"));
@@ -1007,8 +1021,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	TimeFromBoot::Init(new VersatilePb::SP804(IoSpace::GetDefaultIoSpace()->Get("Timer modules 0 and 1 interface"), 1), pPic);
 #endif
 
-	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
-	pPic->RegisterInterrupt(*pTimer0, InterruptController::kIrq);
+//	pTimer0->SetFrequencyInMicroseconds(10 * 1000);
+//	pPic->RegisterInterrupt(*pTimer0, InterruptController::kIrq);
 
 
 	//create vfs and attach the sd card
@@ -1021,8 +1035,28 @@ extern "C" void Setup(unsigned int entryPoint)
 	Directory *d = (Directory *)f;
 	DumpDir(p, d, 0);
 
+
+	//latency test
+	if (0)
+	{
+		unsigned int *pBuf = new unsigned int[1024];
+		for (int count = 0; count < 1024; count++)
+			pBuf[count] = (unsigned int)&pBuf[count + 1];
+
+		pBuf[1023] = (unsigned int)pBuf;
+
+		unsigned long long start_time = TimeFromBoot::GetMicroseconds();
+		for (int count = 0; count < 10; count++)
+			TimingTest(pBuf);
+		unsigned long long end_time = TimeFromBoot::GetMicroseconds();
+		unsigned long long took = end_time - start_time;
+
+		*p << "took " << took << " us\n";
+	}
+
+
 	//load busybox
-	if (1)
+	if (0)
 	{
 		BaseDirent *pLoader = vfs->OpenByName("/Volumes/sd/minimal/lib/ld-minimal.so", O_RDONLY);
 		if (!pLoader)
@@ -1034,8 +1068,12 @@ extern "C" void Setup(unsigned int entryPoint)
 		{
 //			Process *pBusybox1 = new Process("/Volumes/sd/minimal", "/",
 //					"/bin/busybox_new", *vfs, *(File *)pLoader);
+//			Process *pBusybox1 = new Process("/", "/",
+//					"/Volumes/sd/minimal/bin/busybox_new", *vfs, *(File *)pLoader);
+//			Process *pBusybox1 = new Process("/", "/",
+//					"/Volumes/sd/minimal/bin/tinymembench_stripped", *vfs, *(File *)pLoader);
 			Process *pBusybox1 = new Process("/", "/",
-					"/Volumes/sd/minimal/bin/busybox_new", *vfs, *(File *)pLoader);
+					"/Volumes/sd/latency_test_stripped.elf", *vfs, *(File *)pLoader);
 			pBusybox1->SetDefaultStdio();
 //			pBusybox1->SetEnvironment("LD_BIND_NOW=yes");
 			pBusybox1->SetEnvironment("LD_DEBUG=all");
@@ -1101,6 +1139,35 @@ extern "C" void Setup(unsigned int entryPoint)
 
 		if (!s2_switch.Read())
 			break;
+	}
+
+	//turn on second cpu
+	if (1)
+	{
+		unsigned int to_set = 0x200;
+		unsigned int to_clear = ~to_set;
+		unsigned int new_value = VirtMem::OMAP4460::OmapSmc(&to_set, &to_clear, VirtMem::OMAP4460::kModAuxCoreBoot0);
+		ASSERT(new_value == to_set);
+
+		auto secondary_entry_pa = secondary_entry;
+		if (!VirtMem::VirtToPhys(&secondary_entry, &secondary_entry_pa))
+			ASSERT(!"couldn\'t resolve 2nd cpu entry point\n");
+
+		new_value = VirtMem::OMAP4460::OmapSmc((unsigned int *)&secondary_entry_pa, 0, VirtMem::OMAP4460::kWriteAuxCoreBoot1);
+		ASSERT(new_value == (unsigned int)secondary_entry_pa);
+
+		VirtMem::DumpVirtToPhys((void *)secondary_entry_pa, (void *)((unsigned int)secondary_entry_pa + 8192), true, false, true);
+
+		//add a VA<->PA mapping to allow it to run when it comes on
+		if (!VirtMem::MapPhysToVirt((void *)((unsigned int)secondary_entry_pa & ~4095), (void *)((unsigned int)secondary_entry_pa & ~4095), 8192, true,
+				TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+			ASSERT(!"could not add page mapping for cpu 2 VA<->PA\n");
+
+		VirtMem::DumpVirtToPhys((void *)secondary_entry_pa, (void *)((unsigned int)secondary_entry_pa + 8192), true, true, true);
+
+		//turn on the cpu
+		asm volatile ("sev");
+		*p << "cpu #2 enabled\n";
 	}
 
 	//turn on the tv
@@ -1175,22 +1242,22 @@ extern "C" void Setup(unsigned int entryPoint)
 		ASSERT(g_pUdp);
 		g_pIpv4->RegisterProtocol(*g_pUdp);
 
-		Thread *pSlipRecv = new Thread((unsigned int)&SlipRecvThreadFunc, 0, true, 1, 0);
+		Thread *pSlipRecv = new Thread((unsigned int)&SlipRecvThreadFunc, 0, true, 1, 0, 0xffffffff, 0);
 		ASSERT(pSlipRecv);
 		pSlipRecv->SetName("slip recv");
 		pSlipRecv->SetArg(0, g_pLink);
 
-		Thread *pSlipSend = new Thread((unsigned int)&SlipSendThreadFunc, 0, true, 1, 0);
+		Thread *pSlipSend = new Thread((unsigned int)&SlipSendThreadFunc, 0, true, 1, 0, 0xffffffff, 0);
 		ASSERT(pSlipSend);
 		pSlipSend->SetName("slip send");
 		pSlipSend->SetArg(0, g_pLink);
 
-		Thread *pIpDemux = new Thread((unsigned int)&Net::InternetIntf::DemuxThreadFuncEntry, 0, true, 1, 0);
+		Thread *pIpDemux = new Thread((unsigned int)&Net::InternetIntf::DemuxThreadFuncEntry, 0, true, 1, 0, 0xffffffff, 0);
 		ASSERT(pIpDemux);
 		pIpDemux->SetName("ip demux");
 		pIpDemux->SetArg(0, g_pIpv4);
 
-		Thread *pPingReply = new Thread((unsigned int)&PingReplyThreadFunc, 0, true, 1, 0);
+		Thread *pPingReply = new Thread((unsigned int)&PingReplyThreadFunc, 0, true, 1, 0, 0xffffffff, 0);
 		ASSERT(pPingReply);
 		pPingReply->SetName("ping reply");
 		pPingReply->SetArg(0, &g_pIcmp->GetPingRequestListener());
@@ -1207,10 +1274,50 @@ extern "C" void Setup(unsigned int entryPoint)
 //	pTimer0->Enable(true);
 
 	Thread *pBlocked;
-	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
+	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked, 0);
 	ASSERT(!pBlocked);
 	ASSERT(pThread);
 	pThread->Run();
+
+	while(1);
+}
+
+extern "C" void SetupSecondary(void)
+{
+	v7_invalidate_l1();
+	v7_flush_icache_all();
+    v7_flush_dcache_all();
+
+	//disable the existing phys map where we entered from
+	VirtMem::UnmapVirt((void *)&secondary_entry, 8192);
+
+	//use the zero lo
+    VirtMem::SetL1TableLo(0);
+
+    WriteTPIDRURO(0);
+    VirtMem::FlushTlb();
+
+    Printer &p = Printer::Get();
+	p << "hello from cpu 2\n";
+
+	EnableFpu(true);
+	p << "fpu enabled\n";
+
+	p << "enabling interrupts\n";
+
+//	volatile bool wait = true;
+//	while (wait);
+
+	//enable interrupts
+	EnableIrq(true);
+//	EnableFiq(true);
+
+	Thread *pBlocked;
+	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked, 1);
+	ASSERT(!pBlocked);
+	ASSERT(pThread);
+	pThread->Run();
+
 
 	while(1);
 }
@@ -1443,7 +1550,7 @@ void something(Printer *p)
 
 
 	Thread *pBlocked;
-	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
+	Thread *pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked, 0);
 	ASSERT(!pBlocked);
 	ASSERT(pThread);
 

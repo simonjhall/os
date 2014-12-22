@@ -85,22 +85,25 @@ void DumpAllStates(Printer &p)
 	p << (int)__IrqState.m_mode << "\n";
 }
 
-bool g_inHandler = false;
+//bool g_inHandler = false;
 
 extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 {
-	ASSERT(!g_inHandler);
-	g_inHandler = true;
+	static_assert(sizeof(ExceptionState) == 86 * 4, "wrong exception structure size");
+//	ASSERT(!g_inHandler);
+//	g_inHandler = true;
 
 	Printer &p = Printer::Get();
 	bool thumb = pState->m_spsr.m_t;
 
+	unsigned int cpuId = GetCpuId();
+
 //	DumpAllStates(p);
 
-	Thread *pThread = Scheduler::GetMasterScheduler().WhatIsRunning();
+	Thread *pThread = Scheduler::GetMasterScheduler().WhatIsRunning(cpuId);
 	ASSERT(pState->m_spsr.m_mode == kSystem || pState->m_spsr.m_mode == kUser);
 
-	bool uninterruptable = Scheduler::GetMasterScheduler().IsUninterruptableRunning();
+	bool uninterruptable = Scheduler::GetMasterScheduler().IsUninterruptableRunning(cpuId);
 
 	switch (m)
 	{
@@ -254,7 +257,7 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 
 			if (uninterruptable || !pThread)
 			{
-				g_inHandler = false;
+//				g_inHandler = false;
 				Resume(pState);
 			}
 
@@ -275,11 +278,11 @@ extern "C" void NewHandler(ExceptionState *pState, VectorTable::ExceptionType m)
 
 	//find what we're to run next
 	Thread *pBlocked;
-	pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked);
+	pThread = Scheduler::GetMasterScheduler().PickNext(&pBlocked, cpuId);
 	ASSERT(pThread);
 
 	//crap test to check that we're not in the exception handerl
-	g_inHandler = false;
+//	g_inHandler = false;
 
 	//and run it
 	if (!pBlocked)
@@ -298,8 +301,6 @@ void Handler(unsigned int arg0, unsigned int arg1)
 //	Printer &p = Printer::Get();
 
 	Thread *pBlocked = (Thread *)arg1;
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
 
 	while (1)
 	{
@@ -378,9 +379,6 @@ void Handler(unsigned int arg0, unsigned int arg1)
 
 void IdleThread(void)
 {
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
-
 	while (1)
 	{
 		asm volatile ("wfe");

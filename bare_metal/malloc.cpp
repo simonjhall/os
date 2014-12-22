@@ -526,7 +526,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define malloc_getpagesize 4096
 #define LACKS_TIME_H 1
 #define ONLY_MSPACES 1
-#ifdef __ARM_ARCH_7M__
+#if defined __ARM_ARCH_7M__ || defined __PPC__
 #define HAVE_MMAP 0
 #endif
 #define ABORT ASSERT(0)

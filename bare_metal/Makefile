@@ -66,6 +66,14 @@ SOURCE_M3_CPP = clib.cpp \
 	print.cpp \
 	slip.cpp \
 	UART.cpp
+	
+SOURCE_GC_CPP = clib.cpp \
+	main_ppc.cpp \
+	malloc.cpp \
+	print.cpp \
+	PrintfPrinter.cpp
+
+SOURCE_GC_CPP_ = main_ppc.cpp
 
 SOURCE_A9_S = asm.S \
 	cache.S \
@@ -77,6 +85,8 @@ SOURCE_A9_S = asm.S \
 SOURCE_M3_S = asm.S \
 	entry.S
 	
+SOURCE_GC_S = asm_ppc.S
+	
 OBJ_A9_CPP := $(addprefix a9/obj/,$(notdir $(SOURCE_A9_CPP:.cpp=.o)))
 OBJ_A9_S := $(addprefix a9/obj/,$(notdir $(SOURCE_A9_S:.S=.o)))
 
@@ -86,19 +96,26 @@ OBJ_QEMU_S := $(addprefix qemu/obj/,$(SOURCE_A9_S:.S=.o))
 OBJ_M3_CPP := $(addprefix m3/obj/,$(SOURCE_M3_CPP:.cpp=.o))
 OBJ_M3_S := $(addprefix m3/obj/,$(SOURCE_M3_S:.S=.o))
 
+OBJ_GC_CPP := $(addprefix gc/obj/,$(SOURCE_GC_CPP:.cpp=.o))
+OBJ_GC_S := $(addprefix gc/obj/,$(SOURCE_GC_S:.S=.o))
+
 DEPS_A9_CPP := $(OBJ_A9_CPP:.o=.d)
 DEPS_QEMU_CPP := $(OBJ_QEMU_CPP:.o=.d)
 DEPS_M3_CPP := $(OBJ_M3_CPP:.o=.d)
+DEPS_GC_CPP := $(OBJ_GC_CPP:.o=.d)
 
 -include $(DEPS_A9_CPP)
 -include $(DEPS_QEMU_CPP)
 -include $(DEPS_M3_CPP)
+-include $(DEPS_GC_CPP)
 
 PATH_A9 = 
 PATH_M3 = ~/os/build/gcc-simon/bin/
+PATH_GC = /home/simon/devkitPro/devkitPPC/bin/
 
 PREFIX_A9 = arm-linux-gnueabihf
 PREFIX_M3 = arm-none-eabi
+PREFIX_GC = powerpc-eabi
 	
 CC_A9 = $(PATH_A9)$(PREFIX_A9)-gcc
 CXX_A9 = $(PATH_A9)$(PREFIX_A9)-g++
@@ -107,6 +124,10 @@ AS_A9 = $(PATH_A9)$(PREFIX_A9)-as
 CC_M3 = $(PATH_M3)$(PREFIX_M3)-gcc
 CXX_M3 = $(PATH_M3)$(PREFIX_M3)-g++
 AS_M3 = $(PATH_M3)$(PREFIX_M3)-as
+
+CC_GC = $(PATH_GC)$(PREFIX_GC)-gcc
+CXX_GC = $(PATH_GC)$(PREFIX_GC)-g++
+AS_GC = $(PATH_GC)$(PREFIX_GC)-as
 
 CXXFLAGS_BASE = -g3 -Wall -c -fmessage-length=0 -std=c++11 -fno-exceptions -fno-rtti -fno-stack-protector
 ASFLAGS_BASE = -Wa,--gstabs+,
@@ -118,6 +139,10 @@ LDFLAGS_A9 = -nostartfiles -nodefaultlibs -nostdlib -static -Xlinker --entry=ent
 CXXFLAGS_M3 = -mthumb -mcpu=cortex-m3 -D__ARM_ARCH_7M__ -O0  $(CXXFLAGS_BASE)
 ASFLAGS_M3 = $(ASFLAGS_BASE)-mcpu=cortex-m3,-march=armv7m -DM3=1
 LDFLAGS_M3 = -nostartfiles -nodefaultlibs -nostdlib -L/home/simon/build/gcc-simon/lib/gcc/arm-none-eabi/4.9.1/thumb -L/home/simon/build/gcc-simon/arm-none-eabi/lib/thumb -static -mcpu=cortex-m3 -mthumb -Xlinker --entry=M3_Reset -Xlinker -T link_script_4.7_pbes_m3
+
+CXXFLAGS_GC = -I /home/simon/devkitPro/libogc/include -DGEKKO -mcpu=750 -meabi -mhard-float
+ASFLAGS_GC = -mregnames -g
+LDFLAGS_GC = -L /home/simon/devkitPro/libogc/lib/cube -mogc
 
 ############################
 .DEFAULT_GOAL = all
@@ -150,12 +175,22 @@ m3/bin/kernel.elf.o: m3/bin/kernel.elf
 	arm-linux-gnueabihf-strip -s $< -o $<.strip
 	arm-linux-gnueabihf-objcopy $<.strip -O binary $<.bin -K entry
 	arm-linux-gnueabihf-objcopy --input binary --output elf32-littlearm --binary-architecture arm $<.bin $<.o
+	
+gc/bin/kernel.elf: $(OBJ_GC_CPP) $(OBJ_GC_S)
+	test -d $(dir $@) || mkdir -p $(dir $@)
+	$(CC_GC) $(LDFLAGS_GC) -o $@ $(OBJ_GC_CPP) $(OBJ_GC_S) -logc -lm -lstdc++
 
+gc/bin/kernel.dol: gc/bin/kernel.elf
+	~/devkitPro/devkitPPC/bin/elf2dol $< $@
+	cp gc/bin/kernel.dol /media/simon/NO_NAME/autoexec.dol
+	sync
+	sync
 ############################
 clean:
 	$(MAKE) clean_a9
 	$(MAKE) clean_m3
 	$(MAKE) clean_qemu
+	$(MAKE) clean_gc
 	$(MAKE) relink
 	
 clean_a9:
@@ -167,10 +202,14 @@ clean_m3:
 clean_qemu:
 	rm -f $(OBJ_QEMU_CPP) $(OBJ_QEMU_S)  $(patsubst %.o,%.d, $(OBJ_QEMU_CPP))
 	
+clean_gc:
+	rm -f $(OBJ_GC_CPP) $(OBJ_GC_S)  $(patsubst %.o,%.d, $(OBJ_GC_CPP))
+	
 relink:
 	rm -f a9/bin/kernel.elf
 	rm -f m3/bin/kernel.elf
 	rm -f qemu/bin/kernel.elf
+	rm -f gc/bin/kernel.elf
 	rm -f m3/bin/kernel.elf.o
 	rm -f a9/bin/kernel.elf.bin
 	rm -f qemu/bin/kernel.elf.bin
@@ -201,6 +240,15 @@ qemu/obj/%.o: %.cpp
 qemu/obj/%.o: %.S
 	test -d $(dir $@) || mkdir -p $(dir $@)
 	$(CC_A9) $(ASFLAGS_A9) -c -o $@ $< -DPBES=0
+
+############################
+gc/obj/%.o: %.cpp
+	test -d $(dir $@) || mkdir -p $(dir $@)
+	$(CXX_GC) $(CXXFLAGS_GC) -MMD -c -o $@ $<
+ 
+gc/obj/%.o: %.S
+	test -d $(dir $@) || mkdir -p $(dir $@)
+	$(CC_GC) $(ASFLAGS_GC) -c -o $@ $< -DPBES=0
 
 	
 #/home/simon/os/qemu/arm-softmmu/qemu-system-arm -kernel qemu/bin/kernel.elf.bin -M versatilepb -m 128M -s -cpu cortex-a8 -nographic -sd /home/simon/os/git/os/bare_metal/filesystem -serial stdio -usb

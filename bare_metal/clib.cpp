@@ -80,7 +80,7 @@ __strncpy_chk (char *s1, const char *s2, size_t n, size_t s1len)
   return s;
 }
 
-#ifdef __ARM_ARCH_7M__
+#if defined __ARM_ARCH_7M__ || __PPC__
 extern "C" void *memset(void *s, int c, size_t n)
 {
 	char b = (char)c;
@@ -185,7 +185,7 @@ size_t copy_amount, size_t dest_len)
 	return memcpy(dest, src, copy_amount);
 }
 
-#ifdef __ARM_ARCH_7M__
+#if defined __ARM_ARCH_7M__ || __PPC__
 extern "C" void *memcpy(void *dest, const void *src, size_t n)
 {
 	char *d = (char *)dest;
@@ -1258,7 +1258,7 @@ two_way_long_needle (const unsigned char *haystack, size_t haystack_len,
   return NULL;
 }
 
-#ifdef __ARM_ARCH_7A__
+#if defined __ARM_ARCH_7A__
 const
 #endif
 char *
@@ -1616,7 +1616,7 @@ memcmp (const __ptr_t s1,
 }
 
 /* Search no more than N bytes of S for C.  */
-#ifdef __ARM_ARCH_7A__
+#if defined __ARM_ARCH_7A__
 const
 #endif
 __ptr_t memchr (const __ptr_t s, int c_in, size_t n)
@@ -1761,7 +1761,7 @@ __ptr_t memchr (const __ptr_t s, int c_in, size_t n)
   return 0;
 }
 
-#ifdef __ARM_ARCH_7A__
+#if defined __ARM_ARCH_7A__
 const
 #endif
 char * strchr (const char *s, int c_in)
@@ -1946,6 +1946,10 @@ bool InitMempool(void *pBase, unsigned int numPages, bool phys, mspace *pPool)
 		return false;
 }
 
+#ifdef __ARM_ARCH_7A__
+static spinlock s_mallocLock = 0;
+#endif
+
 void *operator new( size_t stAllocateBlock ) {
 //   static int fInOpNew = 0;   // Guard flag.
 //
@@ -1961,15 +1965,17 @@ void *operator new( size_t stAllocateBlock ) {
 //	return 0;
 
 #ifdef __ARM_ARCH_7A__
-	//scope for problems here?
 	bool e = IsIrqEnabled();
-	EnableIrq(false);
+	EnableIrq(false);				//so that it's not called from the same cpu
+
+	SpinLockInternal(s_mallocLock);			//and for another cpu
 #endif
 
 	ASSERT(s_poolInit);
 	void *r = mspace_malloc(s_pool, stAllocateBlock);
 
 #ifdef __ARM_ARCH_7A__
+	SpinUnlockInternal(s_mallocLock);
 	EnableIrq(e);
 #endif
 	return r;
@@ -1992,12 +1998,14 @@ void *operator new[]( size_t stAllocateBlock ) {
 #ifdef __ARM_ARCH_7A__
 	bool e = IsIrqEnabled();
 	EnableIrq(false);
+	SpinLockInternal(s_mallocLock);
 #endif
 
 	ASSERT(s_poolInit);
 	void *r = mspace_malloc(s_pool, stAllocateBlock);
 
 #ifdef __ARM_ARCH_7A__
+	SpinUnlockInternal(s_mallocLock);
 	EnableIrq(e);
 #endif
 	return r;
@@ -2019,12 +2027,14 @@ void operator delete( void *pvMem ) {
 #ifdef __ARM_ARCH_7A__
 	bool e = IsIrqEnabled();
 	EnableIrq(false);
+	SpinLockInternal(s_mallocLock);
 #endif
 
 	ASSERT(s_poolInit);
 	mspace_free(s_pool, pvMem);
 
 #ifdef __ARM_ARCH_7A__
+	SpinUnlockInternal(s_mallocLock);
 	EnableIrq(e);
 #endif
 }

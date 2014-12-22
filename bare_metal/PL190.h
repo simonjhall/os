@@ -20,7 +20,7 @@ public:
 	virtual ~PL190();
 
 protected:
-	virtual bool Enable(InterruptType, unsigned int, bool);
+	virtual bool Enable(InterruptType, unsigned int, bool e, IntDestType type, unsigned int targetMask);
 	virtual void Clear(unsigned int);
 	virtual int GetFiredId(void);
 

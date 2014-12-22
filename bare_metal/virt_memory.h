@@ -159,7 +159,7 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 
 #endif
 
-#ifdef __ARM_ARCH_7M__
+#if defined __ARM_ARCH_7M__ || __PPC__
 template <class T>
 bool VirtToPhys(T *pVirtual, T **ppPhysical)
 {
@@ -226,7 +226,7 @@ enum Smc
 	kSelectTlbEntryForRead = 0x10a,
 	kSelectTlbEntryForWrite = 0x10b,
 	kReadTlbVaEntry = 0x10c,
-	kWRiteTlbVaEntry = 0x10d,
+	kWriteTlbVaEntry = 0x10d,
 	kReadTlbPaEntry = 0x10e,
 	kWriteTlbPaEntry = 0x10f,
 	kReadTlbAttrEntry = 0x110,

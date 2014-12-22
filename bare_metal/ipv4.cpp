@@ -100,9 +100,6 @@ bool IPv4::EnqueuePacket(const InternetAddrIntf &rDest, int protocol, MaxPacket 
 
 void IPv4::DemuxThreadFunc(void)
 {
-	Thread *pThisThread = Scheduler::GetMasterScheduler().WhatIsRunning();
-	ASSERT(pThisThread);
-
 	union PacketUnion
 	{
 		MaxPacket m_bytes;
