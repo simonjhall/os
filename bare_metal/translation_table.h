@@ -15,15 +15,15 @@ namespace TranslationTable
 	//properties
 	enum MemRegionType
 	{
-		kStronglyOrdered = 0,
-		kShareableDevice = 1,
-		kOuterInnerWtNoWa = 2,
-		kOuterInnerWbNoWa = 3,
+		kStronglyOrdered = 0,			//shareable
+		kShareableDevice = 1,			//shareable
+		kOuterInnerWtNoWa = 2,			//s bit
+		kOuterInnerWbNoWa = 3,			//s bit
 
-		kOuterInnerNc = 4,
-		kOuterInnerWbWa = 7,
+		kOuterInnerNc = 4,				//s bit
+		kOuterInnerWbWa = 7,			//s bit
 
-		kNonShareableDevice = 8,
+		kNonShareableDevice = 8,		//non shareable
 	};
 
 	enum ExecuteNever
@@ -40,6 +40,12 @@ namespace TranslationTable
 		kRwRw = 3,
 		kRoNa = 5,
 		kRoRo = 7,
+	};
+
+	enum Shareable
+	{
+		kNonShareable = 0,
+		kShareable = 1,
 	};
 
 	struct Fault;
@@ -114,8 +120,13 @@ namespace TranslationTable
 
 	struct Section
 	{
-		inline void Init(void *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type, unsigned int domain)
+		inline void Init(void *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type, Shareable s, unsigned int domain)
 		{
+			ASSERT((s == kShareable && (type == kStronglyOrdered || type == kShareableDevice		//fixed
+					|| type == kOuterInnerWtNoWa || type == kOuterInnerWbNoWa || type == kOuterInnerNc || type == kOuterInnerWbWa))		//s bit
+				|| (s == kNonShareable && (type == kNonShareableDevice		//fixed
+					|| type == kOuterInnerWtNoWa || type == kOuterInnerWbNoWa || type == kOuterInnerNc || type == kOuterInnerWbWa))		//s bit
+					);
 			m_pxn = 0;
 			m_one = 1;
 			m_b = (unsigned int)type & 1;
@@ -126,7 +137,7 @@ namespace TranslationTable
 			m_ap = (unsigned int)perm & 3;
 			m_tex = (unsigned int)type >> 2;
 			m_ap2 = (unsigned int)perm >> 2;
-			m_s = 0;
+			m_s = (unsigned int)s;
 			m_ng = 0;
 			m_zero = 0;
 			m_ns = 0;
@@ -143,6 +154,8 @@ namespace TranslationTable
 					<< (m_ap | (m_ap2 << 2))
 					<< " TEX "
 					<< (m_b | (m_c << 1) | (m_tex << 2))
+					<< " S "
+					<< m_s
 					<< " XN "
 					<< m_xn
 					<< "\n";
@@ -226,20 +239,26 @@ namespace TranslationTable
 	//second level
 	struct SmallPage
 	{
-		inline void Init(void *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type)
+		inline void Init(void *pBase, AccessPerm perm, ExecuteNever xn, MemRegionType type, Shareable s)
 		{
-		  m_xn = (unsigned int)xn;
-		  m_one = 1;
-		  m_b = (unsigned int)type & 1;
-		  m_c = ((unsigned int)type >> 1) & 1;
-		  m_ap = (unsigned int)perm & 3;
-		  m_tex = (unsigned int)type >> 2;
-		  m_ap2 = (unsigned int)perm >> 2;
-		  m_s = 0;
-		  m_ng = 0;
+			ASSERT((s == kShareable && (type == kStronglyOrdered || type == kShareableDevice		//fixed
+					|| type == kOuterInnerWtNoWa || type == kOuterInnerWbNoWa || type == kOuterInnerNc || type == kOuterInnerWbWa))		//s bit
+				|| (s == kNonShareable && (type == kNonShareableDevice		//fixed
+					|| type == kOuterInnerWtNoWa || type == kOuterInnerWbNoWa || type == kOuterInnerNc || type == kOuterInnerWbWa))		//s bit
+					);
 
-		  ASSERT(((unsigned int)pBase & 4095) == 0);
-		  m_pageBase = (unsigned int)pBase >> 12;
+			m_xn = (unsigned int)xn;
+			m_one = 1;
+			m_b = (unsigned int)type & 1;
+			m_c = ((unsigned int)type >> 1) & 1;
+			m_ap = (unsigned int)perm & 3;
+			m_tex = (unsigned int)type >> 2;
+			m_ap2 = (unsigned int)perm >> 2;
+			m_s = (unsigned int)s;
+			m_ng = 0;
+
+			ASSERT(((unsigned int)pBase & 4095) == 0);
+			m_pageBase = (unsigned int)pBase >> 12;
 		};
 
 		void Print(Printer &p)
@@ -250,6 +269,8 @@ namespace TranslationTable
 					<< (m_ap | (m_ap2 << 2))
 					<< " TEX "
 					<< (m_b | (m_c << 1) | (m_tex << 2))
+					<< " S "
+					<< m_s
 					<< " XN "
 					<< m_xn
 					<< "\n";

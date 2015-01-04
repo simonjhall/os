@@ -55,7 +55,7 @@ void *internal_mmap(void *addr, size_t length, int prot, int flags,
 	}
 
 	if (VirtMem::AllocAndMapVirtContig(addr, length_pages, isPriv,
-			isPriv ? TranslationTable::kRwRo : TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+			isPriv ? TranslationTable::kRwRo : TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 	{
 		memset(addr, 0, length_pages << 12);
 		return addr;

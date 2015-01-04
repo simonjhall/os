@@ -210,8 +210,9 @@ phys_entry:
 map_loop:
 	#construct a section entry for the phys address
 	#but store twice, once to the target virtual address and one to the physical address
-	mov r4, #0x1600				/* tex=1 | ap=1 | one | domain=0000| xn=0 | c=0 | b=0 | one | zero*/
+	mov r4, #0x1600				/* s=1 | tex=1 | ap=1 | one | domain=0000| xn=0 | c=0 | b=0 | one | zero*/
 	orr r4, #0x2
+	orr r4, #0x10000
 
 	#phys addr of the section
 	lsl r5, r3, #20
@@ -372,8 +373,8 @@ virt_entry_2:
 	ldr sp, [sp]
 	sub sp, #8
 
-123:
-	b 123b
+/*123:
+	b 123b*/
 
 	ldr r3, =SetupSecondary
 	bx r3

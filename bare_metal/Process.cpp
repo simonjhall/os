@@ -132,7 +132,7 @@ Process::Process(const char *pRootFilename, const char *pInitialDirectory,
 
 	//allocate a stack
 	if (!VirtMem::AllocAndMapVirtContig((void *)(0x80000000 - 4096), 1, false,
-			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 		ASSERT(0);
 
 	//prepare the aux vector
@@ -416,7 +416,7 @@ char *Process::LoadElf(Elf &elf, unsigned int voffset, bool &has_tls, unsigned i
 				ASSERT(pPhys != (void *)-1);
 
 				bool ok = VirtMem::MapPhysToVirt(pPhys, (void *)beginVirt, 4096, false,
-						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+						TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 				ASSERT(ok);
 
 				//clear the page

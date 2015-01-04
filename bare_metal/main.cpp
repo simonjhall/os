@@ -522,11 +522,11 @@ static void MapKernel(unsigned int physEntryPoint)
 
     //exception vector, plus the executable high secton
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), VectorTable::GetTableAddress(), 4096, true,
-    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    		TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 
     //executable top section
     VirtMem::MapPhysToVirt(PhysPages::FindPage(), (void *)0xffff0000, 4096, true,
-    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0);
+    			TranslationTable::kRwRo, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 
     memset((void *)0xffff0000, 0, 4096);
 
@@ -571,7 +571,7 @@ static void MapM3Kernel(Printer *p)
 	*p << "m3 image at " << pPhysM3Image << "\n";
 
 	if (!VirtMem::MapPhysToVirt(pPhysM3Image, (void *)0x90000000, size_needed << 12, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0))
 		ASSERT(0);
 
 	*p << "mapped\n";
@@ -620,28 +620,28 @@ static void MapM3Kernel(Printer *p)
 
 	//map our code and vector low
 	pVirtTable->e[0].section.Init(pPhysM3Image, TranslationTable::kRwRw, TranslationTable::kExec,
-			TranslationTable::kOuterInnerWtNoWa, 0);
+			TranslationTable::kOuterInnerWtNoWa, TranslationTable::kShareable, 0);
 	//and where we will want it to go after the remap by the m3
 	pVirtTable->e[0x240].section.Init(pPhysM3Image, TranslationTable::kRwRw, TranslationTable::kExec,
-			TranslationTable::kOuterInnerWbWa, 0);
+			TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 
 	//remap the l4 per section
 	for (int count = 0; count < 16; count++)
 		pVirtTable->e[0x480 + count].section.Init((void *)((0x480 + count) * 1048576), TranslationTable::kRwRw, TranslationTable::kNoExec,
-				TranslationTable::kShareableDevice, 0);
+				TranslationTable::kShareableDevice, TranslationTable::kShareable, 0);
 
 	//remap the l4 cfg section
 	for (int count = 0; count < 16; count++)
 		pVirtTable->e[0x4a0 + count].section.Init((void *)((0x4a0 + count) * 1048576), TranslationTable::kRwRw, TranslationTable::kNoExec,
-				TranslationTable::kShareableDevice, 0);
+				TranslationTable::kShareableDevice, TranslationTable::kShareable, 0);
 
 	//remap the m3 section (prob not needed)
 	for (int count = 0; count < 16; count++)
 		pVirtTable->e[0x550 + count].section.Init((void *)((0x550 + count) * 1048576), TranslationTable::kRwRw, TranslationTable::kNoExec,
-				TranslationTable::kOuterInnerWbWa, 0);
+				TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 
 	pVirtTable->e[(unsigned int)pPhysTable >> 20].section.Init((void *)((unsigned int)pPhysTable & ~1048575),
-			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWtNoWa, 0);
+			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kOuterInnerWtNoWa, TranslationTable::kShareable, 0);
 
 	void *pCachedHeap = PhysPages::FindMultiplePages(256, 8);
 	ASSERT(pCachedHeap != (void *)-1);
@@ -651,14 +651,14 @@ static void MapM3Kernel(Printer *p)
 
 	//cached
 	pVirtTable->e[0x600].section.Init(pCachedHeap, TranslationTable::kRwRw, TranslationTable::kNoExec,
-			TranslationTable::kOuterInnerWbWa, 0);
+			TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0);
 	//uncached
 	pVirtTable->e[0xa00].section.Init(pUncachedHeap, TranslationTable::kRwRw, TranslationTable::kNoExec,
-			TranslationTable::kShareableDevice, 0);
+			TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0);
 
 	//just behind the main heap
 	if (!VirtMem::MapPhysToVirt(pUncachedHeap, (void *)0xa0600000, 1048576, true,
-		TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
+		TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0))
 		ASSERT(!"could not map uncached heap\n");
 
 	if (!InitMempool((void *)0xa0680000, 128 * 1, true, &s_uncachedPool))		//512KB
@@ -707,7 +707,7 @@ void EnableDisplayAndMapFb(Printer *p, PrinterFb *fb)
 	g.Attach();
 
 	if (!VirtMem::MapPhysToVirt(pPhysFb, (void *)fb->GetVirtBase(), pages_needed * 4096, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kShareableDevice, TranslationTable::kShareable, 0))
 		ASSERT(!"could not map framebuffer\n");
 
 	*p << "framebuffer mapped at phys " << pPhysFb << " virt " << fb->GetVirtBase() << "\n";
@@ -919,10 +919,12 @@ PrinterFb *g_pFb;
 
 extern "C" void TimingTest(unsigned int *);
 
+spinlock shared_lock;
+
 extern "C" void Setup(unsigned int entryPoint)
 {
-	volatile bool wait = true;
-	while (wait);
+//	volatile bool wait = true;
+//	while (wait);
 
 	v7_invalidate_l1();
 	v7_flush_icache_all();
@@ -1144,6 +1146,8 @@ extern "C" void Setup(unsigned int entryPoint)
 	//turn on second cpu
 	if (1)
 	{
+		SpinInitInternal(shared_lock);
+
 		unsigned int to_set = 0x200;
 		unsigned int to_clear = ~to_set;
 		unsigned int new_value = VirtMem::OMAP4460::OmapSmc(&to_set, &to_clear, VirtMem::OMAP4460::kModAuxCoreBoot0);
@@ -1160,7 +1164,7 @@ extern "C" void Setup(unsigned int entryPoint)
 
 		//add a VA<->PA mapping to allow it to run when it comes on
 		if (!VirtMem::MapPhysToVirt((void *)((unsigned int)secondary_entry_pa & ~4095), (void *)((unsigned int)secondary_entry_pa & ~4095), 8192, true,
-				TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+				TranslationTable::kRwNa, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 			ASSERT(!"could not add page mapping for cpu 2 VA<->PA\n");
 
 		VirtMem::DumpVirtToPhys((void *)secondary_entry_pa, (void *)((unsigned int)secondary_entry_pa + 8192), true, true, true);
@@ -1168,6 +1172,12 @@ extern "C" void Setup(unsigned int entryPoint)
 		//turn on the cpu
 		asm volatile ("sev");
 		*p << "cpu #2 enabled\n";
+	}
+
+	while (1)
+	{
+		SpinLockInternal(shared_lock/*, 0*/);
+		SpinUnlockInternal(shared_lock/*, 0*/);
 	}
 
 	//turn on the tv
@@ -1307,6 +1317,12 @@ extern "C" void SetupSecondary(void)
 
 //	volatile bool wait = true;
 //	while (wait);
+
+	while (1)
+	{
+		SpinLockInternal(shared_lock/*, 0*/);
+		SpinUnlockInternal(shared_lock/*, 0*/);
+	}
 
 	//enable interrupts
 	EnableIrq(true);

@@ -336,7 +336,7 @@ void Handler(unsigned int arg0, unsigned int arg1)
 					unsigned int pages = bytes >> 12;
 
 					if (!VirtMem::AllocAndMapVirtContig((void *)((unsigned int)pBlocked->GetStackLow() - bytes), pages, false,
-							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 						ASSERT(0);
 					pBlocked->SetStackLow((void *)((unsigned int)pBlocked->GetStackLow() - bytes));
 

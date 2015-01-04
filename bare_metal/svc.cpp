@@ -219,7 +219,7 @@ int SupervisorCall(Thread &rBlocked, Process *pParent, Thread::State &rNewState)
 						break;
 
 					if (!VirtMem::MapPhysToVirt(pPhys, (void *)current, 4096, false,
-							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, 0))
+							TranslationTable::kRwRw, TranslationTable::kExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 					{
 						PhysPages::ReleasePage((unsigned int)pPhys >> 12);
 						break;

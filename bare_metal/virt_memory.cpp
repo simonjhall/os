@@ -105,15 +105,15 @@ bool InitL1L2Allocators(void)
 
 	//map them virtually
 	if (!MapPhysToVirt(pL1Phys, (void *)0xfe000000, 1048576, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0))
 		return false;
 
 	if (!MapPhysToVirt(pL2Phys, (void *)(0xfe000000 + 1048576), 1048576, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0))
 		return false;
 
 	if (!MapPhysToVirt(pStacks, (void *)(0xfe000000 + 1048576 * 2), 1048576, true,
-			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 		return false;
 
 	g_masterTables.Init((TranslationTable::L1Table *)0xfe000000);
@@ -138,9 +138,9 @@ bool InitL1L2Allocators(void)
 }
 
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain, bool bulk)
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain, bool bulk)
 {
-	auto mapper = [pPhys, pVirt, length, perm, xn, type, domain, hi](bool commit)
+	auto mapper = [pPhys, pVirt, length, perm, xn, type, share, domain, hi](bool commit)
 		{
 			unsigned int virtStart = (unsigned int)pVirt;
 			unsigned int physStart = (unsigned int)pPhys;
@@ -212,7 +212,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 						if (current_pagetable)
 							RemovePageTable((void *)virtStart, hi);
 
-						pMainTableVirt[megabyte].section.Init((void *)physStart, perm, xn, type, domain);
+						pMainTableVirt[megabyte].section.Init((void *)physStart, perm, xn, type, share, domain);
 					}
 				}
 				else		//map part of it
@@ -239,7 +239,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 							for (unsigned int o = 0; o < total_pages; o++)
 							{
 								ASSERT(o + starting_page < 256);
-								pNewVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type);
+								pNewVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type, share);
 							}
 						}
 					}
@@ -258,6 +258,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 							unsigned int existing_pa = existing.m_sectionBase << 20;
 							TranslationTable::MemRegionType existing_type = (TranslationTable::MemRegionType)((existing.m_b) | (existing.m_c << 1) | (existing.m_tex << 2));
 							TranslationTable::AccessPerm existing_perm = (TranslationTable::AccessPerm)(existing.m_ap | (existing.m_ap2 << 2));
+							TranslationTable::Shareable existing_share = (TranslationTable::Shareable)existing.m_s;
 
 							TranslationTable::TableEntryL2 *pNewVirt;
 							bool ok = AddPageTable((void *)virtStart, domain, &pNewVirt, hi);
@@ -268,7 +269,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 							//re-use the initial settings
 							for (unsigned int o = 0; o < 256; o++)
 								pNewVirt[o].smallPage.Init((void *)(existing_pa + o * 4096),
-										existing_perm, (TranslationTable::ExecuteNever)existing.m_xn, existing_type);
+										existing_perm, (TranslationTable::ExecuteNever)existing.m_xn, existing_type, existing_share);
 
 							//map the bit we're interested in
 							unsigned int total_pages = to_map >> 12;
@@ -277,7 +278,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 							for (unsigned int o = 0; o < total_pages; o++)
 							{
 								ASSERT(o + starting_page < 256);
-								pNewVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type);
+								pNewVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type, share);
 							}
 						}
 					}
@@ -304,7 +305,7 @@ bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
 							for (unsigned int o = 0; o < total_pages; o++)
 							{
 								ASSERT(o + starting_page < 256);
-								pTableVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type);
+								pTableVirt[o + starting_page].smallPage.Init((void *)(physStart + o * 4096), perm, xn, type, share);
 							}
 						}
 					}
@@ -475,7 +476,7 @@ void DumpVirtToPhys(void *pStart, void *pEnd, bool withL2, bool noFault, bool hi
 }
 
 bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain)
 {
 	unsigned char *pMap = (unsigned char *)pBase;
 
@@ -486,7 +487,7 @@ bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
 			return false;											//needs to catch errors properly
 
 		bool ok = VirtMem::MapPhysToVirt(pPhys, pMap, 4096, hi,
-				perm, xn, type,
+				perm, xn, type, share,
 				domain,
 				true);			//bulk
 		if (!ok)

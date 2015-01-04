@@ -21,11 +21,11 @@ bool RemovePageTable(void *pVirtual, bool hi, bool flush = true);
 
 //mapping and unmapping memory
 bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain, bool bulk = false);
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain, bool bulk = false);
 bool UnmapVirt(void *pVirt, unsigned int length);
 
 bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain);
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain);
 
 //master kernel L1 table
 bool AllocL1Table(unsigned int entryPoint);
@@ -173,13 +173,13 @@ bool PhysToVirt(T *pPhysical, T **ppVirtual, unsigned int startMb = 0, unsigned 
 }
 
 inline bool AllocAndMapVirtContig(void *pBase, unsigned int numPages, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain)
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain)
 {
 	return false;
 }
 
 inline bool MapPhysToVirt(void *pPhys, void *pVirt, unsigned int length, bool hi,
-		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, unsigned int domain, bool bulk)
+		TranslationTable::AccessPerm perm, TranslationTable::ExecuteNever xn, TranslationTable::MemRegionType type, TranslationTable::Shareable share, unsigned int domain, bool bulk)
 {
 	return false;
 }

@@ -47,7 +47,7 @@ void IoSpace::Map(void)
 		p += r.m_length >> 2;
 
 		if (!VirtMem::MapPhysToVirt((void *)r.m_pPhys, (void *)r.m_pVirt, r.m_length, true,
-			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, 0))
+			TranslationTable::kRwRw, TranslationTable::kNoExec, TranslationTable::kShareableDevice, TranslationTable::kShareable, 0))
 			ASSERT(!"failed to map item into IoSpace\n");
 	}
 }

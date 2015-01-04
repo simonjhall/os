@@ -74,7 +74,7 @@ InvokeSyscall:
 SpinInitInternal:
 	dmb				//necessary?
 
-	mov r1, #0xff
+	mov r1, #0
 	str r1, [r0]
 
 	dsb				//necessary?

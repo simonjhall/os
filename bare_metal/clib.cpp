@@ -1934,7 +1934,7 @@ bool InitMempool(void *pBase, unsigned int numPages, bool phys, mspace *pPool)
 		pPool = &s_pool;
 
 	if (phys || VirtMem::AllocAndMapVirtContig(pBase, numPages, true,
-			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, 0))
+			TranslationTable::kRwRo, TranslationTable::kNoExec, TranslationTable::kOuterInnerWbWa, TranslationTable::kShareable, 0))
 	{
 		*pPool = create_mspace_with_base(pBase, numPages << 12, 0);
 

@@ -40,7 +40,7 @@ Ehci::Ehci(volatile void *pBase)
 
 	unsigned int v = 0xb0000000;
 
-	if (!VirtMem::AllocAndMapVirtContig((void *)v, 6, true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, 0))
+	if (!VirtMem::AllocAndMapVirtContig((void *)v, 6, true, TranslationTable::kRwNa, TranslationTable::kNoExec, TranslationTable::kOuterInnerNc, TranslationTable::kShareable, 0))
 		ASSERT(0);
 
 	m_pPeriodicFrameList = (FrameListElement *)v;
